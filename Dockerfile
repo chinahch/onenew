@@ -13,7 +13,7 @@ RUN ONENEW_ADMIN_UPSTREAM=/build/upstream-admin pnpm test && pnpm build --upstre
 FROM --platform=$BUILDPLATFORM node:24.22.1-alpine AS user-build
 WORKDIR /build/user
 RUN corepack enable && corepack prepare pnpm@11.25.0 --activate
-COPY customizations/onenew/user-portal/package.json customizations/onenew/user-portal/pnpm-lock.yaml ./
+COPY customizations/onenew/user-portal/package.json customizations/onenew/user-portal/pnpm-lock.yaml customizations/onenew/user-portal/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY customizations/onenew/user-portal/ ./
 RUN pnpm test && pnpm build
