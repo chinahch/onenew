@@ -32,7 +32,10 @@ jobs:
       - name: Initialize isolated database
         run: |
           docker compose run --rm -T -e ADMIN_ACCOUNT=ci-bootstrap@example.test onenew php artisan onenew:install --no-interaction > /tmp/onenew-install.log
-          grep -q '^INSTALLED=true\|^INSTALLED=1' .env
+          if ! grep -q '^INSTALLED=true\|^INSTALLED=1' .env; then
+            sed '/管理员密码/d; /APP_KEY=/d; /password[=:]/Id; /token[=:]/Id' /tmp/onenew-install.log | tail -n 100
+            exit 1
+          fi
           docker compose up -d --wait
           docker compose exec -T -e ONENEW_CI_FIXTURE=isolated-only onenew php /opt/onenew/ci-smoke.php
       - name: Exercise actual login and user portal
