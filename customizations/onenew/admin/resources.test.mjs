@@ -2,10 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {externalOrder,egressPayload,saveMachineEgress} from './src/resources.mjs';
+import {externalOrder,egressPayload,saveMachineEgress,BatchAddresses} from './src/resources.mjs';
 import {patchBundle} from './patch.mjs';
 const source=fs.readFileSync(process.env.ONENEW_ADMIN_UPSTREAM?`${process.env.ONENEW_ADMIN_UPSTREAM}/assets/index-CEIYH7i8.js`:new URL('../../../../xboard-admin-dist/assets/index-CEIYH7i8.js',import.meta.url),'utf8');
 const walk=n=>!n||typeof n!=='object'?[]:[n,...[].concat(n.props?.children||[]).flatMap(walk)];
+test('bulk dialog searches matching IPs and submits only checked endpoint snapshots',async()=>{
+ const cells=[],calls=[],rows=[{id:1,identity:'generation-a',name:'A',type:'vless',host:'192.0.2.1',port:'443'},{id:2,identity:'generation-b',name:'B',type:'vmess',host:'192.0.2.1',port:'444'}];let cursor=0;
+ const React={Fragment:'fragment',createElement:(type,props,...children)=>({type,props:{...props,children:children.flat(Infinity)}}),useState:init=>{const i=cursor++;if(!(i in cells))cells[i]=init;return[cells[i],value=>cells[i]=value]}};
+ const props={react:React,get:async(url,config)=>{calls.push(['get',url,config]);return{nodes:rows}},post:async(url,payload)=>{calls.push(['post',url,payload]);return{updated:1}},useQueryClient:()=>({invalidateQueries:async()=>{calls.push(['refresh'])}})};
+ const render=()=>{cursor=0;return walk(BatchAddresses(props))};
+ let nodes=render();nodes.find(n=>n.props.children?.[0]==='批量修改地址/端口').props.onClick();
+ nodes=render();nodes.find(n=>n.type==='input'&&n.props.placeholder).props.onChange({target:{value:'192.0.2.1'}});
+ nodes=render();await nodes.find(n=>n.props.children?.[0]==='搜索相同地址').props.onClick();
+ assert.equal(calls[0][2].params.ip,'192.0.2.1');
+ nodes=render();nodes.filter(n=>n.type==='input'&&n.props.type==='checkbox')[1].props.onChange();
+ nodes.find(n=>n.type==='input'&&n.props.type==='number').props.onChange({target:{value:'8443'}});
+ nodes=render();await nodes.find(n=>n.props.children?.[0]==='确认修改 1 个节点').props.onClick();
+ assert.deepEqual(calls.find(c=>c[0]==='post')[2],{source_ip:'192.0.2.1',target_ip:null,target_port:8443,nodes:[{id:1,identity:'generation-a',port:'443'}]});
+ assert.equal(calls.filter(c=>c[0]==='refresh').length,1);
+});
 test('external ordering preserves real record IDs and moves only the requested neighbor',()=>{
  const rows=[{id:10},{id:20},{id:30}];assert.deepEqual(externalOrder(rows,30,-1),[10,30,20]);assert.deepEqual(externalOrder(rows,10,-1),[10,20,30]);assert.deepEqual(rows.map(r=>r.id),[10,20,30]);
 });
