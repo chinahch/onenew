@@ -76,7 +76,10 @@ class Plugin extends AbstractPlugin
         }catch(\Throwable $error){
             try{if($abuseClaim)Cache::forget($abuseKey);if($rateClaim)Cache::forget($rateKey);}catch(\Throwable $ignored){}
             // Never log exception messages: they may contain SQL, headers or secrets.
-            Log::warning('[SubscriptionGuard] Guard unavailable; subscription unchanged',['user_id'=>$user->id]);
+            Log::warning('[SubscriptionGuard] Guard unavailable; subscription unchanged',[
+                'user_id'=>$user->id,'error_type'=>get_class($error),
+                'error_source'=>basename($error->getFile()),'error_line'=>$error->getLine(),
+            ]);
             return;
         }finally{
             if($lock&&$acquired){try{$lock->release();}catch(\Throwable $ignored){}}

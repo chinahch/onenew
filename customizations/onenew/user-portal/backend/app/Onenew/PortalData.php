@@ -25,7 +25,9 @@ final class PortalData
         $periods = [];
         foreach (($plan->prices ?? []) as $key => $price) {
             if ($price !== null && isset(\App\Models\Plan::getAvailablePeriods()[$key]) && $key !== 'onetime' && $key !== 'reset_traffic') {
-                $periods[] = self::period($key) + ['price_cents' => (int)round((float)$price * 100)];
+                // Match OrderService::createFromRequest exactly; XB truncates
+                // the multiplied native price rather than rounding it.
+                $periods[] = self::period($key) + ['price_cents' => (int)($price * 100)];
             }
         }
         $selected = null;

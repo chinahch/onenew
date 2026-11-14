@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
@@ -37,6 +38,11 @@ final class SubscriptionGuardFeatureTest extends TestCase
         require __DIR__.'/../SubscriptionGuard/routes/web.php';
         View::addNamespace('SubscriptionGuard',__DIR__.'/../SubscriptionGuard/resources/views');
         Http::preventStrayRequests();Bus::fake([SendTelegramJob::class]);
+        Log::listen(function($event){
+            if($event->message==='[SubscriptionGuard] Guard unavailable; subscription unchanged'){
+                $this->fail('Guard processing failed: '.json_encode($event->context));
+            }
+        });
     }
     private function account(array $extra=[]):User
     {

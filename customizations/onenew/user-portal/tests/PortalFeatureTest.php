@@ -7,6 +7,7 @@ use App\Models\Plan;
 use App\Models\StatUser;
 use App\Models\User;
 use App\Services\AuthService;
+use App\Services\OrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
@@ -79,9 +80,12 @@ final class PortalFeatureTest extends TestCase
     public function test_renewal_uses_native_pending_order_and_durable_idempotency(): void
     {
         $plan=Plan::create(['name'=>'QA renewal','transfer_enable'=>100,'show'=>true,'sell'=>true,'renew'=>true,'prices'=>['monthly'=>19.99,'quarterly'=>55]]);
+        $nativeUser=$this->account();$nativeUser->plan_id=$plan->id;$nativeUser->save();
+        $nativeOrder=OrderService::createFromRequest($nativeUser,$plan,'monthly');
+        $this->assertSame($nativeOrder->total_amount,\App\Onenew\PortalData::plan($plan)['periods'][0]['price_cents']);
         $user=$this->account();$user->plan_id=$plan->id;$user->save();$expiry=$user->expired_at;
         $headers=$this->headersFor($user);$body=['request_id'=>str_repeat('a',32),'period'=>'monthly'];
-        $first=$this->postJson('/api/onenew/user/renewals',$body,$headers)->assertOk()->assertJsonPath('status','pending')->assertJsonPath('price_cents',1999)->json('id');
+        $first=$this->postJson('/api/onenew/user/renewals',$body,$headers)->assertOk()->assertJsonPath('status','pending')->assertJsonPath('price_cents',$nativeOrder->total_amount)->json('id');
         $this->postJson('/api/onenew/user/renewals',$body,$headers)->assertOk()->assertJsonPath('id',$first);
         self::assertSame(1,Order::where('user_id',$user->id)->count());self::assertSame($expiry,$user->fresh()->expired_at);
         Order::where('trade_no',$first)->update(['status'=>3]);
@@ -116,7 +120,7 @@ final class PortalFeatureTest extends TestCase
         $email='qa-register-'.Str::random(12).'@example.invalid';
         $this->postJson('/api/onenew/register',['email'=>$email,'password'=>Str::random(24)])->assertStatus(422);
         $this->postJson('/api/onenew/register',['email'=>$email,'password'=>Str::random(24),'invite_code'=>'not-a-real-code'])->assertStatus(422);
-        self::assertFalse(User::where('email',$email)->exists());
+        self::assertFalse(User::byEmail($email)->exists());
         $this->getJson('/api/onenew/invites/not-a-real-code')->assertOk()->assertJsonPath('valid',false);
     }
 
@@ -141,7 +145,9 @@ final class PortalFeatureTest extends TestCase
         $owner=$this->account();$code=new InviteCode();$code->user_id=$owner->id;$code->code=Str::random(8);$code->save();
         $email='qa-registered-'.Str::random(10).'@example.invalid';
         $this->postJson('/api/onenew/register',['email'=>$email,'password'=>Str::random(24),'invite_code'=>$code->code])->assertOk()->assertJsonPath('success',true)->assertJsonMissingPath('auth_data');
-        self::assertSame($owner->id,(int)User::where('email',$email)->firstOrFail()->invite_user_id);
+        $registered=User::byEmail($email)->firstOrFail();
+        self::assertSame(User::normalizeEmail($email),$registered->email);
+        self::assertSame($owner->id,(int)$registered->invite_user_id);
         self::assertTrue($code->fresh()->status);
         $this->getJson('/api/onenew/invites/'.$code->code)->assertOk()->assertJsonPath('valid',false);
     }
