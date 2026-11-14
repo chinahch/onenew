@@ -195,7 +195,7 @@ class NodeTrafficTest extends TestCase
             'server_port' => 443, 'machine_id' => $machine->id, 'rate' => '1.5', 'enabled' => true, 'group_ids' => ['1']]);
         $user = User::create(['email' => bin2hex(random_bytes(8)) . '@example.test', 'password' => 'unused',
             'uuid' => (string) \Illuminate\Support\Str::uuid(), 'token' => bin2hex(random_bytes(16)), 'group_id' => 1]);
-        return [$user, ['id' => $node->id, 'name' => $node->name, 'rate' => 1.5], $machine];
+        return [$user, ['id' => $node->id, 'name' => $node->name, 'rate' => 1.5, 'onenew_identity' => $node->onenew_identity], $machine];
     }
 
     private function actingAdmin(): void

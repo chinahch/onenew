@@ -12,6 +12,7 @@ class LedgerStatUserJob extends StatUserJob
 
     public function __construct(array $server, array $data, string $protocol, string $recordType = 'd')
     {
+        $server['onenew_identity'] ??= (string) (\App\Models\Server::find($server['id'] ?? 0)?->onenew_identity ?? '');
         parent::__construct($server, $data, $protocol, $recordType);
         $this->onenewBatchId = (string) Str::uuid();
     }

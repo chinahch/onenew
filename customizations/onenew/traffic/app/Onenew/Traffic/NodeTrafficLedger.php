@@ -36,7 +36,7 @@ class NodeTrafficLedger
             }
             $nativeArchive();
             foreach ($increments as $uid => $bytes) {
-                $key = ['user_id' => $uid, 'server_id' => (int) $server['id'], 'server_type' => $protocol,
+                $key = ['user_id' => $uid, 'server_id' => (int) $server['id'], 'node_identity' => (string) ($server['onenew_identity'] ?? ''), 'server_type' => $protocol,
                     'record_at' => $recordAt, 'server_rate' => number_format($rate, 8, '.', '')];
                 $metadata = ['node_name' => mb_substr((string) ($server['name'] ?? ('#' . $server['id'])), 0, 255), 'updated_at' => time()];
                 DB::table('v2_onenew_user_node_traffic')->insertOrIgnore($key + $metadata + [
