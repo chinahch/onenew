@@ -19,7 +19,8 @@ let esbuild;
 if(process.env.ONENEW_ESBUILD_MODULE)esbuild=await import(pathToFileURL(path.resolve(process.env.ONENEW_ESBUILD_MODULE)).href);
 else esbuild=await import('esbuild');
 if(esbuild.version!=='0.28.2')throw new Error('需要 esbuild 0.28.2');
-const modules=new Map(await Promise.all(['component.mjs','rules.mjs','catalog.json'].map(async file=>[file,await fs.readFile(path.join(here,'src',file),'utf8')])));
+const modules=new Map(await Promise.all(['component.mjs','rules.mjs','traffic.mjs','catalog.json'].map(async file=>[file,await fs.readFile(path.join(here,'src',file),'utf8')])));
+modules.set('component.mjs',modules.get('component.mjs')+"\nexport * from './traffic.mjs';\n");
 // A virtual namespace prevents dependency/tsconfig walks outside the customization tree.
 const runtime=await esbuild.build({entryPoints:['component.mjs'],bundle:true,write:false,format:'iife',globalName:'OnenewAdmin',target:'es2022',minify:true,legalComments:'inline',tsconfigRaw:{},plugins:[{
   name:'onenew-local-source',setup(build){

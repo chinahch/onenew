@@ -39,6 +39,14 @@ function copyOverlay(string $source, string $target): void
 copyOverlay($custom . '/health/app', $root . '/app');
 copyOverlay($custom . '/user-portal/backend/app', $root . '/app');
 copyOverlay($custom . '/runtime/app', $root . '/app');
+copyOverlay($custom . '/traffic/app', $root . '/app');
+require $custom . '/traffic/install.php';
+applyOnenewTrafficPatch($root);
+foreach (['XboardInstall.php', 'XboardUpdate.php'] as $command) {
+    replaceOnce($root . '/app/Console/Commands/' . $command,
+        'PluginManager::installDefaultPlugins();',
+        'PluginManager::installDefaultPlugins();' . "\n        \\App\\Onenew\\OnenewPlugins::installMissing();");
+}
 // Only a fresh native installation reaches this point in the command. Existing
 // deployments keep their administrator-selected registration and brand policy.
 replaceOnce($root . '/app/Console/Commands/XboardInstall.php',
@@ -92,6 +100,11 @@ $entrypoint = '/entrypoint.sh';
 if ($root !== '/www') { $entrypoint = $root . '/entrypoint.sh'; }
 $entry = file_get_contents($entrypoint);
 $entry = str_replace(['xboard:', 'xboard-ws-server'], ['onenew:', 'onenew-ws'], $entry);
+$entry = str_replace('chown redis:redis /data 2>/dev/null || true',
+    'chown redis:www /data && chmod 0750 /data', $entry);
+$entry = str_replace('exec "$@"', 'php /opt/onenew/seed-plugins.php /www' . "\n" . 'exec "$@"', $entry);
+// Seeding precedes the startup migration/plugin check as well as the first install.
+$entry = str_replace('php /www/artisan onenew:update --no-interaction', 'php /opt/onenew/seed-plugins.php /www && php /www/artisan onenew:update --no-interaction', $entry);
 file_put_contents($entrypoint, $entry);
 
 $supervisor = $root === '/www' ? '/etc/supervisor/conf.d/supervisord.conf' : $root . '/supervisord.conf';

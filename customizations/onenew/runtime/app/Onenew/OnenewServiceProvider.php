@@ -15,7 +15,14 @@ class OnenewServiceProvider extends ServiceProvider
     {
         $root = '/opt/onenew';
         $this->loadMigrationsFrom($root . '/user-portal/backend/database/migrations');
+        $this->loadMigrationsFrom($root . '/traffic/database/migrations');
+        $this->commands([\App\Onenew\Traffic\PruneTelemetry::class]);
         require $root . '/health/routes.php';
         require $root . '/user-portal/backend/routes.php';
+        require $root . '/traffic/routes.php';
+        $this->app->booted(function (): void {
+            $this->app->make(\Illuminate\Console\Scheduling\Schedule::class)
+                ->command('onenew:prune-telemetry')->dailyAt('03:10')->withoutOverlapping();
+        });
     }
 }

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -22,6 +23,8 @@ final class PortalFeatureTest extends TestCase
         config()->set('app.key','base64:'.base64_encode(str_repeat('q',32)));
         config()->set('app.timezone','UTC');
         config()->set('cache.default','array');
+        config()->set('cache.stores.redis.driver','array');
+        Cache::purge('redis');
         admin_setting(['captcha_enable'=>0,'email_verify'=>0,'stop_register'=>0,'try_out_plan_id'=>0,'invite_force'=>0,'invite_never_expire'=>0]);
     }
 

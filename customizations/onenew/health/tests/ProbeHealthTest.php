@@ -22,6 +22,8 @@ class ProbeHealthTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config()->set('cache.stores.redis.driver', 'array');
+        Cache::purge('redis');
         config()->set('app.key', 'base64:' . base64_encode(str_repeat('h', 32)));
         config()->set('onenew.health_store', 'array');
         Cache::store('array')->flush();
