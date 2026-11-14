@@ -39,7 +39,7 @@ export function LandingEditor({react:React,outbounds,routes,setOutbounds,setRout
   try{
     const candidate=preview?{outbounds:preview.outbounds,routes:preview.routes}:{outbounds:array(outbounds),routes:array(routes)};
     const prepared=prepareLandingSave({...candidate,runtimeMetrics:actualMetrics,network});
-    if(core)probeOutbound=prepared.outbounds.find(out=>out.tag===tag)||prepared.outbounds[0]||null;
+    if(core&&(!link.trim()||preview))probeOutbound=prepared.outbounds.find(out=>out.tag===tag)||prepared.outbounds[0]||null;
   }catch{/* Incompatible native drafts stay editable and cannot be tested as another kernel. */}
   return h('section',{className:'onenew-landing','aria-label':'落地链接解析'},
     h('p',{className:'onenew-help'},core?'已根据机器上报自动识别运行内核：'+coreLabels[core]:'等待机器上报实际运行内核，暂时不能生成或检测落地。'),

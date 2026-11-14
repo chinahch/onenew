@@ -17,6 +17,15 @@ test('runtime absence blocks generation even when saved outbound schema is known
  const nodes=mount({}).render();assert.match(text(nodes),/等待.*上报/);
  const generate=nodes.find(n=>n.type==='button'&&n.children.includes('生成并预览'));assert.equal(generate.props.disabled,true);
 });
+
+test('a newly pasted link cannot accidentally test the previously saved landing',()=>{
+ const editor=mount({runtimeMetrics:{kernel_type:'singbox'}});
+ let nodes=editor.render();
+ assert.equal(nodes.find(n=>n.type?.name==='LandingProbe').props.outbound.tag,'landing');
+ nodes.find(n=>n.props['aria-label']==='落地链接').props.onChange({target:{value:'socks://new.example:1080'}});
+ nodes=editor.render();
+ assert.equal(nodes.find(n=>n.type?.name==='LandingProbe').props.outbound,null);
+});
 test('saving actual Xray migrates complete SOCKS credentials and global route without a replacement link',()=>{
  assert.equal(typeof api.prepareLandingSave,'function');
  const result=api.prepareLandingSave({outbounds:savedOut,routes:savedRoutes,runtimeMetrics:{kernel_type:'xray',onenew_runtime:true}});
