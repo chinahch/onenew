@@ -198,6 +198,30 @@ class NodeTrafficTest extends TestCase
         return [$user, ['id' => $node->id, 'name' => $node->name, 'rate' => 1.5, 'onenew_identity' => $node->onenew_identity], $machine];
     }
 
+    public function test_reused_node_id_keeps_old_and_new_traffic_separate(): void
+    {
+        [$user, $server, $machine] = $this->fixture();
+        $oldJob = new LedgerStatUserJob($server, [$user->id => [10, 20]], 'vmess');
+        $oldJob->handle();
+        Server::findOrFail($server['id'])->delete();
+        $new = Server::create(['name' => 'replacement', 'type' => 'vmess', 'host' => 'new.example',
+            'port' => 443, 'server_port' => 443, 'rate' => 1.5, 'machine_id' => $machine->id, 'group_ids' => ['1']]);
+        $this->assertSame($server['id'], $new->id);
+        (new LedgerStatUserJob($new->toArray(), [$user->id => [30, 40]], 'vmess'))->handle();
+        // A delayed archive still belongs to the old incarnation, without
+        // discarding the user's real traffic from their daily usage record.
+        (new LedgerStatUserJob($server, [$user->id => [1, 2]], 'vmess'))->handle();
+        $this->assertSame(2, DB::table('v2_onenew_user_node_traffic')->count());
+        $this->actingAdmin();
+        $rows = $this->getJson($this->url('nodes', $user))->assertOk()->json('data');
+        $old = collect($rows)->firstWhere('node_name', 'snapshot-node');
+        $replacement = collect($rows)->firstWhere('node_name', 'replacement');
+        $this->assertTrue($old['node_deleted']);
+        $this->assertFalse($replacement['node_deleted']);
+        $this->assertSame(11, $old['raw_u']);
+        $this->assertSame(30, $replacement['raw_u']);
+    }
+
     private function actingAdmin(): void
     {
         $user = User::create(['email' => bin2hex(random_bytes(8)) . '@admin.test', 'password' => 'unused',

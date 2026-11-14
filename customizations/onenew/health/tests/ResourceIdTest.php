@@ -92,4 +92,21 @@ class ResourceIdTest extends TestCase
         $this->assertFalse(\App\Onenew\ResourceConnections::valid($socket));
         $this->assertTrue($socket->closed);
     }
+
+    public function test_machine_socket_cannot_receive_or_report_a_replaced_node(): void
+    {
+        $machine = ServerMachine::create(['name' => 'old', 'token' => ServerMachine::generateToken(), 'is_active' => true]);
+        $node = $this->node(); $node->update(['machine_id' => $machine->id]);
+        $socket = new class { public $machineId; public $onenewCredentialHash; public $onenewNodeIdentities; public bool $closed = false;
+            public function close(): void { $this->closed = true; } };
+        $socket->machineId = $machine->id;
+        $socket->onenewCredentialHash = hash('sha256', $machine->token);
+        $socket->onenewNodeIdentities = [$node->id => $node->onenew_identity];
+        $this->assertTrue(\App\Onenew\ResourceConnections::valid($socket, $node->id));
+        $node->delete();
+        $replacement = $this->node(); $replacement->update(['machine_id' => $machine->id]);
+        $this->assertSame($node->id, $replacement->id);
+        $this->assertFalse(\App\Onenew\ResourceConnections::valid($socket, $replacement->id));
+        $this->assertTrue($socket->closed);
+    }
 }
