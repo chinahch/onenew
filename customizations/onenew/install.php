@@ -41,6 +41,13 @@ copyOverlay($custom . '/user-portal/backend/app', $root . '/app');
 copyOverlay($custom . '/runtime/app', $root . '/app');
 require $custom . '/runtime/install-ids.php';
 applyOnenewResourceIds($root);
+copyOverlay($custom . '/external/app', $root . '/app');
+require $custom . '/external/install.php';
+applyOnenewExternalNodes($root);
+copyOverlay($custom . '/egress/app', $root . '/app');
+replaceOnce($root . '/app/Services/ServerService.php',
+    "        return \$response;\n    }",
+    "        \$ipFamily = \\App\\Onenew\\MachineEgress::forNode(\$node);\n        if (\$ipFamily !== null) \$response['ip_family'] = \$ipFamily;\n        return \$response;\n    }");
 copyOverlay($custom . '/traffic/app', $root . '/app');
 copyOverlay($custom . '/protocols/app', $root . '/app');
 require $custom . '/protocols/install.php';
