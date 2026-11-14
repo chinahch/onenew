@@ -7,7 +7,10 @@ RUN corepack enable && corepack prepare pnpm@11.25.0 --activate
 COPY customizations/onenew/admin/package.json customizations/onenew/admin/pnpm-lock.yaml customizations/onenew/admin/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY customizations/onenew/admin/ ./
-COPY --from=upstream /www/public/assets/admin /build/upstream-admin
+# The base image cloned a moving admin submodule at build time. Use the exact
+# independently verified distribution instead of trusting that embedded copy.
+ADD --checksum=sha256:2f163cb99195d9176ccceadbd71a1b85259f3ba3dbe56646012d67287ffb0214 https://codeload.github.com/cedar2025/xboard-admin-dist/tar.gz/ef5f43da335092cbff8fdf0ad7ff9b4d92d7d0d7 /tmp/onenew-admin.tar.gz
+RUN mkdir /build/upstream-admin && tar -xzf /tmp/onenew-admin.tar.gz --strip-components=1 -C /build/upstream-admin
 RUN ONENEW_ADMIN_UPSTREAM=/build/upstream-admin pnpm test && pnpm build --upstream-dir /build/upstream-admin
 
 FROM --platform=$BUILDPLATFORM node:24.22.1-alpine AS user-build
