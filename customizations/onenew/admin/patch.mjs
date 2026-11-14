@@ -12,6 +12,9 @@ export function patchBundle(source,runtime){
   const editorStart=source.indexOf('function m4t('),editorEnd=source.indexOf('const f4t=',editorStart);
   let editor=source.slice(editorStart,editorEnd);
   if(sha(editor)!==contract.networkEditorSha256)throw new Error('协议编辑器 SHA256 不匹配');
+  const templateStart=editor.indexOf('xhttp:{label:"XHTTP",content:'),templateEnd=editor.indexOf('},g=()=>{switch(i)',templateStart);
+  if(templateStart<0||templateEnd<templateStart)throw new Error('XHTTP 模板边界不存在');
+  editor=editor.slice(0,templateStart)+'xhttp:{label:"XHTTP",content:{host:"example.com",path:"/",mode:"packet-up",alpn:"h2",extra:{headers:{},xPaddingBytes:"100-1000",noGRPCHeader:!1,noSSEHeader:!1}}}'+editor.slice(templateEnd);
   editor=replaceOnce(editor,'},g=()=>{switch(i)',',h3:{label:"H3",content:{host:"example.com",path:"/",mode:"auto",alpn:"h3",extra:{headers:{},xPaddingBytes:"100-1000",noGRPCHeader:!1,noSSEHeader:!1}}}},g=()=>{switch(i)');
   editor=replaceOnce(editor,'case"xhttp":return["xhttp"]','case"xhttp":return["xhttp","h3"]');
   source=source.slice(0,editorStart)+editor+source.slice(editorEnd);

@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import {patchBundle} from './patch.mjs';
 const source=fs.readFileSync(process.env.ONENEW_ADMIN_UPSTREAM?`${process.env.ONENEW_ADMIN_UPSTREAM}/assets/index-CEIYH7i8.js`:new URL('../../../../xboard-admin-dist/assets/index-CEIYH7i8.js',import.meta.url),'utf8');
 const h3={host:'example.com',path:'/',mode:'auto',alpn:'h3',extra:{headers:{},xPaddingBytes:'100-1000',noGRPCHeader:false,noSSEHeader:false}};
+const xhttp={host:'example.com',path:'/',mode:'packet-up',alpn:'h2',extra:{headers:{},xPaddingBytes:'100-1000',noGRPCHeader:false,noSSEHeader:false}};
 function editor(value,network='xhttp'){
  const patched=patchBundle(source,''),a=patched.indexOf('function m4t('),b=patched.indexOf('const f4t=',a);
  const state=[true,JSON.stringify(value),null],saved=[];let cursor=0;
@@ -26,4 +27,14 @@ test('XHTTP editor exposes H3 and XHTTP templates and saves edited H3 JSON',()=>
 test('H3 template is confined to XHTTP transport',()=>{
  const nodes=editor({},'ws').render();
  assert.equal(nodes.some(n=>n.props.children==='使用H3模板'),false);
+});
+
+test('XHTTP template uses packet-up and h2 and remains editable before save',()=>{
+ const e=editor({path:'/old'});let nodes=e.render();
+ nodes.find(n=>n.props.children==='使用XHTTP模板').props.onClick();
+ assert.deepEqual(JSON.parse(e.state[1]),xhttp);
+ nodes=e.render();const edited={...xhttp,host:'custom.example',path:'/editable'};
+ nodes.find(n=>n.type==='aZt').props.onChange({target:{value:JSON.stringify(edited)}});
+ nodes=e.render();nodes.find(n=>n.props.children==='common.confirm').props.onClick();
+ assert.deepEqual(JSON.parse(JSON.stringify(e.saved)),[edited]);
 });
