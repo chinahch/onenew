@@ -77,6 +77,21 @@ export function ExternalNodes({react:React,get,post}){
 }
 
 const familyLabels={inherit:'继承服务器设置',default:'系统默认',prefer_ipv4:'IPv4 优先',prefer_ipv6:'IPv6 优先'};
+export function BatchAddresses({react:React,get,post,useQueryClient}){
+ const queryClient=useQueryClient();
+ const h=React.createElement,[open,setOpen]=React.useState(false),[source,setSource]=React.useState(''),[target,setTarget]=React.useState(''),[port,setPort]=React.useState(''),[rows,setRows]=React.useState(null),[selected,setSelected]=React.useState([]),[busy,setBusy]=React.useState(false),[error,setError]=React.useState(''),[done,setDone]=React.useState('');
+ const api='/api/onenew/admin/node-addresses';
+ const button=(label,onClick,disabled=false)=>h('button',{type:'button',className:'onenew-resource-button',onClick,disabled:busy||disabled},label);
+ async function search(){setBusy(true);setError('');setDone('');setRows(null);try{const value=await read(get,api,{ip:source.trim()});setRows(value.nodes);setSelected(value.nodes.map(n=>n.id))}catch(e){setError(message(e))}finally{setBusy(false)}}
+ async function apply(){setBusy(true);setError('');try{const value=await write(post,api,{source_ip:source.trim(),target_ip:target.trim()||null,target_port:port?Number(port):null,nodes:rows.filter(n=>selected.includes(n.id)).map(n=>({id:n.id,identity:n.identity,port:n.port}))});setDone(`已修改 ${value.updated} 个节点。客户端更新订阅后可使用新地址。`);setRows(null);setSelected([]);await queryClient.invalidateQueries().catch(()=>{})}catch(e){setError(message(e))}finally{setBusy(false)}}
+ return h(React.Fragment,null,button('批量修改地址/端口',()=>{setOpen(true);setRows(null);setError('');setDone('')}),open&&h(Dialog,{react:React,title:'批量修改 IP / 连接端口',onClose:()=>{if(!busy)setOpen(false)}},h('div',{className:'onenew-resource-body onenew-landing'},
+  h('label',{className:'onenew-field'},h('span',null,'搜索旧 IP（IPv4 / IPv6）'),h('input',{value:source,disabled:busy,onChange:e=>{setSource(e.target.value);setRows(null);setSelected([]);setDone('')},placeholder:'输入需要替换的 IP'})),button('搜索相同地址',search,!source.trim()),
+  error&&h('p',{role:'alert',className:'onenew-error'},error),done&&h('p',{role:'status'},done),
+  rows&&h(React.Fragment,null,h('div',{className:'onenew-resource-actions'},h('strong',null,`匹配 ${rows.length} 个，已选 ${selected.length} 个`),button('全选',()=>setSelected(rows.map(n=>n.id))),button('取消全选',()=>setSelected([]))),
+   h('div',{className:'onenew-resource-list'},rows.map(row=>h('label',{key:row.id,className:'onenew-check'},h('input',{type:'checkbox',disabled:busy,checked:selected.includes(row.id),onChange:()=>setSelected(selected.includes(row.id)?selected.filter(id=>id!==row.id):[...selected,row.id])}),`#${row.id} ${row.name} · ${row.type.toUpperCase()} · ${row.host}:${row.port}`))),
+   h('div',{className:'onenew-row'},h('label',{className:'onenew-field'},h('span',null,'新 IP（留空保持）'),h('input',{value:target,disabled:busy,onChange:e=>setTarget(e.target.value)})),h('label',{className:'onenew-field'},h('span',null,'新连接端口（留空保持）'),h('input',{type:'number',min:1,max:65535,value:port,disabled:busy,onChange:e=>setPort(e.target.value)}))),
+   h('p',{className:'onenew-help'},'只修改勾选节点的对外地址和连接端口，监听端口保持原值。'),button(`确认修改 ${selected.length} 个节点`,apply,!selected.length||(!target.trim()&&!port))))));
+}
 export function MachineEgress({react:React,machineId,open,get,onChange}){
  const h=React.createElement,[settings,setSettings]=React.useState(null),[error,setError]=React.useState(''),callback=React.useRef(onChange);callback.current=onChange;
  React.useEffect(()=>{setSettings(null);setError('');if(!open||!machineId)return;let active=true;

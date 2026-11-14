@@ -1,6 +1,10 @@
 <?php
 use App\Onenew\External\ExternalController;
 use Illuminate\Support\Facades\Route;
+Route::middleware(['api','admin'])->group(function(){
+    Route::get('/api/onenew/admin/node-addresses',[\App\Onenew\NodeAddresses::class,'preview']);
+    Route::post('/api/onenew/admin/node-addresses',[\App\Onenew\NodeAddresses::class,'apply']);
+});
 Route::middleware(['api','admin'])->prefix('/api/onenew/admin/external-nodes')->group(function () {
     Route::get('/',[ExternalController::class,'index']);
     Route::get('/lookups',[ExternalController::class,'lookups']);

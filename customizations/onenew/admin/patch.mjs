@@ -52,6 +52,7 @@ export function patchBundle(source,runtime){
   source=source.slice(0,trafficStart)+traffic+source.slice(trafficEnd);
   const externalButton='children:[Q.jsx(YXt,{icon:"ion:add"}),Q.jsx("div",{children:e("form.add_node")})]}),Q.jsxs(ptt';
   source=replaceOnce(source,externalButton,'children:[Q.jsx(YXt,{icon:"ion:add"}),Q.jsx("div",{children:e("form.add_node")})]}),Q.jsx(OnenewAdmin.ExternalNodes,{react:H,get:IL,post:RL}),Q.jsxs(ptt');
+  source=replaceOnce(source,'Q.jsx(OnenewAdmin.ExternalNodes,{react:H,get:IL,post:RL}),','Q.jsx(OnenewAdmin.ExternalNodes,{react:H,get:IL,post:RL}),Q.jsx(OnenewAdmin.BatchAddresses,{react:H,get:IL,post:RL,useQueryClient:lC}),');
   const machineStart=source.indexOf('function n3t('),machineEnd=source.indexOf('function i3t(',machineStart);
   let machine=source.slice(machineStart,machineEnd);
   if(sha(machine)!==contract.machineEditorSha256)throw new Error('服务器编辑器 SHA256 不匹配');
