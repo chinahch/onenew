@@ -22,10 +22,19 @@ class ProbeService
     public function poll(ServerMachine $machine): array
     {
         return $this->store->locked((int) $machine->id, function () use ($machine) {
+            if (class_exists(ExitProbeService::class) && app(ExitProbeService::class)->busy((int) $machine->id)) {
+                return [];
+            }
             $now = now()->timestamp;
             $active = $this->store->active((int) $machine->id);
             if ($active && $active['expires_at'] > $now) {
-                return [];
+                $current = Server::find($active['node_id']);
+                if ($current && (int) $current->machine_id === (int) $machine->id && $this->nodeAvailable($current)
+                    && hash_equals($active['revision'], $this->revision($current))) {
+                    return [];
+                }
+                $this->finish($active, 'pending', 'configuration_unavailable');
+                $active = null;
             }
             if ($active) {
                 $this->finish($active, 'expired', 'expired');
@@ -37,7 +46,9 @@ class ProbeService
             });
             foreach ($nodes as $node) {
                 $last = $this->store->latest((int) $node->id);
-                if ($last && $last['created_at'] + self::INTERVAL > $now) {
+                if ($last && $last['created_at'] + self::INTERVAL > $now
+                    && $last['machine_id'] === (int) $machine->id
+                    && hash_equals($last['revision'], $this->revision($node))) {
                     continue;
                 }
                 $task = [
@@ -187,7 +198,8 @@ class ProbeService
     {
         $fields = ['machine_id', 'enabled', 'type', 'host', 'port', 'server_port', 'parent_id',
             'protocol_settings', 'group_ids', 'custom_outbounds', 'custom_routes', 'route_ids', 'cert_config'];
-        $values = [];
+        // Invalidate cached unsupported results when the client builder changes.
+        $values = ['probe_schema_version' => 2];
         foreach ($fields as $field) {
             $value = $node->getAttribute($field);
             // The native port column is VARCHAR without a model scalar cast:

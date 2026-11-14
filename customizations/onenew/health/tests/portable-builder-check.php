@@ -104,6 +104,8 @@ namespace {
         ['vless-tcp-enc', 'vless', $enc + ['tls' => 0, 'network' => 'tcp']],
         ['vless-xhttp', 'vless', ['tls' => 0, 'network' => 'xhttp', 'network_settings' => ['path' => '/edge', 'mode' => 'packet-up']]],
         ['vless-xhttp-tls-enc', 'vless', $enc + $tls + ['network' => 'xhttp', 'network_settings' => ['path' => '/edge', 'alpn' => 'h2']]],
+        ['vless-xhttp-h3', 'vless', $tls + ['network' => 'xhttp', 'network_settings' => ['host' => 'certificate.example', 'path' => '/', 'mode' => 'auto', 'alpn' => 'h3',
+            'extra' => ['headers' => new \stdClass(), 'xPaddingBytes' => '100-1000', 'noGRPCHeader' => false, 'noSSEHeader' => false]]]],
         ['vless-xhttp-reality-enc', 'vless', $enc + $reality + ['network' => 'xhttp', 'network_settings' => ['path' => '/edge', 'extra' => ['xmux' => ['maxConcurrency' => '16-32']]]]],
         ['trojan-tls', 'trojan', $tls + ['network' => 'tcp']],
         ['ss2022', 'shadowsocks', ['cipher' => '2022-blake3-aes-128-gcm']],
@@ -131,6 +133,11 @@ namespace {
         }
         if ($type === 'shadowsocks') {
             check(data_get($out, 'settings.password') === \App\Utils\Helper::getServerKey(1700000000, 16) . ':' . \App\Utils\Helper::uuidToBase64($uuid, 16), 'SS2022 native password mismatch');
+        }
+        if ($name === 'vless-xhttp-h3') {
+            check(data_get($out, 'stream_settings.tlsSettings.alpn') === ['h3'], 'H3 probe lost ALPN');
+            check(str_contains(json_encode($out), '"headers":{}'), 'H3 probe headers must be an object');
+            check(data_get($out, 'stream_settings.xhttpSettings.extra.noSSEHeader') === false, 'H3 tuning was dropped');
         }
     }
     foreach ([

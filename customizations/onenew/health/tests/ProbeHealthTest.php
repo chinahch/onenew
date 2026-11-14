@@ -111,12 +111,39 @@ class ProbeHealthTest extends TestCase
         $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertJsonCount(1, 'tasks');
     }
 
+    public function test_editing_a_node_replaces_a_stale_running_probe_immediately(): void
+    {
+        [$machine, $node] = $this->fixture();
+        $first = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->json('tasks.0');
+        $node->update(['server_port' => 23456]);
+        // Same second: a new revision must not wait for the old lease or interval.
+        $next = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk()->json('tasks.0');
+        $this->assertNotNull($next);
+        $this->assertNotSame($first['id'], $next['id']);
+        $this->assertSame(23456, $next['payload']['outbound']['settings']['server_port']);
+        $this->assertSame('running', app(ProbeService::class)->status($node->fresh())['state']);
+        $this->withToken($machine->token)->postJson('/api/v3/server/probes/' . $first['id'] . '/result', [
+            'machine_id' => $machine->id, 'lease' => $first['lease'], 'state' => 'succeeded',
+        ])->assertConflict();
+    }
+
     public function test_heartbeat_alone_never_creates_proxy_success_and_user_route_requires_authentication(): void
     {
         [$machine, $node] = $this->fixture();
         $machine->update(['last_seen_at' => now()->timestamp]);
         $this->assertSame('pending', app(ProbeService::class)->status($node)['state']);
         $this->getJson('/api/onenew/user/nodes')->assertForbidden();
+    }
+
+    public function test_runtime_kernel_metadata_is_allowlisted_in_native_metrics(): void
+    {
+        [, $node] = $this->fixture();
+        \App\Services\ServerService::updateMetrics($node, ['kernel_type' => 'xray', 'onenew_runtime' => true]);
+        $this->assertSame('xray', $node->metrics['kernel_type']);
+        $this->assertTrue($node->metrics['onenew_runtime']);
+        \App\Services\ServerService::updateMetrics($node, ['kernel_type' => 'unknown', 'onenew_runtime' => 'true']);
+        $this->assertNull($node->metrics['kernel_type']);
+        $this->assertFalse($node->metrics['onenew_runtime']);
     }
 
     public function test_configuration_failures_remain_pending_and_real_proxy_failures_are_failed(): void

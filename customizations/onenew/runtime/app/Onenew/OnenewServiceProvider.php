@@ -20,5 +20,6 @@ class OnenewServiceProvider extends ServiceProvider
         require $root . '/health/routes.php';
         require $root . '/user-portal/backend/routes.php';
         require $root . '/traffic/routes.php';
+        require $root . '/exit-probe/routes.php';
     }
 }

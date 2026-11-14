@@ -57,7 +57,8 @@ class ProbeStore
         unset($public['ciphertext'], $public['lease_hash'], $public['user_id'], $public['user_revision']);
         $latest = $this->latest((int) $task['node_id']);
         // An old machine's late result must not replace a new owner's task.
-        if (!$latest || $latest['id'] === $task['id'] || $task['created_at'] > $latest['created_at']) {
+        if (!$latest || $latest['id'] === $task['id'] || $task['created_at'] > $latest['created_at']
+            || ($running && $task['created_at'] === $latest['created_at'])) {
             $this->cache()->put('onenew:probe:node:' . $task['node_id'], $public, self::RETENTION);
         }
         if ($task['state'] === 'running') {

@@ -9,6 +9,12 @@ function replaceOnce(source,anchor,replacement){
 export function patchBundle(source,runtime){
   source=source.replace(/\r\n/g,'\n');
   if(sha(source)!==contract.files['assets/index-CEIYH7i8.js'])throw new Error('上游 bundle SHA256 不匹配，拒绝修改');
+  const editorStart=source.indexOf('function m4t('),editorEnd=source.indexOf('const f4t=',editorStart);
+  let editor=source.slice(editorStart,editorEnd);
+  if(sha(editor)!==contract.networkEditorSha256)throw new Error('协议编辑器 SHA256 不匹配');
+  editor=replaceOnce(editor,'},g=()=>{switch(i)',',h3:{label:"H3",content:{host:"example.com",path:"/",mode:"auto",alpn:"h3",extra:{headers:{},xPaddingBytes:"100-1000",noGRPCHeader:!1,noSSEHeader:!1}}}},g=()=>{switch(i)');
+  editor=replaceOnce(editor,'case"xhttp":return["xhttp"]','case"xhttp":return["xhttp","h3"]');
+  source=source.slice(0,editorStart)+editor+source.slice(editorEnd);
   const start=source.indexOf('function l5t('),end=source.indexOf('const c5t=',start);
   let advanced=source.slice(start,end);
   if(sha(advanced)!==contract.advancedSha256)throw new Error('高级协议组件 SHA256 不匹配');
@@ -17,7 +23,10 @@ export function patchBundle(source,runtime){
   advanced=replaceOnce(advanced,',Q.jsx(ow,{value:"routes",className:"text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm",children:i("dynamic_form.routing.routes_tab","Routes")})','');
   const paneStart=advanced.indexOf('Q.jsx(aw,{value:"outbounds"'),footer=advanced.indexOf('Q.jsxs(ftt,',paneStart);
   if(paneStart<0||footer<0)throw new Error('高级协议内容边界不存在');
-  advanced=advanced.slice(0,paneStart)+'Q.jsx(aw,{value:"outbounds",className:"mt-0",children:Q.jsx(OnenewAdmin.LandingEditor,{react:H,outbounds:g,routes:_,setOutbounds:p,setRoutes:v})})]}),'+advanced.slice(footer);
+  advanced=advanced.slice(0,paneStart)+'Q.jsx(aw,{value:"outbounds",className:"mt-0",children:Q.jsx(OnenewAdmin.LandingEditor,{react:H,runtimeMetrics:e.getValues("metrics"),onRuntime:r=>e.setValue("metrics",r,{shouldDirty:!1}),network:e.getValues("protocol_settings.network"),nodeId:e.getValues("id"),machineId:e.getValues("machine_id"),get:IL,post:RL,outbounds:g,routes:_,setOutbounds:p,setRoutes:v})})]}),'+advanced.slice(footer);
+  const saveStart=advanced.indexOf('onClick:()=>{(()=>{let t=!1;'),saveEnd=advanced.indexOf('},className:"px-8',saveStart);
+  if(saveStart<0||saveEnd<0)throw new Error('高级协议保存边界不存在');
+  advanced=advanced.slice(0,saveStart)+'onClick:()=>{try{const t=OnenewAdmin.prepareLandingSave({outbounds:g,routes:_,runtimeMetrics:e.getValues("metrics"),network:e.getValues("protocol_settings.network")});e.setValue(u,t.outbounds);e.setValue(h,t.routes);f(null);y(null);s(!1)}catch(t){f(t.message);gE.error(t.message)}'+advanced.slice(saveEnd);
   source=source.slice(0,start)+advanced+source.slice(end);
   const menus=[
     '{id:"knowledge-management",title:"nav:knowledgeManagement",label:"",href:"/config/knowledge",icon:Q.jsx(af,{size:18})}',
