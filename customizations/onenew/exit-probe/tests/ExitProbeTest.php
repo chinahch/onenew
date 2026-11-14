@@ -36,7 +36,7 @@ class ExitProbeTest extends TestCase
     private function fixture(): array
     {
         $machine = ServerMachine::create(['name'=>'exit-machine','token'=>'private-machine-token','is_active'=>true]);
-        $node = Server::create(['name'=>'runtime-reported','type'=>'vmess','host'=>'public.example','port'=>443,'rate'=>'1',
+        $node = Server::create(['name'=>'runtime-reported','type'=>'vmess','host'=>'public.example','port'=>443,'server_port'=>443,'rate'=>'1',
             'machine_id'=>$machine->id,'group_ids'=>['1'],'enabled'=>true,'show'=>true,
             ]);
         \App\Services\ServerService::updateMetrics($node, ['kernel_type'=>'singbox','onenew_runtime'=>true]);
