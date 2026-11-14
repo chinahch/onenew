@@ -36,22 +36,26 @@ jobs:
         run: |
           python3 caddy/scripts/prepare_source.py --upstream upstream --out prepared
           python3 onenew/customizations/onenew/node-audit/patch.py prepared
+          python3 onenew/customizations/onenew/node/hot_apply.py --source prepared
+          python3 onenew/customizations/onenew/node/exit-probe-patch.py --source prepared
       - name: Verify package and installer regressions
         run: |
           python3 onenew/customizations/onenew/node/test_build.py
           python3 onenew/customizations/onenew/node/test_installer.py
+          python3 onenew/customizations/onenew/node/test_exit_probe_patch.py
+          python3 onenew/customizations/onenew/node/test_upgrade.py
           bash -n onenew/customizations/onenew/node/install.sh
       - name: Test collectors and both native kernels
         working-directory: prepared
-        run: go test -tags 'with_quic,with_utls,with_acme,with_clash_api,with_wireguard' ./internal/onenewaudit ./internal/kernel/xray ./internal/kernel/singbox ./internal/machine
+        run: go test -tags 'with_quic,with_utls,with_acme,with_clash_api,with_wireguard' ./...
       - name: Build Onenew native package
         run: python3 onenew/customizations/onenew/node/build.py --source prepared --arch ${{ matrix.arch }} --out dist
       - name: Verify amd64 executable version and CLI configuration
         if: matrix.arch == 'amd64'
         run: |
-          dist/amd64/caddy -v | grep '^caddy onenew-v0.1.0 '
+          dist/amd64/caddy -v | grep '^caddy onenew-v0.1.1 '
           mkdir -m 700 /tmp/onenew-fixture
-          dist/amd64/caddyctl config init --mode machine --panel-url https://panel.example.test --token fixture-disposable-token --machine-id 7 --kernel singbox --health-port 65530 --version onenew-v0.1.0 --output /tmp/onenew-fixture/config.yml --credentials-out /tmp/onenew-fixture/credentials.env --meta /tmp/onenew-fixture/install-meta.json --install-root /etc/caddy
+          dist/amd64/caddyctl config init --mode machine --panel-url https://panel.example.test --token fixture-disposable-token --machine-id 7 --kernel singbox --health-port 65530 --version onenew-v0.1.1 --output /tmp/onenew-fixture/config.yml --credentials-out /tmp/onenew-fixture/credentials.env --meta /tmp/onenew-fixture/install-meta.json --install-root /etc/caddy
           test -s /tmp/onenew-fixture/config.yml
           test -s /tmp/onenew-fixture/credentials.env
       - uses: actions/upload-artifact@v4
@@ -80,8 +84,8 @@ jobs:
         run: |
           set -euo pipefail
           # Do not replace a previously published package or move its source tag.
-          if gh release view node-v0.1.0 >/dev/null 2>&1; then
-            echo 'node-v0.1.0 already published; keeping the existing release unchanged.'
+          if gh release view node-v0.1.1 >/dev/null 2>&1; then
+            echo 'node-v0.1.1 already published; keeping the existing release unchanged.'
             exit 0
           fi
-          gh release create node-v0.1.0 dist/*.tar.gz dist/SHA256SUMS-* dist/build-info-*.json --target "$GITHUB_SHA" --title 'Onenew native node v0.1.0' --prerelease --notes 'Native binary packages for systemd/OpenRC. Fixed dual-kernel, dual-IP, certificate, real proxy probe and opt-in domain metadata overlays. SHA256 files included. amd64 smoke tested; arm64 cross-built, low-memory ARM64 runtime not validated. Existing caddy/php-fpm installations are preserved by the installer and need an explicit migration.'
+          gh release create node-v0.1.1 dist/*.tar.gz dist/SHA256SUMS-* dist/build-info-*.json --target "$GITHUB_SHA" --title 'Onenew native node v0.1.1' --prerelease --notes 'Native binary packages for systemd/OpenRC. Fixed dual-kernel, dual-IP, certificate, real proxy probe and opt-in domain metadata overlays. SHA256 files included. amd64 smoke tested; arm64 cross-built, low-memory ARM64 runtime not validated. Existing caddy/php-fpm installations are preserved by the installer and need an explicit migration.'

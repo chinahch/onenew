@@ -40,6 +40,16 @@ copyOverlay($custom . '/health/app', $root . '/app');
 copyOverlay($custom . '/user-portal/backend/app', $root . '/app');
 copyOverlay($custom . '/runtime/app', $root . '/app');
 copyOverlay($custom . '/traffic/app', $root . '/app');
+copyOverlay($custom . '/protocols/app', $root . '/app');
+require $custom . '/protocols/install.php';
+applyOnenewProtocolPatch($root);
+copyOverlay($custom . '/exit-probe/app', $root . '/app');
+replaceOnce($root . '/app/Services/ServerService.php',
+    "            'kernel_status' => (bool) (\$metrics['kernel_status'] ?? false),",
+    "            'kernel_status' => (bool) (\$metrics['kernel_status'] ?? false),\n"
+    . "            'kernel_type' => in_array(\$metrics['kernel_type'] ?? null, ['xray', 'singbox'], true) ? \$metrics['kernel_type'] : null,\n"
+    . "            'onenew_runtime' => (\$metrics['onenew_runtime'] ?? null) === true,");
+replaceOnce($root . '/app/Observers/ServerObserver.php', "            'server_port',", "            'host',\n            'server_port',");
 // The native controller previously pointed at cedar2025's stock installer.
 $machineController = $root . '/app/Http/Controllers/V2/Admin/Server/MachineController.php';
 $machineSource = file_get_contents($machineController);

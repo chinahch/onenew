@@ -195,9 +195,14 @@ class ProbeOutboundBuilder extends SingBox
 
     private function xhttpExtra(mixed $extra): array
     {
+        if ($extra instanceof \stdClass) $extra = get_object_vars($extra);
+        if ($extra === []) return [];
+        if (is_array($extra) && ($extra['xmux'] ?? null) instanceof \stdClass) {
+            $extra['xmux'] = get_object_vars($extra['xmux']);
+        }
         // Preserve safe native tuning, but prohibit alternate download endpoints,
         // dialers and arbitrary TLS settings that would bypass the actual ingress.
-        $allowed = ['headers', 'noGRPCHeader', 'xPaddingBytes', 'scMaxEachPostBytes', 'scMinPostsIntervalMs',
+        $allowed = ['headers', 'noGRPCHeader', 'noSSEHeader', 'xPaddingBytes', 'scMaxEachPostBytes', 'scMinPostsIntervalMs',
             'scMaxBufferedPosts', 'scStreamUpServerSecs', 'xmux', 'xPaddingObfsMode', 'xPaddingKey',
             'xPaddingHeader', 'xPaddingPlacement', 'sessionIDPlacement', 'sessionIDKey', 'seqPlacement', 'seqKey',
             'uplinkDataPlacement', 'uplinkDataKey', 'uplinkChunkSize'];
@@ -209,10 +214,15 @@ class ProbeOutboundBuilder extends SingBox
             throw new ProbeUnavailable('unsupported');
         }
         $this->validateHeaders($extra['headers'] ?? []);
+        foreach (['noGRPCHeader', 'noSSEHeader'] as $field) {
+            if (isset($extra[$field]) && !is_bool($extra[$field])) {
+                throw new ProbeUnavailable('configuration_unavailable');
+            }
+        }
         // Empty PHP lists are not native Xray objects.
         foreach (['xmux', 'headers'] as $field) {
             if (isset($extra[$field]) && $extra[$field] === []) {
-                unset($extra[$field]);
+                $extra[$field] = new \stdClass();
             }
         }
         return $extra;
@@ -231,6 +241,7 @@ class ProbeOutboundBuilder extends SingBox
 
     private function validateHeaders(mixed $headers): void
     {
+        if ($headers instanceof \stdClass) $headers = get_object_vars($headers);
         if (!is_array($headers)) {
             throw new ProbeUnavailable('unsupported');
         }
