@@ -1,0 +1,185 @@
+{
+  "name": "订阅防共享",
+  "code": "subscription_guard",
+  "version": "1.0.1",
+  "description": "订阅拉取审计与多 IP 防护；默认仅记录告警，自动处罚需管理员明确配置。",
+  "author": "XBoard Plugin",
+  "type": "feature",
+  "require": {
+    "xboard": ">=1.0.0"
+  },
+  "config": {
+    "max_unique_ips": {
+      "type": "string",
+      "default": "5",
+      "label": "最大独立IP数",
+      "description": "允许的最大独立 IP 数，严格超过此值才触发，范围 1–1000。"
+    },
+    "time_window_hours": {
+      "type": "string",
+      "default": "24",
+      "label": "检测时间窗口(小时)",
+      "description": "检测窗口 1–168 小时。"
+    },
+    "action_mode": {
+      "type": "string",
+      "default": "alert_only",
+      "label": "处罚模式",
+      "description": "alert_only=仅本地告警（默认），auto_ban=自动封禁并重置订阅，reset_only=仅重置订阅。修改前请核对代理转发与 IP 白名单。"
+    },
+    "enable_subnet_grouping": {
+      "type": "boolean",
+      "default": false,
+      "label": "启用子网合并",
+      "description": "仅 IPv4 /24 合并；IPv6 按规范化地址统计。先排除白名单，再分组。"
+    },
+    "ip_whitelist": {
+      "type": "text",
+      "default": "",
+      "label": "IP白名单",
+      "description": "不计入滥用检测的IP列表，每行一个IP或CIDR，如 192.168.1.0/24"
+    },
+    "enable_telegram_notify": {
+      "type": "boolean",
+      "default": false,
+      "label": "Telegram通知",
+      "description": "检测到滥用时是否通过Telegram通知管理员"
+    },
+    "rate_limit_seconds": {
+      "type": "string",
+      "default": "60",
+      "label": "拉取频率限制(秒)",
+      "description": "同一IP在此时间内重复拉取不重复记录，0为不限制"
+    },
+    "log_retention_days": {
+      "type": "string",
+      "default": "30",
+      "label": "日志保留天数",
+      "description": "保留 1–365 天；不存储订阅令牌。"
+    },
+    "exclude_admin": {
+      "type": "boolean",
+      "default": true,
+      "label": "排除管理员",
+      "description": "兼容旧配置；管理员和员工始终不受自动处罚。"
+    },
+    "ban_reason": {
+      "type": "string",
+      "default": "订阅共享滥用 - 检测到多IP拉取",
+      "label": "封禁备注",
+      "description": "自动封禁时写入用户备注的内容"
+    }
+  },
+  "admin_menus": [
+    {
+      "id": "logs",
+      "title": "订阅拉取日志",
+      "path": "logs",
+      "icon": "list"
+    },
+    {
+      "id": "abuse",
+      "title": "防护事件",
+      "path": "abuse",
+      "icon": "shield"
+    }
+  ],
+  "admin_crud": {
+    "logs": {
+      "version": 1,
+      "title": "订阅拉取日志",
+      "description": "只读审计；策略与启停通过原生插件管理配置。",
+      "id_field": "id",
+      "api": {
+        "list": "/subscription-guard/logs",
+        "save": "/subscription-guard/unsupported",
+        "delete": "/subscription-guard/unsupported"
+      },
+      "columns": [
+        {
+          "key": "id",
+          "title": "ID",
+          "type": "number"
+        },
+        {
+          "key": "email",
+          "title": "用户邮箱",
+          "type": "string",
+          "searchable": true
+        },
+        {
+          "key": "ip",
+          "title": "IP",
+          "type": "string",
+          "searchable": true
+        },
+        {
+          "key": "user_agent",
+          "title": "客户端",
+          "type": "string"
+        },
+        {
+          "key": "created_at",
+          "title": "拉取时间",
+          "type": "datetime"
+        }
+      ],
+      "form": {},
+      "actions": {
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "abuse": {
+      "version": 1,
+      "title": "防护事件",
+      "description": "只读审计；策略与启停通过原生插件管理配置。",
+      "id_field": "id",
+      "api": {
+        "list": "/subscription-guard/abuse",
+        "save": "/subscription-guard/unsupported",
+        "delete": "/subscription-guard/unsupported"
+      },
+      "columns": [
+        {
+          "key": "user_id",
+          "title": "用户 ID",
+          "type": "number"
+        },
+        {
+          "key": "email",
+          "title": "用户邮箱",
+          "type": "string",
+          "searchable": true
+        },
+        {
+          "key": "unique_ip_count",
+          "title": "独立 IP 数",
+          "type": "number"
+        },
+        {
+          "key": "action_taken",
+          "title": "处理",
+          "type": "string"
+        },
+        {
+          "key": "created_at",
+          "title": "事件时间",
+          "type": "datetime"
+        },
+        {
+          "key": "reviewed_at",
+          "title": "管理员复核",
+          "type": "datetime"
+        }
+      ],
+      "form": {},
+      "actions": {
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    }
+  }
+}

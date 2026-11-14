@@ -1,0 +1,60 @@
+{
+  "upstream_repository": "https://github.com/cedar2025/Xboard",
+  "upstream_commit": "d826a3b32f73bde24acce2a3ab033c6538ce121d",
+  "upstream_image": "ghcr.io/cedar2025/xboard@sha256:493c71b7c991c40eb3e114ccc6cbeda89d42b31e5a6341dd3eb9d7929dd7c13f",
+  "official_admin_commit": "ef5f43da335092cbff8fdf0ad7ff9b4d92d7d0d7",
+  "image_verification": {
+    "digest": "sha256:493c71b7c991c40eb3e114ccc6cbeda89d42b31e5a6341dd3eb9d7929dd7c13f",
+    "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+    "platforms": [
+      {
+        "platform": {
+          "architecture": "amd64",
+          "os": "linux"
+        },
+        "digest": "sha256:3a32f4af1bf84a92fa2a44972643caa90d4d2a7926ff36b93285ea49f646c166",
+        "labels": {
+          "org.opencontainers.image.base.name": "docker.io/library/php:8.2-cli-alpine3.24",
+          "org.opencontainers.image.created": "2026-11-02T09:21:50.448Z",
+          "org.opencontainers.image.description": "High-performance panel based on V2board secondary development supporting new protocols and new features",
+          "org.opencontainers.image.licenses": "MIT",
+          "org.opencontainers.image.revision": "d826a3b32f73bde24acce2a3ab033c6538ce121d",
+          "org.opencontainers.image.source": "https://github.com/cedar2025/Xboard",
+          "org.opencontainers.image.title": "Xboard",
+          "org.opencontainers.image.url": "https://github.com/cedar2025/Xboard",
+          "org.opencontainers.image.version": "master"
+        },
+        "created": "2026-11-02T09:22:56.884486786Z",
+        "env": [
+          "PHP_VERSION=8.2.35",
+          "ENABLE_CADDY=true"
+        ]
+      },
+      {
+        "platform": {
+          "architecture": "arm64",
+          "os": "linux"
+        },
+        "digest": "sha256:4a259d26c5599ac80dce9c92739b82410d79da0e79196ad15d319cce5fc8004a",
+        "labels": {
+          "org.opencontainers.image.base.name": "docker.io/library/php:8.2-cli-alpine3.24",
+          "org.opencontainers.image.created": "2026-11-02T09:21:50.448Z",
+          "org.opencontainers.image.description": "High-performance panel based on V2board secondary development supporting new protocols and new features",
+          "org.opencontainers.image.licenses": "MIT",
+          "org.opencontainers.image.revision": "d826a3b32f73bde24acce2a3ab033c6538ce121d",
+          "org.opencontainers.image.source": "https://github.com/cedar2025/Xboard",
+          "org.opencontainers.image.title": "Xboard",
+          "org.opencontainers.image.url": "https://github.com/cedar2025/Xboard",
+          "org.opencontainers.image.version": "master"
+        },
+        "created": "2026-11-02T09:27:09.078002639Z",
+        "env": [
+          "PHP_VERSION=8.2.35",
+          "ENABLE_CADDY=true"
+        ]
+      }
+    ]
+  },
+  "checked_on": "2026-11-14",
+  "official_admin_archive_sha256": "2f163cb99195d9176ccceadbd71a1b85259f3ba3dbe56646012d67287ffb0214"
+}

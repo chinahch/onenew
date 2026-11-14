@@ -1,0 +1,82 @@
+name: Verify onenew customization
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The upstream entrypoint assigns private bind-mounted data to its www UID.
+    # Keep private modes and exercise backup/restore with host root access.
+    defaults:
+      run:
+        shell: sudo --preserve-env=COMPOSE_PROJECT_NAME,ONENEW_REVISION bash --noprofile --norc -e -o pipefail {0}
+    env:
+      COMPOSE_PROJECT_NAME: onenew-ci
+      ONENEW_REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare isolated deployment
+        run: |
+          cp compose.onenew.sample.yaml compose.yaml
+          umask 077
+          touch .env
+          mkdir -p data/database data/redis storage/logs storage/theme plugins
+          docker compose config --quiet
+      - name: Build pinned image and both frontend checks
+        run: docker compose build
+      - name: Run PHP feature regressions with isolated SQLite and cache
+        run: |
+          docker run --rm --entrypoint sh onenew:local -c '
+            set -eu
+            cd /www
+            composer install --no-interaction
+            APP_ENV=testing APP_KEY=base64:aGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGg= DB_CONNECTION=sqlite DB_DATABASE=:memory: CACHE_DRIVER=array QUEUE_CONNECTION=sync SESSION_DRIVER=array vendor/bin/phpunit --bootstrap /opt/onenew/testing/ci-bootstrap.php /opt/onenew/health/tests /opt/onenew/user-portal/tests /opt/onenew/traffic/tests /opt/onenew/plugins/tests
+          '
+      - name: Initialize isolated database
+        run: |
+          docker compose run --rm -T -e ADMIN_ACCOUNT=ci-bootstrap@example.test onenew php artisan onenew:install --no-interaction > /tmp/onenew-install.log
+          if ! grep -q '^INSTALLED=true\|^INSTALLED=1' .env; then
+            sed '/管理员密码/d; /APP_KEY=/d; /password[=:]/Id; /token[=:]/Id' /tmp/onenew-install.log | tail -n 100
+            exit 1
+          fi
+          docker compose up -d --wait
+          docker compose exec -T -e ONENEW_CI_FIXTURE=isolated-only onenew php /opt/onenew/ci-smoke.php
+      - name: Exercise actual login and user portal
+        run: |
+          curl --fail --silent http://127.0.0.1:7001/ | grep -q onenew
+          AUTH=$(curl --fail --silent -H 'Content-Type: application/json' -d '{"email":"ci-onenew@example.test","password":"ci-onenew-disposable-2048"}' http://127.0.0.1:7001/api/v1/passport/auth/login | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["auth_data"])')
+          echo "::add-mask::$AUTH"
+          curl --fail --silent -H "Authorization: $AUTH" http://127.0.0.1:7001/api/onenew/user/me | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["user"]["email"]=="ci-onenew@example.test" and d["user"]["is_admin"]'
+          curl --fail --silent -H "Authorization: $AUTH" http://127.0.0.1:7001/api/onenew/user/subscription | python3 -c 'import json,sys; assert json.load(sys.stdin)["path"]'
+          test "$(curl --silent -o /dev/null -w '%{http_code}' http://127.0.0.1:7001/api/onenew/user/me)" = 403
+          test "$(curl --silent -o /dev/null -w '%{http_code}' 'http://127.0.0.1:7001/api/v3/server/probes?machine_id=1')" = 403
+          docker compose top onenew > /tmp/onenew-processes
+          if grep -Ei 'xboard' /tmp/onenew-processes; then exit 1; fi
+      - name: Snapshot and restore isolated instance
+        run: |
+          sh customizations/onenew/backup.sh /tmp/onenew-ci-backup.tar.gz
+          test -s /tmp/onenew-ci-backup.tar.gz
+          docker compose down
+          mkdir /tmp/onenew-ci-restored
+          tar -xzf /tmp/onenew-ci-backup.tar.gz -C /tmp/onenew-ci-restored
+          cd /tmp/onenew-ci-restored
+          export COMPOSE_PROJECT_NAME=onenew-restore-ci
+          docker compose up -d --wait
+          curl --fail --silent -H 'Content-Type: application/json' -d '{"email":"ci-onenew@example.test","password":"ci-onenew-disposable-2048"}' http://127.0.0.1:7001/api/v1/passport/auth/login | python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["auth_data"]'
+          docker compose down
+      - name: Failure diagnostics
+        if: failure()
+        run: docker compose logs --tail=100 onenew
+      - name: Clean isolated containers
+        if: always()
+        run: |
+          docker compose down --remove-orphans
+          if [ -d /tmp/onenew-ci-restored ]; then
+            cd /tmp/onenew-ci-restored
+            COMPOSE_PROJECT_NAME=onenew-restore-ci docker compose down --remove-orphans
+          fi
