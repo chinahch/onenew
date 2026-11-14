@@ -51,6 +51,11 @@ Configuration revisions include the resolved native routing rules in their emitt
 order (`match`, `action`, `action_value`), so editing a route under an existing ID
 invalidates pending leases and prior successes. Administrator route labels and
 timestamps do not invalidate a connectivity result.
+Scalar listener fields and empty optional collections are canonicalized before
+hashing, so freshly created models and database-hydrated/subscription-mapped models
+do not disagree merely because native `port` is an integer in memory and a string
+in its database column. Actual listener-port/configuration changes still invalidate
+the result, without adding a fresh database lookup for every status accessor.
 Heartbeat timestamps are reported independently and never set proxy success.
 
 ## Candidate protocol support

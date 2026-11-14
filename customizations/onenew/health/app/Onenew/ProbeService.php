@@ -189,7 +189,19 @@ class ProbeService
             'protocol_settings', 'group_ids', 'custom_outbounds', 'custom_routes', 'route_ids', 'cert_config'];
         $values = [];
         foreach ($fields as $field) {
-            $values[$field] = $node->getAttribute($field);
+            $value = $node->getAttribute($field);
+            // The native port column is VARCHAR without a model scalar cast:
+            // create()/subscription mapping can leave 443 in memory, whereas a
+            // database reload returns "443". Hash listener semantics rather than
+            // incidental PDO/model scalar representations or absent empty arrays.
+            $values[$field] = match ($field) {
+                'machine_id', 'server_port', 'parent_id' => (int) $value,
+                'enabled' => (bool) $value,
+                'port' => is_numeric($value) ? (string) (int) $value : (string) $value,
+                'type', 'host' => (string) $value,
+                'group_ids', 'custom_outbounds', 'custom_routes', 'route_ids', 'cert_config' => $value ?? [],
+                default => $value,
+            };
         }
         // Route IDs point to mutable records. Resolve the same collection as
         // buildNodeConfig, preserving its effective rule order rather than

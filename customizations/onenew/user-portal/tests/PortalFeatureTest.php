@@ -25,6 +25,9 @@ final class PortalFeatureTest extends TestCase
         config()->set('cache.default','array');
         config()->set('cache.stores.redis.driver','array');
         Cache::purge('redis');
+        // Setting captures its named repository when constructed during app boot.
+        // Re-resolve the real service after the test repository configuration.
+        $this->app->forgetInstance(\App\Support\Setting::class);
         admin_setting(['captcha_enable'=>0,'email_verify'=>0,'stop_register'=>0,'try_out_plan_id'=>0,'invite_force'=>0,'invite_never_expire'=>0]);
     }
 

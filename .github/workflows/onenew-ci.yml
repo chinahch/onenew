@@ -66,7 +66,7 @@ jobs:
           docker run --rm --entrypoint sh onenew:local -c '
             cd /www
             composer install --no-interaction
-            APP_ENV=testing APP_KEY=base64:aGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGg= DB_CONNECTION=sqlite DB_DATABASE=:memory: CACHE_DRIVER=array QUEUE_CONNECTION=sync SESSION_DRIVER=array vendor/bin/phpunit --bootstrap vendor/autoload.php /opt/onenew/health/tests /opt/onenew/user-portal/tests /opt/onenew/traffic/tests /opt/onenew/plugins/tests
+            APP_ENV=testing APP_KEY=base64:aGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGg= DB_CONNECTION=sqlite DB_DATABASE=:memory: CACHE_DRIVER=array QUEUE_CONNECTION=sync SESSION_DRIVER=array vendor/bin/phpunit --bootstrap /opt/onenew/testing/ci-bootstrap.php /opt/onenew/health/tests /opt/onenew/user-portal/tests /opt/onenew/traffic/tests /opt/onenew/plugins/tests
           '
       - name: Failure diagnostics
         if: failure()

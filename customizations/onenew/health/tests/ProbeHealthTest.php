@@ -24,6 +24,7 @@ class ProbeHealthTest extends TestCase
         parent::setUp();
         config()->set('cache.stores.redis.driver', 'array');
         Cache::purge('redis');
+        $this->app->forgetInstance(\App\Support\Setting::class);
         config()->set('app.key', 'base64:' . base64_encode(str_repeat('h', 32)));
         config()->set('onenew.health_store', 'array');
         Cache::store('array')->flush();
@@ -55,6 +56,26 @@ class ProbeHealthTest extends TestCase
         $this->assertArrayNotHasKey('lease_hash', app(ProbeStore::class)->latest($node->id));
         $this->assertSame('running', app(ProbeService::class)->status($node)['state']);
         $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertExactJson(['tasks' => []]);
+    }
+
+    public function test_revision_matches_created_reloaded_and_subscription_mapped_native_models(): void
+    {
+        [$machine, $node] = $this->fixture();
+        $service = app(ProbeService::class);
+        $revision = new \ReflectionMethod($service, 'revision');
+        $reloaded = $node->fresh();
+        $this->assertSame($revision->invoke($service, $node), $revision->invoke($service, $reloaded));
+        // ServerService::getAvailableServers also converts the public port to int.
+        // This in-memory presentation change is the same listener configuration.
+        $subscriptionNode = clone $reloaded;
+        $subscriptionNode->port = (int) $subscriptionNode->port;
+        $this->assertSame($revision->invoke($service, $reloaded), $revision->invoke($service, $subscriptionNode));
+        $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk()->assertJsonCount(1, 'tasks');
+        foreach ([$node, $reloaded, $subscriptionNode] as $representation) {
+            $this->assertSame('running', $service->status($representation)['state']);
+        }
+        $subscriptionNode->server_port = 23456;
+        $this->assertSame('pending', $service->status($subscriptionNode)['state']);
     }
 
     public function test_results_require_owner_current_lease_and_a_single_terminal_transition(): void

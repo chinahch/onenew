@@ -71,7 +71,7 @@ test('real original modal date callback opens nested panel; back/close preserve 
 });
 
 const selection={recordAt:epoch,date:'2026-03-08',timezone:'UTC'};
-const nodeData={data:[{server_id:7,node_name:'Tokyo',server_type:'vless',server_rate:1,raw_u:100,raw_d:200,total:300},{server_id:7,node_name:'Tokyo',server_type:'vless',server_rate:2,raw_u:50,raw_d:50,total:200}],total:2,per_page:20,date:'2026-03-08',timezone:'UTC',totals:{total:500},native_totals:{total:900},unattributed:{total:400},coverage:{state:'partial',reason:'部分历史记录未保存逐节点明细'}};
+const nodeData={data:[{server_id:7,node_name:'Tokyo',server_type:'vless',server_rate:1,raw_u:100,raw_d:200,total:300},{server_id:7,node_name:'Tokyo',server_type:'vless',server_rate:2,raw_u:50,raw_d:50,total:200}],total:2,per_page:20,date:'2026-03-08',timezone:'UTC',totals:{total:500},native_totals:{total:900},unattributed:{total:400},coverage:{state:'partial',reason:'legacy_node_breakdown_unavailable'}};
 
 test('detail tabs render genuine rate rows, billed coverage, domain reports and accessible keyboard navigation',async()=>{
  const requests=[],runner=hooks(),domainData={data:[{domain:'reported.example.invalid',server_id:8,node_name:'Deleted snapshot',server_type:'trojan',node_deleted:true,first_seen:'2026-03-08T01:02:03Z',last_seen:'2026-03-08T01:04:05Z',hit_count:6}],total:1,per_page:20,date:selection.date,timezone:'UTC',coverage:{state:'available',reason:''}};
@@ -88,9 +88,9 @@ test('detail tabs render genuine rate rows, billed coverage, domain reports and 
 });
 
 test('historical empty domain records are explicit and never reconstructed from IPs or node totals',async()=>{
- const runner=hooks(),props={get:async()=>({data:[],total:0,per_page:20,date:selection.date,timezone:'UTC',coverage:{state:'unavailable',reason:'历史记录没有报告域名'}}),format:n=>`${n}B`,userId:42,selection,onBack:()=>{}};
+ const runner=hooks(),props={get:async()=>({data:[],total:0,per_page:20,date:selection.date,timezone:'UTC',coverage:{state:'unavailable',reason:'no_reported_domain_records'}}),format:n=>`${n}B`,userId:42,selection,onBack:()=>{}};
  let tree=runner.render(TrafficDetails,props);nodes(tree).find(n=>n.props?.role==='tab'&&text(n)==='访问域名').props.onClick();tree=runner.render(TrafficDetails,props);runner.effects();await tick();tree=runner.render(TrafficDetails,props);
- assert.match(text(tree),/暂无域名记录/);assert.match(text(tree),/历史记录没有报告域名/);assert.equal(nodes(tree).some(n=>n.type==='table'),false);runner.cleanup();
+ assert.match(text(tree),/暂无域名记录/);assert.match(text(tree),/该日暂无节点报告的域名记录/);assert.equal(nodes(tree).some(n=>n.type==='table'),false);runner.cleanup();
 });
 
 test('late responses for an earlier tab are discarded rather than shown under domain records',async()=>{
@@ -111,4 +111,26 @@ test('domain collection changes only after an explicit native admin POST and pre
 test('audit-setting failures do not hide genuine domain records or pretend collection is enabled',async()=>{
  const runner=hooks(),props={get:async url=>{if(url.endsWith('/audit-config'))throw Error('设置读取失败');return{data:[{domain:'actual.example.invalid',node_name:'Actual node',server_id:1,first_seen:'2026-03-08T01:00:00Z',hit_count:1}],total:1,coverage:{state:'available'}}},post:async()=>{throw Error('must not save without configuration')},format:n=>`${n}B`,userId:42,selection,onBack:()=>{}};
  let tree=runner.render(TrafficDetails,props);nodes(tree).find(n=>n.props?.role==='tab'&&text(n)==='访问域名').props.onClick();tree=runner.render(TrafficDetails,props);runner.effects();await tick();tree=runner.render(TrafficDetails,props);assert.match(text(tree),/actual.example.invalid/);assert.match(text(tree),/设置读取失败/);assert.equal(nodes(tree).some(n=>n.type==='button'&&text(n)==='启用域名收集'),false);runner.cleanup();
+});
+
+test('actual API coverage enums render Chinese notices and never expose unknown internal codes',async()=>{
+ const cases=[
+  ['nodes','legacy_node_breakdown_unavailable','历史记录未保存逐节点明细，无法还原。'],
+  ['nodes','no_archived_traffic','该日暂无归档流量。'],
+  ['nodes','archive_totals_do_not_match_recorded_node_breakdown','节点明细与归档总量不一致，请以归档总量为准。'],
+  ['domains','domain_records_outside_retention','该日域名记录已超出保留期限。'],
+  ['domains','domain_collection_disabled','域名收集已停用，暂无新增域名记录。'],
+  ['domains','no_reported_domain_records','该日暂无节点报告的域名记录。'],
+  ['nodes','future_internal_node_reason','逐节点明细暂不完整，请以归档总量为准。'],
+  ['domains','future_internal_domain_reason','域名记录暂不可用。']
+ ];
+ for(const [tab,reason,expected] of cases){
+  const runner=hooks(),props={get:async url=>url.endsWith('/audit-config')?{enabled:false,retention_days:7,metadata_only:true}:{data:[],total:0,per_page:20,date:selection.date,timezone:'UTC',coverage:{state:'unavailable',reason}},format:n=>`${n}B`,userId:42,selection,onBack:()=>{}};
+  let tree=runner.render(TrafficDetails,props);
+  if(tab==='domains'){nodes(tree).find(n=>n.props?.role==='tab'&&text(n)==='访问域名').props.onClick();tree=runner.render(TrafficDetails,props)}
+  runner.effects();await tick();tree=runner.render(TrafficDetails,props);
+  assert.ok(nodes(tree).some(n=>n.props?.role==='status'&&text(n)===expected),`${reason} should have a readable Chinese notice`);
+  assert.equal(text(tree).includes(reason),false,`${reason} must not leak into the rendered interface`);
+  runner.cleanup();
+ }
 });

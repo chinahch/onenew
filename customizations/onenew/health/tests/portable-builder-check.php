@@ -38,6 +38,11 @@ namespace Illuminate\Database\Eloquent {
         {
             return $this->__get($key) !== null;
         }
+
+        public function getAttribute($key)
+        {
+            return $this->__get($key);
+        }
     }
 }
 namespace Illuminate\Foundation\Auth {
@@ -77,6 +82,8 @@ namespace {
     require $repo . '/app/Protocols/SingBox.php';
     require __DIR__ . '/../app/Onenew/ProbeUnavailable.php';
     require __DIR__ . '/../app/Onenew/ProbeOutboundBuilder.php';
+    require __DIR__ . '/../app/Onenew/ProbeStore.php';
+    require __DIR__ . '/../app/Onenew/ProbeService.php';
 
     $uuid = '00000000-0000-4000-8000-000000000001';
     $user = new \App\Models\User(['id' => 1, 'uuid' => $uuid]);
@@ -141,5 +148,16 @@ namespace {
         }
         check($refused, 'Unsafe/incomplete native configuration was accepted');
     }
-    echo count($cases) . " native builder projections and 3 refusal checks passed (attribute shim, not Laravel/runtime validation)\n";
+    // Native Server::port is a VARCHAR without an Eloquent scalar cast. Newly
+    // created/in-memory subscriber models may contain integer ports, while the
+    // same persisted listener reloads as a string. They must share a revision.
+    $service = new \App\Onenew\ProbeService(new \App\Onenew\ProbeStore(), $builder);
+    $revision = new \ReflectionMethod($service, 'revision');
+    $attributes = ['id' => 1, 'type' => 'vmess', 'enabled' => true, 'machine_id' => 1, 'host' => 'public.example',
+        'server_port' => 12345, 'protocol_settings' => ['tls' => 0, 'network' => 'tcp']];
+    $created = new \App\Models\Server($attributes + ['port' => 443]);
+    $reloaded = new \App\Models\Server($attributes + ['port' => '443']);
+    check($revision->invoke($service, $created) === $revision->invoke($service, $reloaded),
+        'Equivalent integer/string native listener ports produced different health revisions');
+    echo count($cases) . " native builder projections, 3 refusal checks and port revision canonicalization passed (attribute shim, not Laravel/runtime validation)\n";
 }

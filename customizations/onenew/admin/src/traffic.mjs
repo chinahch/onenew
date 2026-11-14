@@ -30,6 +30,15 @@ export function trafficColumns({react:React,columns,select,timezone}){
  }});
 }
 const tabNames={nodes:'节点流量',domains:'访问域名'};
+const coverageMessages=new Map([
+ ['legacy_node_breakdown_unavailable','历史记录未保存逐节点明细，无法还原。'],
+ ['no_archived_traffic','该日暂无归档流量。'],
+ ['archive_totals_do_not_match_recorded_node_breakdown','节点明细与归档总量不一致，请以归档总量为准。'],
+ ['domain_records_outside_retention','该日域名记录已超出保留期限。'],
+ ['domain_collection_disabled','域名收集已停用，暂无新增域名记录。'],
+ ['no_reported_domain_records','该日暂无节点报告的域名记录。']
+]);
+function coverageNotice(coverage,tab){return coverageMessages.get(coverage?.reason)||(tab==='domains'?'域名记录暂不可用。':'逐节点明细暂不完整，请以归档总量为准。')}
 function trafficValue(value,format){return value===null||value===undefined||!Number.isFinite(Number(value))||Number(value)<0?'—':format(Number(value))}
 function reportTime(value,timezone){
  if(!value||!Number.isFinite(Date.parse(value)))return '—';
@@ -74,7 +83,7 @@ export function TrafficDetails({react:React,get,post,format,userId,selection,onB
      h('p',{className:'text-xs text-muted-foreground'},'仅收集实际报告的域名、时间、节点及次数，不保存完整 URL 或访问内容。'),
      auditError&&h('p',{role:'alert',className:'text-xs text-destructive'},auditError)),
     tab==='nodes'&&h('p',{className:'text-xs text-muted-foreground'},'本日计费总量 ',trafficValue(data.native_totals?.total,format),' · 已归属节点 ',trafficValue(data.totals?.total,format),' · 未归属 ',trafficValue(data.unattributed?.total,format)),
-    coverage&&(tab==='nodes'?coverage.state!=='complete':coverage.state!=='available')&&h('p',{role:'status',className:'rounded-md border p-2 text-xs text-muted-foreground'},coverage.reason||(tab==='domains'?'暂无域名记录。':'历史记录缺少逐节点明细，不会按倍率或节点推算。')),
+    coverage&&(tab==='nodes'?coverage.state!=='complete':coverage.state!=='available')&&h('p',{role:'status',className:'rounded-md border p-2 text-xs text-muted-foreground'},coverageNotice(coverage,tab)),
     rows.length?h('div',{className:'rounded-md border',style:{maxHeight:320,overflow:'auto'}},h('table',{className:'w-full text-sm',style:{width:'100%'}},h('thead',null,h('tr',{className:'border-b'},...cells(head,true))),h('tbody',null,...body))):h('p',{className:'py-6 text-center text-sm text-muted-foreground'},tab==='domains'?'暂无域名记录':'暂无逐节点流量记录'),
     h('div',{className:'flex items-center justify-between text-xs text-muted-foreground'},h('span',null,`${count} 条 · 第 ${page} / ${pages} 页`),h('div',{className:'flex items-center gap-2'},h('button',{type:'button',className:'rounded-md border px-2 py-1',disabled:page<=1,onClick:()=>setPage(page-1),'aria-label':'上一页明细'},'上一页'),h('button',{type:'button',className:'rounded-md border px-2 py-1',disabled:page>=pages,onClick:()=>setPage(page+1),'aria-label':'下一页明细'},'下一页'))),
     tab==='domains'&&h('p',{className:'text-xs text-muted-foreground'},'仅显示节点实际报告的域名与次数，不包含完整 URL 或访问内容。'))));

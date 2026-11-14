@@ -4,10 +4,13 @@ namespace Tests\Unit;
 use App\Models\Order;
 use App\Models\Plan;
 use App\Onenew\PortalData;
-use PHPUnit\Framework\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 final class PortalDataTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_plan_gb_and_currency_are_converted_once_and_all_renewal_periods_survive(): void
     {
         $plan=new Plan(['name'=>'QA mapping plan','transfer_enable'=>100,'renew'=>true,'prices'=>['monthly'=>19.99,'quarterly'=>55,'yearly'=>180,'onetime'=>300,'reset_traffic'=>5]]);
