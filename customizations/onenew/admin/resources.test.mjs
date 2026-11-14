@@ -25,10 +25,14 @@ test('actual pinned machine editor saves egress before closing and refreshing',a
   OnenewAdmin:{MachineEgress:'MachineEgress',saveMachineEgress}};
  for(const name of ['htt','gtt','Lf','YXt','ptt','mtt','_tt','vtt','zy','$y','ftt','btt','elt','e3t'])ctx[name]=name;
  const render=vm.runInNewContext(`(${patched.slice(a,b)})`,ctx);
- const nodes=walk(render({defaultValues:{id:7,name:'test'},type:'edit',refetch:()=>calls.push('refresh')}));
+ const props={defaultValues:{id:7,name:'test'},type:'edit',refetch:()=>calls.push('refresh')};
+ let nodes=walk(render(props));
+ assert.equal(nodes.find(n=>n.type==='Lf'&&n.props.type==='submit').props.disabled,true);
  const panel=nodes.find(n=>n.type==='MachineEgress');assert.equal(panel.props.machineId,7);
  const payload={machine_id:7,mode:'prefer_ipv6',node_overrides:{3:'prefer_ipv4'}};
  panel.props.onChange(()=>payload);
+ cursor=0;nodes=walk(render(props));
+ assert.equal(nodes.find(n=>n.type==='Lf'&&n.props.type==='submit').props.disabled,false);
  await nodes.find(n=>n.type==='form').props.onSubmit({id:7,name:'test'});
  assert.deepEqual(calls,['native',['/api/onenew/admin/machine-egress',payload],'success','refresh']);
  assert.equal(cells[0],false);

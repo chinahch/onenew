@@ -55,10 +55,10 @@ export function patchBundle(source,runtime){
   const machineStart=source.indexOf('function n3t('),machineEnd=source.indexOf('function i3t(',machineStart);
   let machine=source.slice(machineStart,machineEnd);
   if(sha(machine)!==contract.machineEditorSha256)throw new Error('服务器编辑器 SHA256 不匹配');
-  machine=replaceOnce(machine,'[h,g]=H.useState(null);','[h,g]=H.useState(null),onenewEgress=H.useRef(null);');
+  machine=replaceOnce(machine,'[h,g]=H.useState(null);','[h,g]=H.useState(null),onenewEgress=H.useRef(null),[onenewEgressReady,onenewSetReady]=H.useState(!1);');
   machine=replaceOnce(machine,'const n=await TT(t);n.data&&','const n=await TT(t);if(n.data&&"edit"===i){const t=onenewEgress.current?.();if(!t)throw new Error("出口设置尚未读取");await OnenewAdmin.saveMachineEgress(RL,t)}n.data&&');
-  machine=replaceOnce(machine,'Q.jsx($y,{control:s.control,name:"is_active",','"edit"===i&&Q.jsx(OnenewAdmin.MachineEgress,{react:H,machineId:n?.id,open:o,get:IL,onChange:t=>{onenewEgress.current=t;s.trigger()}}),Q.jsx($y,{control:s.control,name:"is_active",');
-  machine=replaceOnce(machine,'disabled:l||!s.formState.isValid','disabled:l||!s.formState.isValid||("edit"===i&&!onenewEgress.current)');
+  machine=replaceOnce(machine,'Q.jsx($y,{control:s.control,name:"is_active",','"edit"===i&&Q.jsx(OnenewAdmin.MachineEgress,{react:H,machineId:n?.id,open:o,get:IL,onChange:t=>{onenewEgress.current=t;onenewSetReady(!!t);s.trigger()}}),Q.jsx($y,{control:s.control,name:"is_active",');
+  machine=replaceOnce(machine,'disabled:l||!s.formState.isValid','disabled:l||!s.formState.isValid||("edit"===i&&!onenewEgressReady)');
   machine=replaceOnce(machine,'className:"max-w-md gap-0 overflow-hidden p-0 sm:rounded-2xl"','className:"max-w-xl max-h-[90vh] gap-0 overflow-y-auto p-0 sm:rounded-2xl"');
   source=source.slice(0,machineStart)+machine+source.slice(machineEnd);
   return runtime+'\n'+source;
