@@ -67,7 +67,7 @@ class Plugin extends AbstractPlugin
                 ]);
                 if($policy->action!=='alert_only'){
                     if($policy->action==='auto_ban')$fresh->banned=true;
-                    $fresh->token=Str::random(32);
+                    $fresh->token=bin2hex(random_bytes(16));
                     $fresh->remarks=($fresh->remarks?$fresh->remarks."\n":'').'['.now()->format('Y-m-d H:i').'] SubscriptionGuard: '.$policy->action.' (IP: '.$count.')';
                     $fresh->save();
                 }

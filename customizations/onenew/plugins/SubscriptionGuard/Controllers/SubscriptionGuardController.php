@@ -73,7 +73,7 @@ class SubscriptionGuardController extends Controller
     public function banUser(Request $request)
     {
         DB::transaction(function()use($request){
-            $u=$this->target($request);$u->banned=true;$u->token=Str::random(32);$u->save();
+            $u=$this->target($request);$u->banned=true;$u->token=bin2hex(random_bytes(16));$u->save();
             DB::table('v2_subscribe_abuse')->updateOrInsert(['user_id'=>$u->id],[
                 'unique_ip_count'=>0,'ip_list'=>'[]','action_taken'=>'manual_ban','details'=>'{}','created_at'=>now(),
             ]);

@@ -47,7 +47,7 @@ final class SubscriptionGuardFeatureTest extends TestCase
     private function account(array $extra=[]):User
     {
         return User::create($extra+['email'=>'guard-'.Str::random(12).'@example.test','password'=>'unused',
-            'uuid'=>(string)Str::uuid(),'token'=>Str::random(32),'transfer_enable'=>1000000,'u'=>0,'d'=>0,'banned'=>false]);
+            'uuid'=>(string)Str::uuid(),'token'=>bin2hex(random_bytes(16)),'transfer_enable'=>1000000,'u'=>0,'d'=>0,'banned'=>false]);
     }
     private function guard(array $config=[]):Plugin
     {
@@ -158,6 +158,7 @@ final class SubscriptionGuardFeatureTest extends TestCase
         try{$this->pull($guard,$user,'192.0.2.2');$this->fail('Expected subscription interception');}
         catch(InterceptResponseException $exception){$this->assertSame(403,$exception->getResponse()->getStatusCode());}
         $this->assertFalse($user->fresh()->banned);$this->assertNotSame($token,$user->fresh()->token);
+        $this->assertSame($user->fresh()->token,\App\Utils\Helper::validateSubscriptionToken($user->fresh()->token));
         Bus::assertNothingDispatched();
     }
     public function test_upgrade_drops_indexed_legacy_token_data_without_dropping_audit_rows():void
