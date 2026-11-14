@@ -105,6 +105,9 @@ Route::get('/', function () {
 
 PHP;
 file_put_contents($web, str_replace("admin_setting('app_name', 'XBoard')", "admin_setting('app_name', 'onenew')", substr($source, 0, $start) . $homepage . substr($source, $end)));
+replaceOnce($web, "    return view('admin', [", "    return response()->view('admin', [");
+replaceOnce($web, "    ]);\n});\n\nRoute::get('/' . (admin_setting('subscribe_path', 's'))",
+    "    ])->header('Cache-Control', 'no-store');\n});\n\nRoute::get('/' . (admin_setting('subscribe_path', 's'))");
 
 // Rename runtime commands and worker process labels without changing model
 // identities, DB tables, protocol names, or third-party copyright notices.
