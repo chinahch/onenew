@@ -40,6 +40,18 @@ copyOverlay($custom . '/health/app', $root . '/app');
 copyOverlay($custom . '/user-portal/backend/app', $root . '/app');
 copyOverlay($custom . '/runtime/app', $root . '/app');
 copyOverlay($custom . '/traffic/app', $root . '/app');
+// The native controller previously pointed at cedar2025's stock installer.
+$machineController = $root . '/app/Http/Controllers/V2/Admin/Server/MachineController.php';
+$machineSource = file_get_contents($machineController);
+$machineSource = str_replace("\r\n", "\n", $machineSource);
+$startCommand = strpos($machineSource, "        \$installerUrl = 'https://raw.githubusercontent.com/cedar2025/xboard-node/dev/install.sh';");
+$endCommand = $startCommand === false ? false : strpos($machineSource, "\n        );", $startCommand);
+if ($startCommand === false || $endCommand === false) {
+    throw new RuntimeException('Pinned machine installer anchor changed');
+}
+file_put_contents($machineController, substr($machineSource, 0, $startCommand)
+    . '        return \\App\\Onenew\\NodeInstallCommand::make($panelUrl, $machine->token, (int) $machine->id);'
+    . substr($machineSource, $endCommand + strlen("\n        );")));
 require $custom . '/traffic/install.php';
 applyOnenewTrafficPatch($root);
 replaceOnce($root . '/app/Console/Kernel.php',
