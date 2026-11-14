@@ -56,7 +56,11 @@ final class SubscriptionGuardFeatureTest extends TestCase
     private function pull(Plugin $plugin,User $user,string $ip,string $agent='fake-client'):void
     {
         $request=Request::create('/s/not-exported','GET',[],[],[],['REMOTE_ADDR'=>$ip,'HTTP_USER_AGENT'=>$agent]);
-        $request->setUserResolver(fn()=>$user->fresh());$this->app->instance('request',$request);$plugin->onSubscribeBefore();
+        // Laravel's request rebinding installs the auth guard resolver. Set the
+        // subscription identity afterwards, as native subscription auth does.
+        $this->app->instance('request',$request);$request->setUserResolver(fn()=>$user->fresh());
+        $this->assertSame($user->id,request()->user()?->id);
+        $plugin->onSubscribeBefore();
     }
     public function test_native_install_is_disabled_and_defaults_are_non_punitive():void
     {
