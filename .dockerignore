@@ -24,3 +24,13 @@ storage/laravels.conf
 storage/laravels.pid
 storage/laravels-timer-process.pid
 /frontend
+
+.git
+**/node_modules
+**/dist
+/data
+/backups
+*.dump
+*.tar.gz
+.env.*
+!.env.example

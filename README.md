@@ -1,109 +1,12 @@
-# Xboard
+# onenew
 
-<div align="center">
+基于 [cedar2025/Xboard](https://github.com/cedar2025/Xboard) 的定制项目。保留原项目 MIT 许可证及版权声明；上游说明见 [README.upstream.md](README.upstream.md)。
 
-[![Telegram](https://img.shields.io/badge/Telegram-Channel-blue)](https://t.me/XboardOfficial)
-![PHP](https://img.shields.io/badge/PHP-8.2.35+-green.svg)
-![MySQL](https://img.shields.io/badge/MySQL-5.7+-blue.svg)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+- 管理端保留原版布局，合并落地链接解析，增加真实代理检测状态列，移除知识库、优惠券、礼品卡和工单菜单入口。
+- 用户端沿用原 Luma 的 Vue 界面，统一使用本项目账号、套餐、订单、订阅和用量数据。
+- 运行中的容器、服务和进程标签使用 onenew。数据库原表名、内部兼容协议及第三方版权信息保留。
+- 管理端定制由独立源码和固定版本校验生成；Docker 使用固定上游镜像摘要叠加定制，不在构建时重新克隆移动分支。
 
-</div>
+完整部署、备份和换机步骤见 [部署说明](customizations/onenew/DEPLOY.md)。功能与验证边界见 [实施计划](customizations/onenew/PLAN.md)、[管理端说明](customizations/onenew/admin/README.md)、[检测后端说明](customizations/onenew/health/README.md)。
 
-## 📖 Introduction
-
-Xboard is a modern panel system built on Laravel 11, focusing on providing a clean and efficient user experience.
-
-## ✨ Features
-
-- 🚀 Built with Laravel 12 + Octane for significant performance gains
-- 🎨 Redesigned admin interface (React + Shadcn UI)
-- 📱 Modern user frontend (Vue3 + TypeScript)
-- 🐳 Ready-to-use Docker deployment solution
-- 🎯 Optimized system architecture for better maintainability
-
-## 🚀 Quick Start
-
-```bash
-git clone -b compose --depth 1 https://github.com/cedar2025/Xboard && \
-cd Xboard && \
-docker compose run -it --rm \
-    -e ENABLE_SQLITE=true \
-    -e ENABLE_REDIS=true \
-    -e ADMIN_ACCOUNT=admin@demo.com \
-    xboard php artisan xboard:install && \
-docker compose up -d
-```
-
-> After installation, visit: http://SERVER_IP:7001  
-> ⚠️ Make sure to save the admin credentials shown during installation
-
-## 📖 Documentation
-
-### 🔄 Upgrade Notice
-> 🚨 **Important:** This version involves significant changes. Please strictly follow the upgrade documentation and backup your database before upgrading. Note that upgrading and migration are different processes, do not confuse them.
-
-### Development Guides
-- [Plugin Development Guide](./docs/en/development/plugin-development-guide.md) - Complete guide for developing XBoard plugins
-
-### Deployment Guides
-
-PHP **8.2.35 or later** is required. Use the latest security patch for your PHP release series. Docker deployments must meet this requirement inside the container.
-
-- [Deploy with 1Panel](./docs/en/installation/1panel.md)
-- [Deploy with Docker Compose](./docs/en/installation/docker-compose.md)
-- [Deploy with aaPanel](./docs/en/installation/aapanel.md)
-- [Deploy with aaPanel + Docker](./docs/en/installation/aapanel-docker.md) (Recommended)
-
-### Migration Guides
-- [Migrate from v2board dev](./docs/en/migration/v2board-dev.md)
-- [Migrate from v2board 1.7.4](./docs/en/migration/v2board-1.7.4.md)
-- [Migrate from v2board 1.7.3](./docs/en/migration/v2board-1.7.3.md)
-
-## 🛠️ Tech Stack
-
-- Backend: Laravel 11 + Octane
-- Admin Panel: React + Shadcn UI + TailwindCSS
-- User Frontend: Vue3 + TypeScript + NaiveUI
-- Deployment: Docker + Docker Compose
-- Caching: Redis + Octane Cache
-
-## 📷 Preview
-![Admin Preview](./docs/images/admin.png)
-
-![User Preview](./docs/images/user.png)
-
-## ⚠️ Disclaimer
-
-This project is for learning and communication purposes only. Users are responsible for any consequences of using this project.
-
-## ❤️ Support The Project
-
-If this project has helped you, donations are appreciated. They help support ongoing maintenance and would make me very happy.
-
-TRC20: `TLypStEWsVrj6Wz9mCxbXffqgt5yz3Y4XB`
-
-## 🌟 Maintenance Notice
-
-This project is currently under light maintenance. We will:
-- Fix critical bugs and security issues
-- Review and merge important pull requests
-- Provide necessary updates for compatibility
-
-However, new feature development may be limited.
-
-## 🔔 Important Notes
-
-1. Restart required after modifying admin path:
-```bash
-docker compose restart
-```
-
-2. For aaPanel installations, restart the Octane daemon process
-
-## 🤝 Contributing
-
-Issues and Pull Requests are welcome to help improve the project.
-
-## 📈 Star History
-
-[![Stargazers over time](https://starchart.cc/cedar2025/Xboard.svg)](https://starchart.cc/cedar2025/Xboard)
+原 Luma 服务及数据库不会由本项目自动覆盖。先在独立目录/域名或 SSH 隧道验证，再安排切换；不应直接让两套面板操作同一个数据库。

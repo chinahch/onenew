@@ -1,0 +1,37 @@
+name: onenew
+services:
+  onenew:
+    image: onenew:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ONENEW_REVISION: "${ONENEW_REVISION:-local}"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ports:
+      - "${ONENEW_BIND_IP:-127.0.0.1}:${ONENEW_PORT:-7001}:7001"
+    environment:
+      APP_NAME: onenew
+      ENABLE_SQLITE: "true"
+      ENABLE_REDIS: "true"
+      ENABLE_WEB: "true"
+      ENABLE_HORIZON: "true"
+      ENABLE_WS_SERVER: "true"
+      ENABLE_CADDY: "true"
+      RESOURCE_PROFILE: balanced
+      MEM_FALLBACK_MIB: "2048"
+      docker: "true"
+    volumes:
+      - ./.env:/www/.env
+      - ./data/database:/www/.docker/.data
+      - ./data/redis:/data
+      - ./storage/logs:/www/storage/logs
+      - ./storage/theme:/www/storage/theme
+      - ./plugins:/www/plugins
+    healthcheck:
+      test: ["CMD-SHELL", "php -r '$$r=@file_get_contents(\"http://127.0.0.1:7001/\"); exit($$r === false ? 1 : 0);'"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
