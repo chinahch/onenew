@@ -20,9 +20,5 @@ class OnenewServiceProvider extends ServiceProvider
         require $root . '/health/routes.php';
         require $root . '/user-portal/backend/routes.php';
         require $root . '/traffic/routes.php';
-        $this->app->booted(function (): void {
-            $this->app->make(\Illuminate\Console\Scheduling\Schedule::class)
-                ->command('onenew:prune-telemetry')->dailyAt('03:10')->withoutOverlapping();
-        });
     }
 }

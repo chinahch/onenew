@@ -42,6 +42,9 @@ copyOverlay($custom . '/runtime/app', $root . '/app');
 copyOverlay($custom . '/traffic/app', $root . '/app');
 require $custom . '/traffic/install.php';
 applyOnenewTrafficPatch($root);
+replaceOnce($root . '/app/Console/Kernel.php',
+    'app(PluginManager::class)->registerPluginSchedules($schedule);',
+    'app(PluginManager::class)->registerPluginSchedules($schedule);' . "\n        \$schedule->command('onenew:prune-telemetry')->dailyAt('03:10')->withoutOverlapping();");
 foreach (['XboardInstall.php', 'XboardUpdate.php'] as $command) {
     replaceOnce($root . '/app/Console/Commands/' . $command,
         'PluginManager::installDefaultPlugins();',
