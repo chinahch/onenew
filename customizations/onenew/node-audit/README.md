@@ -27,8 +27,8 @@ the memory queue. Historical domains before enabling cannot be recovered.
 `.github/workflows/onenew-node-ci.yml` prepares upstream commit
 `0a29338e1f102a462363ce3527417029f89bab28` through public caddy customization
 `11f025992aa163204c5d4d2d8fb0934a0ab2e893`, verifies both kernels and builds a separate
-amd64 candidate artifact. It neither changes an existing server nor publishes an
-automatic production release. Existing caddy packages lack this new collector;
+amd64/arm64 Onenew packages. Successful master builds publish a versioned preview
+release; see [native installation](../node/README.md). It does not change an existing server. Existing caddy packages lack this new collector;
 their heartbeat or traffic reports cannot supply domain history. Validate the
 candidate on a separate node, then upgrade nodes through the normal binary
 deployment process before expecting domains in the panel.
