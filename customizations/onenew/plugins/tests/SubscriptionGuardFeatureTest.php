@@ -72,6 +72,17 @@ final class SubscriptionGuardFeatureTest extends TestCase
         $this->assertFalse($row->is_enabled);$this->assertSame('alert_only',$config['action_mode']);$this->assertFalse($config['enable_telegram_notify']);
         Bus::assertNothingDispatched();
     }
+    public function test_native_token_middleware_supplies_the_subscription_hook_identity():void
+    {
+        $user=$this->account();$guard=$this->guard();$guard->boot();
+        \Illuminate\Support\Facades\Route::get('/guard-native/{token}',function(){
+            \App\Services\Plugin\HookManager::call('client.subscribe.before');
+            return response()->json(['ok'=>true]);
+        })->middleware('client');
+        $this->withServerVariables(['REMOTE_ADDR'=>'192.0.2.9'])->get('/guard-native/'.$user->token)->assertOk();
+        $this->assertDatabaseHas('v2_subscribe_log',['user_id'=>$user->id,'ip'=>'192.0.2.9']);
+        $this->assertDatabaseCount('v2_subscribe_log',1);
+    }
     public function test_data_and_actions_require_admin_auth_and_never_export_subscription_tokens():void
     {
         $base='/api/v2/guard-test/subscription-guard';
