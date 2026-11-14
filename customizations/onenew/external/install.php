@@ -3,6 +3,9 @@ function applyOnenewExternalNodes(string $root): void
 {
     $class = '\\App\\Onenew\\External\\ExternalNodes';
     replaceOnce($root.'/app/Http/Controllers/V1/Client/ClientController.php',
+        '        if (!$userService->isAvailable($user)) {',
+        "        if (!\$user->banned && \$user->expired_at !== null && (int)\$user->expired_at <= time()) {\n            return \\App\\Onenew\\External\\ExpiredSubscription::response(\$request, \$user);\n        }\n\n        if (!\$userService->isAvailable(\$user)) {");
+    replaceOnce($root.'/app/Http/Controllers/V1/Client/ClientController.php',
         '$servers = ServerService::getAvailableServers($user);',
         '$servers = '.$class.'::append(ServerService::getAvailableServers($user), $user);');
     replaceOnce($root.'/app/Http/Controllers/V1/Client/ClientController.php',

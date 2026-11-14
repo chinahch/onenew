@@ -85,7 +85,15 @@ class ExternalNodesTest extends TestCase
         $socks=collect($sing['outbounds'])->firstWhere('server','socks.example');
         $this->assertSame(self::UUID,$vless['uuid']);$this->assertSame('alice',$socks['username']);
         $this->assertSame('independent-password',$socks['password']);
-        $user->update(['expired_at'=>time()-60]);$this->assertSame(403,$this->subscribe($user,'v2ray')->getStatusCode());
+        $user->update(['expired_at'=>time()-60]);
+        $expired=$this->subscribe($user,'v2ray');
+        $this->assertSame(200,$expired->getStatusCode());
+        $this->assertSame(\App\Onenew\External\ExpiredSubscription::LINK."\r\n",base64_decode($expired->getContent()));
+        $expiredSing=json_decode($this->subscribe($user,'sing-box')->getContent(),true);
+        $proxies=collect($expiredSing['outbounds'])->filter(fn($row)=>isset($row['server']))->values();
+        $this->assertCount(1,$proxies);
+        $this->assertSame('127.0.0.1',$proxies[0]['server']);
+        $this->assertSame(65535,$proxies[0]['server_port']);
     }
 
     public function test_edit_disable_delete_and_sort_affect_next_subscription(): void
