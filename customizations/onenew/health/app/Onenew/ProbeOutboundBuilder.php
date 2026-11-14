@@ -100,7 +100,7 @@ class ProbeOutboundBuilder extends SingBox
             ($type !== 'vless' && data_get($s, 'encryption.enabled'))) {
             throw new ProbeUnavailable('unsupported');
         }
-        $ns = data_get($s, 'network_settings') ?: [];
+        $ns = $this->clientTransportSettings(data_get($s, 'network_settings') ?: []);
         if (!is_array($ns)) {
             throw new ProbeUnavailable('unsupported');
         }
@@ -252,10 +252,24 @@ class ProbeOutboundBuilder extends SingBox
         }
     }
 
+    private function clientTransportSettings(mixed $settings): mixed
+    {
+        // This is an inbound-only switch present in the official TCP template.
+        // Disabled PROXY protocol requires no client behavior; enabled PROXY
+        // protocol cannot be claimed as tested without sending its prelude.
+        if (is_array($settings) && array_key_exists('acceptProxyProtocol', $settings)) {
+            if ($settings['acceptProxyProtocol'] !== false) {
+                throw new ProbeUnavailable('unsupported');
+            }
+            unset($settings['acceptProxyProtocol']);
+        }
+        return $settings;
+    }
+
     protected function buildTransport(array $protocol_settings, array $server): ?array
     {
         $network = data_get($protocol_settings, 'network') ?: 'tcp';
-        $s = data_get($protocol_settings, 'network_settings') ?: [];
+        $s = $this->clientTransportSettings(data_get($protocol_settings, 'network_settings') ?: []);
         if (!is_array($s)) {
             throw new ProbeUnavailable('unsupported');
         }

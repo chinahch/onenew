@@ -99,6 +99,10 @@ namespace {
         ['vmess-grpc-tls', 'vmess', $tls + ['network' => 'grpc', 'network_settings' => ['serviceName' => 'edge']]],
         ['vless-tcp', 'vless', ['tls' => 0, 'network' => 'tcp']],
         ['vless-vision-reality', 'vless', $reality + ['network' => 'tcp', 'flow' => 'xtls-rprx-vision']],
+        ['vless-vision-reality-native-tcp-template', 'vless', $reality + ['network' => 'tcp', 'flow' => 'xtls-rprx-vision',
+            'network_settings' => ['acceptProxyProtocol' => false, 'header' => ['type' => 'none']]]],
+        ['vless-enc-native-tcp-template', 'vless', $enc + $reality + ['network' => 'tcp', 'flow' => 'xtls-rprx-vision',
+            'network_settings' => ['acceptProxyProtocol' => false, 'header' => ['type' => 'none']]]],
         ['vless-ws-tls', 'vless', $tls + ['network' => 'ws', 'network_settings' => ['path' => '/edge']]],
         ['vless-grpc-tls', 'vless', $tls + ['network' => 'grpc', 'network_settings' => ['serviceName' => 'edge']]],
         ['vless-tcp-enc', 'vless', $enc + ['tls' => 0, 'network' => 'tcp']],
@@ -144,6 +148,8 @@ namespace {
         ['network' => 'xhttp', 'network_settings' => ['extra' => ['downloadSettings' => ['address' => 'bypass.example']]]],
         ['network' => 'xhttp', 'encryption' => ['enabled' => true]],
         ['network' => 'ws', 'network_settings' => ['headers' => ['Host' => "bad\r\nInjected: yes"]]],
+        ['network' => 'tcp', 'network_settings' => ['acceptProxyProtocol' => true]],
+        ['network' => 'tcp', 'network_settings' => ['acceptProxyProtocol' => 'false']],
     ] as $settings) {
         $node = new \App\Models\Server(['type' => 'vless', 'host' => 'public.example', 'port' => 443,
             'server_port' => 12345, 'protocol_settings' => $settings]);
@@ -166,5 +172,5 @@ namespace {
     $reloaded = new \App\Models\Server($attributes + ['port' => '443']);
     check($revision->invoke($service, $created) === $revision->invoke($service, $reloaded),
         'Equivalent integer/string native listener ports produced different health revisions');
-    echo count($cases) . " native builder projections, 3 refusal checks and port revision canonicalization passed (attribute shim, not Laravel/runtime validation)\n";
+    echo count($cases) . " native builder projections, 5 refusal checks and port revision canonicalization passed (attribute shim, not Laravel/runtime validation)\n";
 }
