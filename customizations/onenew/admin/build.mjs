@@ -13,7 +13,7 @@ const out=path.join(here,'dist');
 if(upstream===out||upstream.startsWith(out+path.sep))throw new Error('upstream 目录不能位于 dist 内');
 for(const [file,expected] of Object.entries(contract.files)){
   const bytes=await fs.readFile(path.join(upstream,file));
-  if(createHash('sha256').update(bytes).digest('hex')!==expected)throw new Error(`上游文件 SHA256 不匹配：${file}`);
+  if(createHash('sha256').update(bytes.toString('utf8').replace(/\r\n/g,'\n')).digest('hex')!==expected)throw new Error(`上游文件 SHA256 不匹配：${file}`);
 }
 let esbuild;
 if(process.env.ONENEW_ESBUILD_MODULE)esbuild=await import(pathToFileURL(path.resolve(process.env.ONENEW_ESBUILD_MODULE)).href);

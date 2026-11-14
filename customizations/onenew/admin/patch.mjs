@@ -7,6 +7,7 @@ function replaceOnce(source,anchor,replacement){
   return source.slice(0,pos)+replacement+source.slice(pos+anchor.length);
 }
 export function patchBundle(source,runtime){
+  source=source.replace(/\r\n/g,'\n');
   if(sha(source)!==contract.files['assets/index-CEIYH7i8.js'])throw new Error('上游 bundle SHA256 不匹配，拒绝修改');
   const start=source.indexOf('function l5t('),end=source.indexOf('const c5t=',start);
   let advanced=source.slice(start,end);
