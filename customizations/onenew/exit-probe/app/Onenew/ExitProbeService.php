@@ -35,6 +35,7 @@ class ExitProbeService
         return $this->store->locked((int) $machine->id, function () use ($machine, $node, $admin, $payload) {
             abort_if($this->busy((int) $machine->id), 409, 'An exit test is already queued');
             $task = ['id' => (string) Str::uuid(), 'node_id' => $node ? (int) $node->id : null, 'machine_id' => (int) $machine->id,
+                'machine_identity' => (string) $machine->onenew_identity, 'node_identity' => $node ? (string) $node->onenew_identity : null,
                 'admin_id' => $admin, 'created_at' => now()->timestamp, 'expires_at' => now()->timestamp + 60,
                 'state' => 'pending', 'error_code' => '', 'ciphertext' => Crypt::encryptString(json_encode($payload, JSON_THROW_ON_ERROR))];
             $this->save($task);
@@ -62,7 +63,8 @@ class ExitProbeService
             $task = $this->store->cache()->get($this->key('machine:' . $machine->id));
             if (!$task || $task['state'] !== 'pending' || $task['expires_at'] <= now()->timestamp) return [];
             $node = $task['node_id'] ? Server::find($task['node_id']) : null;
-            if ($task['node_id'] && (!$node || (int) $node->machine_id !== (int) $machine->id)) {
+            if (($task['machine_identity'] ?? '') !== (string) $machine->onenew_identity ||
+                ($task['node_id'] && (!$node || (int) $node->machine_id !== (int) $machine->id || ($task['node_identity'] ?? '') !== (string) $node->onenew_identity))) {
                 $this->finish($task, 'failed', 'machine_unavailable');
                 return [];
             }
@@ -83,7 +85,8 @@ class ExitProbeService
             abort_unless($task && $task['machine_id'] === (int) $machine->id && $task['state'] === 'running' &&
                 $task['expires_at'] > now()->timestamp && hash_equals($task['lease_hash'], hash('sha256', $result['lease'])), 409);
             $node = $task['node_id'] ? Server::find($task['node_id']) : null;
-            if ($task['node_id'] && (!$node || (int) $node->machine_id !== (int) $machine->id)) {
+            if (($task['machine_identity'] ?? '') !== (string) $machine->onenew_identity ||
+                ($task['node_id'] && (!$node || (int) $node->machine_id !== (int) $machine->id || ($task['node_identity'] ?? '') !== (string) $node->onenew_identity))) {
                 $this->finish($task, 'failed', 'machine_unavailable');
                 abort(409);
             }

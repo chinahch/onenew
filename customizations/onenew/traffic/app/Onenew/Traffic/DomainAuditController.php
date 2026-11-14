@@ -47,6 +47,7 @@ class DomainAuditController extends Controller
             }
             abort_unless(self::validDomain($domain), 422, 'Invalid DNS hostname');
             $rows[] = ['user_id' => (int) $event['user_id'], 'server_id' => (int) $node->id,
+                'node_identity' => (string) $node->onenew_identity,
                 'server_type' => (string) $node->type, 'node_name' => mb_substr((string) $node->name, 0, 255),
                 'domain' => $domain, 'observed_at' => (int) $event['observed_at']];
         }

@@ -16,6 +16,7 @@ class OnenewServiceProvider extends ServiceProvider
         $root = '/opt/onenew';
         $this->loadMigrationsFrom($root . '/user-portal/backend/database/migrations');
         $this->loadMigrationsFrom($root . '/traffic/database/migrations');
+        $this->loadMigrationsFrom($root . '/runtime/database/migrations');
         $this->commands([\App\Onenew\Traffic\PruneTelemetry::class]);
         require $root . '/health/routes.php';
         require $root . '/user-portal/backend/routes.php';

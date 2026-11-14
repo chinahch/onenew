@@ -39,6 +39,8 @@ function copyOverlay(string $source, string $target): void
 copyOverlay($custom . '/health/app', $root . '/app');
 copyOverlay($custom . '/user-portal/backend/app', $root . '/app');
 copyOverlay($custom . '/runtime/app', $root . '/app');
+require $custom . '/runtime/install-ids.php';
+applyOnenewResourceIds($root);
 copyOverlay($custom . '/traffic/app', $root . '/app');
 copyOverlay($custom . '/protocols/app', $root . '/app');
 require $custom . '/protocols/install.php';

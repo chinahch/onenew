@@ -50,7 +50,10 @@ class TrafficController extends Controller
             $state = 'partial';
             $reason = 'archive_totals_do_not_match_recorded_node_breakdown';
         }
-        $rows = (clone $base)->leftJoin('v2_server as nodes', 'nodes.id', '=', 'v2_onenew_user_node_traffic.server_id')
+        $rows = (clone $base)->leftJoin('v2_server as nodes', function ($join) {
+                $join->on('nodes.id', '=', 'v2_onenew_user_node_traffic.server_id')
+                    ->on('nodes.onenew_identity', '=', 'v2_onenew_user_node_traffic.node_identity');
+            })
             ->orderBy('v2_onenew_user_node_traffic.server_id')->orderBy('server_rate')->orderBy('v2_onenew_user_node_traffic.id')
             ->offset(($page - 1) * $perPage)->limit($perPage)
             ->get(['v2_onenew_user_node_traffic.*', 'nodes.id as existing_node_id'])->map(fn ($row) => [
@@ -73,17 +76,17 @@ class TrafficController extends Controller
         $end = $day->copy()->addDay()->timestamp;
         $cutoff = time() - DomainAuditController::retention() * 86400;
         $query = DB::table('v2_onenew_domain_events')->where('user_id', $user->id)->where('observed_at', '>=', max($recordAt, $cutoff))
-            ->where('observed_at', '<', $end)->select(['server_id', 'server_type', 'domain'])
+            ->where('observed_at', '<', $end)->select(['server_id', 'node_identity', 'server_type', 'domain'])
             ->selectRaw('MAX(node_name) AS node_name, MIN(observed_at) AS first_seen, MAX(observed_at) AS last_seen, COUNT(*) AS hit_count')
-            ->groupBy('server_id', 'server_type', 'domain');
+            ->groupBy('server_id', 'node_identity', 'server_type', 'domain');
         $total = DB::query()->fromSub(clone $query, 'domains')->count();
         $rows = $query->orderByDesc('last_seen')->orderBy('server_id')->orderBy('domain')
             ->offset(($page - 1) * $perPage)->limit($perPage)->get();
-        $existing = DB::table('v2_server')->whereIn('id', $rows->pluck('server_id'))->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $existing = DB::table('v2_server')->whereIn('id', $rows->pluck('server_id'))->pluck('onenew_identity', 'id')->all();
         $rows = $rows->map(fn ($row) => ['domain' => $row->domain, 'server_id' => (int) $row->server_id,
             'node_name' => $row->node_name, 'server_type' => $row->server_type,
             'first_seen' => gmdate('Y-m-d\TH:i:s\Z', (int) $row->first_seen), 'last_seen' => gmdate('Y-m-d\TH:i:s\Z', (int) $row->last_seen),
-            'hit_count' => (int) $row->hit_count, 'node_deleted' => !in_array((int) $row->server_id, $existing, true),
+            'hit_count' => (int) $row->hit_count, 'node_deleted' => ($existing[$row->server_id] ?? null) !== $row->node_identity,
         ])->values();
         $state = $end <= $cutoff ? 'expired' : (!DomainAuditController::enabled() ? 'disabled' : ($total ? 'available' : 'unavailable'));
         return response()->json(['data' => $rows, 'total' => $total, 'current_page' => $page, 'per_page' => $perPage,
