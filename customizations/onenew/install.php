@@ -43,7 +43,7 @@ copyOverlay($custom . '/runtime/app', $root . '/app');
 // deployments keep their administrator-selected registration and brand policy.
 replaceOnce($root . '/app/Console/Commands/XboardInstall.php',
     "            \$this->info('正在安装默认插件...');",
-    "            admin_setting(['invite_force' => 1, 'app_name' => 'onenew']);\n            \$this->info('正在安装默认插件...');");
+    "            \\App\\Models\\Setting::createOrUpdate('invite_force', 1);\n            \\App\\Models\\Setting::createOrUpdate('app_name', 'onenew');\n            \$this->info('正在安装默认插件...');");
 replaceOnce($root . '/config/app.php',
     'App\\Providers\\ProtocolServiceProvider::class,',
     'App\\Providers\\ProtocolServiceProvider::class,' . "\n        App\\Onenew\\OnenewServiceProvider::class,");
