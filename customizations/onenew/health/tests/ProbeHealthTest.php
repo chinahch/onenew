@@ -127,6 +127,28 @@ class ProbeHealthTest extends TestCase
         ])->assertConflict();
     }
 
+    public function test_native_tcp_reality_vision_template_replaces_cached_unsupported_without_reediting_node(): void
+    {
+        foreach ([false, true] as $encrypted) {
+            [$machine, $node, $user] = $this->fixture();
+            $settings = ['tls' => 2, 'network' => 'tcp', 'flow' => 'xtls-rprx-vision',
+                'network_settings' => ['acceptProxyProtocol' => false, 'header' => ['type' => 'none']],
+                'reality_settings' => ['server_name' => 'reality.example', 'public_key' => str_repeat('A', 43), 'short_id' => 'abcd']];
+            if ($encrypted) $settings['encryption'] = ['enabled' => true, 'encryption' => 'native-public-test-key', 'decryption' => 'never-export'];
+            $node->update(['type' => 'vless', 'protocol_settings' => $settings]);
+            app(ProbeStore::class)->save(['id' => (string) \Illuminate\Support\Str::uuid(), 'node_id' => (int) $node->id,
+                'machine_id' => (int) $machine->id, 'revision' => 'prior-builder-revision', 'created_at' => now()->timestamp,
+                'expires_at' => now()->timestamp + 120, 'finished_at' => now()->timestamp, 'state' => 'unsupported', 'error_code' => 'unsupported']);
+            $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk()->json('tasks.0');
+            $this->assertNotNull($task);
+            $this->assertSame($encrypted ? 'xray' : 'singbox', $task['payload']['kernel_type']);
+            $this->assertStringNotContainsString('acceptProxyProtocol', json_encode($task['payload']));
+            $this->assertStringNotContainsString('never-export', json_encode($task['payload']));
+            $this->assertFalse($node->fresh()->protocol_settings['network_settings']['acceptProxyProtocol']);
+            $this->assertSame('running', app(ProbeService::class)->status($node->fresh())['state']);
+        }
+    }
+
     public function test_heartbeat_alone_never_creates_proxy_success_and_user_route_requires_authentication(): void
     {
         [$machine, $node] = $this->fixture();
