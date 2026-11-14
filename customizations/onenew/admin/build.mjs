@@ -3,6 +3,7 @@ import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {patchBundle} from './patch.mjs';
+import {fingerprintAssets} from './fingerprint-assets.mjs';
 import contract from './upstream.json' with {type:'json'};
 
 const here=path.dirname(fileURLToPath(import.meta.url));
@@ -36,5 +37,6 @@ await fs.cp(upstream,out,{recursive:true,filter:p=>!p.split(path.sep).includes('
 await fs.writeFile(path.join(out,bundlePath),patched);
 const css='assets/index-DiYa-_z_.css';
 await fs.writeFile(path.join(out,css),(await fs.readFile(path.join(upstream,css),'utf8'))+'\n'+await fs.readFile(path.join(here,'src/style.css'),'utf8'));
-await fs.writeFile(path.join(out,'onenew-build.json'),JSON.stringify({upstreamCommit:contract.commit,upstreamBundleSha256:contract.files[bundlePath],patchedBundleSha256:createHash('sha256').update(patched).digest('hex'),esbuild:esbuild.version},null,2)+'\n');
+const published=await fingerprintAssets(out);
+await fs.writeFile(path.join(out,'onenew-build.json'),JSON.stringify({upstreamCommit:contract.commit,upstreamBundleSha256:contract.files[bundlePath],patchedBundleSha256:createHash('sha256').update(patched).digest('hex'),...published,esbuild:esbuild.version},null,2)+'\n');
 console.log(`Onenew official-admin customization built: ${out}`);
