@@ -29,10 +29,15 @@ case "$(uname -m)" in
 esac
 # Never install a second agent over an unknown live caddy/php-fpm/XB instance.
 if [ "$CHECK" -eq 0 ]; then
-  for path in "$ROOT/config.yml" /etc/php-fpm/config.yml /etc/xboard-node/config.yml; do
-    [ ! -e "$path" ] || fail 'Existing node configuration found. Back it up and migrate the old service before installing; nothing was replaced.'
+  for path in "$ROOT" /etc/php-fpm/config.yml /etc/xboard-node/config.yml \
+    /etc/systemd/system/caddy.service /lib/systemd/system/caddy.service \
+    /usr/lib/systemd/system/caddy.service /etc/init.d/caddy \
+    /usr/local/bin/caddy /usr/local/bin/caddyctl; do
+    { [ ! -e "$path" ] && [ ! -L "$path" ]; } || fail 'Existing caddy service, binary or node configuration found. Back it up and migrate the old service before installing; nothing was replaced.'
   done
-  [ ! -e /usr/local/bin/caddy ] || fail 'Existing Onenew binary found; refusing an implicit upgrade'
+  if command -v caddy >/dev/null 2>&1; then
+    fail 'A caddy executable already exists in PATH; refusing to shadow or replace it'
+  fi
 fi
 for tool in curl tar sha256sum install; do command -v "$tool" >/dev/null || fail "Missing dependency: $tool"; done
 if command -v rc-service >/dev/null && command -v supervise-daemon >/dev/null; then MANAGER=openrc

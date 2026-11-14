@@ -35,13 +35,25 @@ cp "$FIXTURE_ROOT/${url##*/}" "$dest"
         file.write_text(body, newline='\n')
         file.chmod(0o755)
 
-    def run_installer(self, panel='https://panel.example.test'):
+    def run_installer(self, panel='https://panel.example.test', check_only=True):
         env = {**os.environ, 'PATH': str(self.bin) + os.pathsep + os.environ['PATH'], 'FIXTURE_ROOT': str(self.root).replace('\\', '/')}
         bash = 'C:/Program Files/Git/bin/bash.exe' if os.name == 'nt' else shutil.which('bash')
         env['MOCK_BIN'] = str(self.bin).replace('\\', '/')
         if os.name == 'nt':
             env['MOCK_BIN'] = '/' + env['MOCK_BIN'][0].lower() + env['MOCK_BIN'][2:]
-        return subprocess.run([bash, '--noprofile', '--norc', '-c', 'export PATH="$MOCK_BIN:$PATH"; exec bash "$@"', 'test-installer', str(HERE / 'install.sh').replace('\\', '/'), '--check-only', '--mode', 'machine', '--panel', panel, '--token', 'fixture-private-token', '--machine-id', '7'], env=env, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        args = ['--check-only'] if check_only else []
+        return subprocess.run([bash, '--noprofile', '--norc', '-c', 'export PATH="$MOCK_BIN:$PATH"; exec bash "$@"', 'test-installer', str(HERE / 'install.sh').replace('\\', '/'), *args, '--mode', 'machine', '--panel', panel, '--token', 'fixture-private-token', '--machine-id', '7'], env=env, capture_output=True, text=True, encoding='utf-8', errors='replace')
+
+    def test_existing_path_caddy_stops_before_any_host_mutation(self):
+        self.script('id', '#!/bin/sh\necho 0\n')
+        self.script('caddy', '#!/bin/sh\necho existing-web-server\n')
+        # Even a regression must not allow this test to create a host directory.
+        self.script('mkdir', '#!/bin/sh\necho MUTATION-MUST-NOT-RUN >&2\nexit 99\n')
+        result = self.run_installer(check_only=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('caddy', result.stderr)
+        self.assertNotIn('MUTATION-MUST-NOT-RUN', result.stderr)
+        self.assertNotIn('SERVICE-MUST-NOT-RUN', result.stderr)
 
     def test_valid_release_checks_without_service_changes_or_secret_output(self):
         result = self.run_installer()
