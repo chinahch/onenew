@@ -17,19 +17,24 @@ function applyOnenewResourceIds(string $root): void
     replaceOnce($worker, '$conn->nodeId = $nodeId;',
         '$conn->onenewNodeIdentity = (string) $node->onenew_identity;' . "\n        " . '$conn->nodeId = $nodeId;');
     replaceOnce($worker, '$conn->machineId = $machineId;',
-        '$conn->onenewCredentialHash = hash(\'sha256\', (string) $machine->token);' . "\n        " . '$conn->machineId = $machineId;');
+        '$conn->onenewCredentialHash = hash(\'sha256\', (string) $machine->token);' . "\n        "
+        . '$conn->onenewNodeIdentities = $nodes->pluck(\'onenew_identity\', \'id\')->all();' . "\n        " . '$conn->machineId = $machineId;');
     replaceOnce($worker, "    public function onMessage(TcpConnection \$conn, \$data): void\n    {",
         "    public function onMessage(TcpConnection \$conn, \$data): void\n    {\n        if ((!empty(\$conn->machineId) || !empty(\$conn->nodeId)) && !\\App\\Onenew\\ResourceConnections::valid(\$conn)) return;");
     replaceOnce($worker, 'foreach ($conn->machineNodeIds as $nodeId) {',
         'foreach ($conn->machineNodeIds as $nodeId) {' . "\n                if (NodeRegistry::get(\$nodeId) !== \$conn) continue;");
+    replaceOnce($worker, 'foreach ($conn->machineNodeIds as $nid) {',
+        'foreach ($conn->machineNodeIds as $nid) {' . "\n                    if (!\\App\\Onenew\\ResourceConnections::valid(\$conn, (int) \$nid)) return;");
+    replaceOnce($worker, "            if (isset(\$this->handlers[\$event])) {",
+        "            if (!\\App\\Onenew\\ResourceConnections::valid(\$conn, \$nodeId)) return;\n            if (isset(\$this->handlers[\$event])) {");
     replaceOnce($worker, "\$nodeId = \$conn->nodeId;\n            NodeRegistry::remove",
         "\$nodeId = \$conn->nodeId;\n            if (NodeRegistry::get(\$nodeId) !== \$conn) return;\n            NodeRegistry::remove");
     $registry = $root.'/app/Services/NodeRegistry.php';
     // Sending a push must revalidate before any newly reused ID receives data.
     replaceOnce($registry, "\$conn = self::get(\$nodeId);\n        if (!\$conn)",
-        "\$conn = self::get(\$nodeId);\n        if (!\$conn || !\\App\\Onenew\\ResourceConnections::valid(\$conn))");
+        "\$conn = self::get(\$nodeId);\n        if (!\$conn || !\\App\\Onenew\\ResourceConnections::valid(\$conn, \$nodeId))");
     replaceOnce($registry, "\$conn = self::getMachine(\$machineId);\n        if (!\$conn) {\n            return false;",
         "\$conn = self::getMachine(\$machineId);\n        if (!\$conn || !\\App\\Onenew\\ResourceConnections::valid(\$conn)) {\n            return false;");
     replaceOnce($registry, "\$conn = self::getMachine(\$machineId);\n        if (!\$conn) {\n            return;",
-        "\$conn = self::getMachine(\$machineId);\n        if (!\$conn || !\\App\\Onenew\\ResourceConnections::valid(\$conn)) {\n            return;");
+        "\$conn = self::getMachine(\$machineId);\n        if (!\$conn || !\\App\\Onenew\\ResourceConnections::refresh(\$conn, \$newNodeIds)) {\n            return;");
 }
