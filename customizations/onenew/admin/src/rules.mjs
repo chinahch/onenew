@@ -141,7 +141,10 @@ export function parseLink(raw,core,tag){
       protocol='shadowsocks';params(query,[]);auth=decode(auth);if(!auth.includes(':'))auth=b64(auth);const sep=auth.indexOf(':');if(sep<1||!auth.slice(sep+1))fail('SS 方法或密码为空');settings.method=auth.slice(0,sep);settings.password=auth.slice(sep+1);
       if(!['aes-128-gcm','aes-256-gcm','chacha20-ietf-poly1305','2022-blake3-aes-128-gcm','2022-blake3-aes-256-gcm','2022-blake3-chacha20-poly1305'].includes(settings.method))fail('暂不支持此 Shadowsocks 加密方法');
     }else if(protocol==='vless'||protocol==='trojan'){
-      const p=params(query,[...tlsKeys,...transKeys,...(protocol==='vless'?['encryption','flow']:[]),...(core==='xray-caddy'?['peer','spx','headerType','mode','pcs','vcn']:[])]);
+      const p=params(query,[...tlsKeys,...transKeys,...(protocol==='vless'?['encryption','flow','headerType']:[]),...(core==='xray-caddy'?['peer','spx','mode','pcs','vcn']:[])]);
+      // An explicit TCP "none" header is identical to the omitted default.
+      // Other values require an actual transport implementation, not omission.
+      if(p.headerType!==undefined&&(p.headerType!=='none'||!['tcp',...(core==='xray-caddy'?['raw']:[])].includes(p.type||'tcp')))fail('不支持的 headerType');
       if(protocol==='vless'){
         if(core==='xray-caddy')settings.encryption=nativeEncryption(p.encryption);
         else if(p.encryption&&p.encryption!=='none')fail('当前标准 XB-node 无法承载 VLESS ENC 加密，已拒绝生成');

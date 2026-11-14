@@ -27,6 +27,22 @@ test('Sing-box REALITY survives with all TLS fields',()=>{
   assert.deepEqual(s.tls,{enabled:true,server_name:'tls.example',utls:{enabled:true,fingerprint:'chrome'},reality:{enabled:true,public_key:'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',short_id:'abcd'}});
   assert.equal(s.flow,'xtls-rprx-vision');
 });
+
+test('VLESS TCP headerType=none is a no-op for Sing-box and native Xray without losing REALITY or Vision',()=>{
+  for(const core of ['singbox','xray-caddy']) {
+    const plain=reality+'&encryption=none&type=tcp';
+    assert.deepEqual(parseLink(plain+'&headerType=none',core,'landing'),parseLink(plain,core,'landing'));
+  }
+  const tcp='vless://00000000-0000-4000-8000-000000000001@exit.example:1080?encryption=none&type=tcp';
+  assert.deepEqual(parseLink(tcp+'&headerType=none','xray','landing'),parseLink(tcp,'xray','landing'));
+});
+
+test('VLESS nontrivial or conflicting TCP headers still refuse instead of silently losing camouflage',()=>{
+  const prefix='vless://00000000-0000-4000-8000-000000000001@exit.example:443?';
+  for(const core of ['singbox','xray','xray-caddy'])for(const query of ['type=tcp&headerType=http','type=tcp&headerType=','type=ws&headerType=none','type=tcp&headerType=none&headerType=none']) {
+    assert.throws(()=>parseLink(prefix+query,core,'landing'));
+  }
+});
 test('Xray rejects TLS/REALITY/WS and VLESS ENC instead of dropping fields',()=>{
   for(const link of [reality,reality.replace('security=reality','security=tls'),'vless://id@exit.example:80?type=ws&path=%2Fws','vless://id@exit.example:80?encryption=mlkem768x25519plus.native.0rtt.abc']) assert.throws(()=>parseLink(link,'xray','landing'));
   assert.throws(()=>parseLink('vless://id@exit.example:80?encryption=foo','singbox','landing'));
