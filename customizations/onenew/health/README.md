@@ -40,7 +40,7 @@ not a guarantee that an arbitrarily large machine completes every listener in fi
 minutes. Unsupported/no-account nodes consume their own interval, without starving
 other nodes. No task creation endpoint accepts an arbitrary URL, command, account,
 outbound or node id from a client. The only target is
-`https://www.gstatic.com/generate_204`.
+`http://cp.cloudflare.com/generate_204`.
 
 Redis stores only the latest node status (24-hour TTL), a bounded per-machine active
 id, and short-lived tasks. Task payloads are encrypted with APP_KEY. Only a SHA256
