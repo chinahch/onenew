@@ -41,6 +41,7 @@ jobs:
           python3 onenew/customizations/onenew/node/egress-patch.py --source prepared
           python3 onenew/customizations/onenew/node/bandwidth-patch.py --source prepared
           python3 onenew/customizations/onenew/node/argo-patch.py --source prepared
+          python3 onenew/customizations/onenew/node/health-patch.py --source prepared
       - name: Verify panel health scheduling
         run: |
           grep -Fq 'public const INTERVAL = 60;' onenew/customizations/onenew/health/app/Onenew/ProbeService.php
@@ -112,4 +113,4 @@ jobs:
             echo 'node-v0.1.7 already published; keeping the existing release unchanged.'
             exit 0
           fi
-          gh release create node-v0.1.7 dist/*.tar.gz dist/SHA256SUMS-* dist/build-info-*.json --target "$GITHUB_SHA" --title 'Onenew native node v0.1.7' --prerelease --notes 'Native binary packages with tested systemd and OpenRC in-place upgrades and temporary rollback cleanup; the panel health interval is 60 seconds after panel deployment. Restores Argo and reverse-proxy plaintext WS origins with TLS subscriptions and certificate mode none. Self-probes use the fixed http://cp.cloudflare.com/generate_204 target shared with the panel and preserve actual local listener security. Configured certificate failures remain blocked; REALITY and remote exit probes remain unchanged. Includes previous node bandwidth and hot-apply fixes. SHA256 files included. amd64 smoke tested; arm64 cross-built, low-memory ARM64 runtime not validated. Existing caddy/php-fpm installations are preserved by the installer and need an explicit migration.'
+          gh release create node-v0.1.7 dist/*.tar.gz dist/SHA256SUMS-* dist/build-info-*.json --target "$GITHUB_SHA" --title 'Onenew native node v0.1.7' --prerelease --notes 'Fixes Cloudflare health target validation and NAT REALITY/TCP self probes. Upgrade nodes to this version when the panel uses the Cloudflare target. Native binary packages with tested systemd and OpenRC in-place upgrades and temporary rollback cleanup; the panel health interval is 60 seconds after panel deployment. Restores Argo and reverse-proxy plaintext WS origins with TLS subscriptions and certificate mode none. Self-probes use the fixed http://cp.cloudflare.com/generate_204 target shared with the panel and preserve actual local listener security. Configured certificate failures remain blocked; REALITY and remote exit probes remain unchanged. Includes previous node bandwidth and hot-apply fixes. SHA256 files included. amd64 smoke tested; arm64 cross-built, low-memory ARM64 runtime not validated. Existing caddy/php-fpm installations are preserved by the installer and need an explicit migration.'
