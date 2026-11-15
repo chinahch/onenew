@@ -44,3 +44,6 @@ python3 customizations/onenew/node/test_build.py
 ## v0.1.2
 
 新增面板服务器全局 IPv4/IPv6 出口优先设置及按逻辑节点覆盖。未设置的机器保留本地 YAML 策略；优先模式保留另一地址族作为候选。修改后按节点重新应用并关闭旧的 TCP/UDP 会话，不改系统网络。已有 Onenew systemd 节点需复制新安装命令并添加 `--upgrade`，版本确认应为 `caddy onenew-v0.1.2`。
+
+## node-v0.1.4: Argo TLS offload compatibility
+VLESS/VMess with subscription TLS and effective certificate mode `none` retain plaintext origins without a new switch. Configured certificate failures never downgrade to plaintext. Matching loopback self-probes use actual listener security; remote exit probes and REALITY retain their security. Upgrade an existing native Onenew node using `install.sh --upgrade --mode machine --panel ... --token ... --machine-id ...`; configuration and credentials are retained with binary backups for rollback.

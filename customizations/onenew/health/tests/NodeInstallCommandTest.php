@@ -9,7 +9,7 @@ final class NodeInstallCommandTest extends TestCase
     public function test_own_installer_and_shell_safe_machine_arguments(): void
     {
         $command = NodeInstallCommand::make('https://panel.example.test/', "fixture'\$token", 7);
-        self::assertStringContainsString('https://raw.githubusercontent.com/chinahch/onenew/node-v0.1.3/customizations/onenew/node/install.sh', $command);
+        self::assertStringContainsString('https://raw.githubusercontent.com/chinahch/onenew/node-v0.1.4/customizations/onenew/node/install.sh', $command);
         self::assertStringNotContainsString('cedar2025', $command);
         self::assertStringContainsString('--machine-id 7', $command);
         self::assertStringContainsString(escapeshellarg("fixture'\$token"), $command);
