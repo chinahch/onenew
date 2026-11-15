@@ -12,7 +12,7 @@ class InstallerTest(unittest.TestCase):
         self.bin.mkdir()
         self.package = self.root / 'onenew-node-linux-amd64.tar.gz'
         with tarfile.open(self.package, 'w:gz') as archive:
-            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.6 (built fixture)"\n'), ('caddyctl', '#!/bin/sh\nexit 0\n')]:
+            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.7 (built fixture)"\n'), ('caddyctl', '#!/bin/sh\nexit 0\n')]:
                 data = content.encode()
                 info = tarfile.TarInfo(name)
                 info.size, info.mode = len(data), 0o755
@@ -22,8 +22,26 @@ class InstallerTest(unittest.TestCase):
         self.script('uname', '#!/bin/sh\necho x86_64\n')
         self.script('systemctl', '#!/bin/sh\necho SERVICE-MUST-NOT-RUN >&2\nexit 99\n')
         self.script('curl', '''#!/bin/bash
-url= dest=
-while [ "$#" -gt 0 ]; do case "$1" in -o) dest=$2; shift 2;; https:*) url=$1; shift;; *) shift;; esac; done
+url= dest= body=
+while [ "$#" -gt 0 ]; do
+ case "$1" in
+   -o|--output) dest=$2; shift 2;;
+   --data-binary) body="${2#@}"; shift 2;;
+   --write-out|--request|--header|--max-time) shift 2;;
+   https:*) url=$1; shift;;
+   *) shift;;
+ esac
+done
+if [[ "$url" == */api/v2/server/machine/nodes ]]; then
+  if grep -Fq '"machine_id":7,"token":"fixture-private-token"' "$body" && [ ! -e "$FIXTURE_ROOT/panel403" ]; then
+    printf '{"nodes":[{"id":22}]}' > "$dest"
+    printf 200
+  else
+    printf '{"message":"Machine not found or disabled"}' > "$dest"
+    printf 403
+  fi
+  exit 0
+fi
 cp "$FIXTURE_ROOT/${url##*/}" "$dest"
 ''')
 
@@ -58,7 +76,7 @@ cp "$FIXTURE_ROOT/${url##*/}" "$dest"
     def test_valid_release_checks_without_service_changes_or_secret_output(self):
         result = self.run_installer()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('Verified onenew-v0.1.6', result.stdout)
+        self.assertIn('Verified onenew-v0.1.7', result.stdout)
         self.assertNotIn('fixture-private-token', result.stdout + result.stderr)
         self.assertNotIn('SERVICE-MUST-NOT-RUN', result.stderr)
 
@@ -68,6 +86,12 @@ cp "$FIXTURE_ROOT/${url##*/}" "$dest"
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('checksum mismatch', result.stderr)
         self.assertNotIn('Verified', result.stdout)
+
+    def test_installer_is_lf_only_and_bash_parses_cleanly(self):
+        raw = (HERE / 'install.sh').read_bytes()
+        self.assertNotIn(b'\\r', raw)
+        proc = subprocess.run(['bash', '-n', str(HERE / 'install.sh')], capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
 
     def test_plain_http_and_url_credentials_are_rejected(self):
         for panel in ['http://panel.example.test', 'https://user:password@panel.example.test']:
