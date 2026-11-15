@@ -5,30 +5,65 @@ namespace App\Onenew;
 
 final class NodeInstallCommand
 {
+    private const INSTALLER = 'https://raw.githubusercontent.com/chinahch/onenew/node-v0.1.7/customizations/onenew/node/install.sh';
+
     public static function make(string $panel, string $token, int $machineId): string
     {
         self::validatePanel($panel, $machineId);
-        $installer = 'https://raw.githubusercontent.com/chinahch/onenew/node-v0.1.6/customizations/onenew/node/install.sh';
-        // Works when pasted into either a root shell or a sudo-enabled account.
-        return sprintf('curl -fsSL %s | %s -- --mode machine --panel %s --token %s --machine-id %d',
-            escapeshellarg($installer), '$(if [ "$(id -u)" -eq 0 ]; then printf "bash -s"; else printf "sudo bash -s"; fi)',
-            escapeshellarg(rtrim($panel, '/')), escapeshellarg($token), $machineId);
+        // The token is carried over stdin, never as a process argument. A local
+        // temporary script avoids competing with Bash's stdin for the token.
+        $template = <<<'SH'
+(
+set -e
+umask 077
+ONENEW_INSTALLER=$(mktemp /tmp/onenew-node-install.XXXXXX)
+trap 'rm -f -- "$ONENEW_INSTALLER"; unset NODE_TOKEN ONENEW_INSTALLER' EXIT
+curl --proto '=https' --tlsv1.2 -fsSL __INSTALLER__ -o "$ONENEW_INSTALLER"
+NODE_TOKEN=__TOKEN__
+if [ "$(id -u)" -eq 0 ]; then
+  printf '%s\n' "$NODE_TOKEN" | bash "$ONENEW_INSTALLER" --token-stdin --mode machine --panel __PANEL__ --machine-id __MACHINE__
+else
+  sudo -v </dev/tty
+  printf '%s\n' "$NODE_TOKEN" | sudo -n bash "$ONENEW_INSTALLER" --token-stdin --mode machine --panel __PANEL__ --machine-id __MACHINE__
+fi
+)
+SH;
+        return strtr($template, [
+            '__INSTALLER__' => escapeshellarg(self::INSTALLER),
+            '__TOKEN__' => escapeshellarg($token),
+            '__PANEL__' => escapeshellarg(rtrim($panel, '/')),
+            '__MACHINE__' => (string) $machineId,
+        ]);
     }
 
     public static function upgrade(string $panel, int $machineId): string
     {
         self::validatePanel($panel, $machineId);
-        // The latest reviewed installer selects a checksummed release package.
-        // Read the token on the node machine so the admin page never exposes it.
-        $installer = 'https://raw.githubusercontent.com/chinahch/onenew/master/customizations/onenew/node/install.sh';
-        return sprintf(
-            "ONENEW_INSTALLER=\$(mktemp /tmp/onenew-node-upgrade.XXXXXX) &&\n" .
-            "curl -fsSL %s -o \"\$ONENEW_INSTALLER\" &&\n" .
-            "read -rsp '服务器 Token：' NODE_TOKEN && echo &&\n" .
-            "\$(if [ \"\$(id -u)\" -eq 0 ]; then printf 'bash'; else printf 'sudo bash'; fi) \"\$ONENEW_INSTALLER\" --upgrade --mode machine --panel %s --token \"\$NODE_TOKEN\" --machine-id %d;\n" .
-            "unset NODE_TOKEN; rm -f -- \"\$ONENEW_INSTALLER\"; unset ONENEW_INSTALLER",
-            escapeshellarg($installer), escapeshellarg(rtrim($panel, '/')), $machineId
-        );
+        // Always download the reviewed release installer, not mutable master.
+        // Authenticate the machine before touching binaries or credentials;
+        // install.sh enforces this even when called independently.
+        $template = <<<'SH'
+(
+set -e
+umask 077
+ONENEW_INSTALLER=$(mktemp /tmp/onenew-node-upgrade.XXXXXX)
+trap 'rm -f -- "$ONENEW_INSTALLER"; unset NODE_TOKEN ONENEW_INSTALLER' EXIT
+curl --proto '=https' --tlsv1.2 -fsSL __INSTALLER__ -o "$ONENEW_INSTALLER"
+if [ "$(id -u)" -ne 0 ]; then sudo -v </dev/tty; fi
+read -rsp '服务器 Token：' NODE_TOKEN </dev/tty
+printf '\n'
+if [ "$(id -u)" -eq 0 ]; then
+  printf '%s\n' "$NODE_TOKEN" | bash "$ONENEW_INSTALLER" --token-stdin --upgrade --mode machine --panel __PANEL__ --machine-id __MACHINE__
+else
+  printf '%s\n' "$NODE_TOKEN" | sudo -n bash "$ONENEW_INSTALLER" --token-stdin --upgrade --mode machine --panel __PANEL__ --machine-id __MACHINE__
+fi
+)
+SH;
+        return strtr($template, [
+            '__INSTALLER__' => escapeshellarg(self::INSTALLER),
+            '__PANEL__' => escapeshellarg(rtrim($panel, '/')),
+            '__MACHINE__' => (string) $machineId,
+        ]);
     }
 
     private static function validatePanel(string $panel, int $machineId): void
@@ -39,4 +74,3 @@ final class NodeInstallCommand
         }
     }
 }
-
