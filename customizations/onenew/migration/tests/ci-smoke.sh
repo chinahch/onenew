@@ -25,7 +25,7 @@ printf '%s\n' ci-migration-disposable-2048 | docker run --rm -i --network none -
 git -c safe.directory="$PWD" archive HEAD | tar -x -C "$work/source"
 cp -a "$work/unpack/restored/." "$work/source/"
 mkdir -p "$work/source/data/redis" "$work/source/storage/logs"
-cp "$work/source/compose.onenew.sample.yaml" "$work/source/compose.yaml"
+sed -e '/ONENEW_REVISION:/c\        ONENEW_REVISION: "'"$ONENEW_REVISION"'"' -e '/ONENEW_BIND_IP/c\      - "127.0.0.1:7002:7001"' "$work/source/compose.onenew.sample.yaml" > "$work/source/compose.yaml"
 printf 'ONENEW_REVISION=%s\nONENEW_PORT=7002\n' "$ONENEW_REVISION" > "$work/source/.env.compose.restore"
 (
   cd "$work/source"
@@ -33,7 +33,28 @@ printf 'ONENEW_REVISION=%s\nONENEW_PORT=7002\n' "$ONENEW_REVISION" > "$work/sour
   docker compose --env-file .env.compose.restore -p onenew-migration-ci exec -T onenew php artisan onenew:migration-assets
   restored=$(docker compose --env-file .env.compose.restore -p onenew-migration-ci exec -T -e ONENEW_CI_FIXTURE=isolated-only onenew php /opt/onenew/migration/tests/ci-fixture.php digest)
   [[ "$original" == "$restored" ]] || { echo 'Restored key or credentials changed' >&2; exit 1; }
+  # Reproduce normal operator rebuild with neither exported revision nor special env-file.
+  env -u ONENEW_REVISION docker compose -p onenew-migration-ci config --format json > "$work/config.json"
+  python3 -c 'import json,sys;assert json.load(open(sys.argv[1]))["services"]["onenew"]["build"]["args"]["ONENEW_REVISION"]==sys.argv[2]' "$work/config.json" "$ONENEW_REVISION"
+  env -u ONENEW_REVISION docker compose -p onenew-migration-ci up -d --build --wait
+  actual=$(env -u ONENEW_REVISION docker compose -p onenew-migration-ci exec -T onenew cat /opt/onenew/REVISION)
+  [[ "$actual" == "$ONENEW_REVISION" ]] || { echo 'Normal rebuild lost the restored revision' >&2; exit 1; }
+
 )
 curl --fail --silent -H 'Content-Type: application/json' -d '{"email":"ci-onenew@example.test","password":"ci-onenew-disposable-2048"}' http://127.0.0.1:7002/api/v1/passport/auth/login > "$work/login.json"
 python3 -c 'import json,sys;assert json.load(open(sys.argv[1]))["data"]["auth_data"]' "$work/login.json"
-echo 'Encrypted export, fresh Compose restore, credentials, plugin assets and login passed'
+# The rebuilt restored panel must itself be capable of generating the next migration.
+auth=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["data"]["auth_data"])' "$work/login.json")
+echo "::add-mask::$auth"
+curl --fail --silent -H "Authorization: $auth" http://127.0.0.1:7002/api/onenew/admin/migration > "$work/info.json"
+python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));assert d["supported"] and d["revision"]==sys.argv[2]' "$work/info.json" "$ONENEW_REVISION"
+id=$(curl --fail --silent -H "Authorization: $auth" -H 'Content-Type: application/json' -d '{"password":"ci-migration-disposable-2048","password_confirmation":"ci-migration-disposable-2048"}' http://127.0.0.1:7002/api/onenew/admin/migration/exports | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+state=''
+for attempt in $(seq 1 90); do
+  state=$(curl --fail --silent -H "Authorization: $auth" "http://127.0.0.1:7002/api/onenew/admin/migration/exports/$id" | python3 -c 'import json,sys;print(json.load(sys.stdin)["state"])')
+  [[ "$state" != failed && "$state" != expired ]] || { echo "Second export $state" >&2; exit 1; }
+  [[ "$state" != ready ]] || break
+  sleep 2
+done
+[[ "$state" == ready ]] || { echo 'Second migration worker timed out' >&2; exit 1; }
+echo 'Encrypted export, fresh Compose restore, normal rebuild, second export and login passed' 

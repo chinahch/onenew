@@ -32,6 +32,8 @@ jobs:
       - name: Run PHP feature regressions with isolated SQLite and cache
         run: |
           bash customizations/onenew/migration/tests/restore.sh
+          bash customizations/onenew/migration/tests/version-pin.sh
+          bash customizations/onenew/migration/tests/upgrade-restored.sh
           python3 customizations/onenew/migration/tests/bootstrap_success.py
           docker run --rm --entrypoint sh onenew:local -c '
             set -eu

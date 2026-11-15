@@ -55,7 +55,9 @@ template="$work/source/compose.onenew.sample.yaml"
 [[ $(grep -c '^name: onenew$' "$template") == 1 && $(grep -c '^    image: onenew:local$' "$template") == 1 ]] || { echo 'Unexpected trusted Compose template; refusing to deploy.' >&2; exit 1; }
 binding='      - "${ONENEW_BIND_IP:-127.0.0.1}:${ONENEW_PORT:-7001}:7001"'
 [[ $(grep -Fxc -- "$binding" "$template") == 1 ]] || { echo 'Unexpected Compose port binding.' >&2; exit 1; }
-sed -e '/ONENEW_BIND_IP/c\      - "0.0.0.0:'"$port"':7001"' -e "s/^name: onenew$/name: $project/" -e "s/^    image: onenew:local$/    image: $image/" "$template" > "$work/source/compose.yaml"
+version_arg='        ONENEW_REVISION: "${ONENEW_REVISION:-local}"'
+[[ $(grep -Fxc -- "$version_arg" "$template") == 1 ]] || { echo 'Unexpected Compose build revision.' >&2; exit 1; }
+sed -e '/ONENEW_REVISION:/c\        ONENEW_REVISION: "'"$revision"'"' -e '/ONENEW_BIND_IP/c\      - "0.0.0.0:'"$port"':7001"' -e "s/^name: onenew$/name: $project/" -e "s/^    image: onenew:local$/    image: $image/" "$template" > "$work/source/compose.yaml"
 [[ ! -e "$target" ]] || rmdir -- "$target"
 mv -T -n -- "$work/source" "$target"
 [[ ! -e "$work/source" ]] || { echo 'Target changed concurrently; refusing to overwrite.' >&2; exit 1; }
