@@ -62,6 +62,9 @@ export function patchBundle(source,runtime){
   nodeTable=replaceOnce(nodeTable,'await QL(t)','await OnenewAdmin.saveManagedOrder(RL,t)');
   source=source.slice(0,tableStart)+nodeTable+source.slice(tableEnd);
   source=replaceOnce(source,'const n=e.getRowModel().rows,i=n.length>0&&n.every(e=>e.getIsSelected());','const n=e.getRowModel().rows.filter(e=>e.getCanSelect()),i=n.length>0&&n.every(e=>e.getIsSelected());');
+  source=replaceOnce(source,'rate_time_enable:uy().default(!1),rate_time_ranges:gy(t)','node_speed_limit_mbps:dy().int().min(0).max(100000).default(0),rate_time_enable:uy().default(!1),rate_time_ranges:gy(t)');
+  source=replaceOnce(source,'name:"",rate:"1",rate_time_enable:','name:"",rate:"1",node_speed_limit_mbps:0,rate_time_enable:');
+  source=replaceOnce(source,'Q.jsx($y,{control:x.control,name:"transfer_enable_gb",','Q.jsx(OnenewAdmin.NodeBandwidthField,{react:H,form:x}),Q.jsx($y,{control:x.control,name:"transfer_enable_gb",');
   const machineStart=source.indexOf('function n3t('),machineEnd=source.indexOf('function i3t(',machineStart);
   let machine=source.slice(machineStart,machineEnd);
   if(sha(machine)!==contract.machineEditorSha256)throw new Error('服务器编辑器 SHA256 不匹配');
