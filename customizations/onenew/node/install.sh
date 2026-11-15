@@ -2,8 +2,8 @@
 # Native binary installation; no Docker is used on the node server.
 set -Eeuo pipefail
 umask 077
-VERSION=onenew-v0.1.7
-RELEASE=node-v0.1.7
+VERSION=onenew-v0.1.8
+RELEASE=node-v0.1.8
 BASE="https://github.com/chinahch/onenew/releases/download/$RELEASE"
 ROOT=/etc/caddy
 PANEL= TOKEN= MACHINE= CHECK=0 UPGRADE=0

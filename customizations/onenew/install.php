@@ -83,7 +83,7 @@ $machineSource = str_replace(
     "            'command' => \$this->buildInstallCommand(\$request, \$machine),",
     "            'command' => \$this->buildInstallCommand(\$request, \$machine),\n"
         . "            'upgrade_command' => \\App\\Onenew\\NodeInstallCommand::upgrade("
-        . "rtrim((string) (admin_setting('app_url') ?: \$request->getSchemeAndHttpHost()), '/'), (int) \$machine->id),",
+        . "rtrim((string) (admin_setting('app_url') ?: \$request->getSchemeAndHttpHost()), '/'), (int) \$machine->id, \$machine->token),",
     $machineSource,
     $upgradeCount
 );

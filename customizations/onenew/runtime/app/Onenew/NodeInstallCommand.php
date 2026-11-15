@@ -5,62 +5,36 @@ namespace App\Onenew;
 
 final class NodeInstallCommand
 {
-    private const INSTALLER = 'https://raw.githubusercontent.com/chinahch/onenew/node-v0.1.7/customizations/onenew/node/install.sh';
+    private const INSTALLER = 'https://raw.githubusercontent.com/chinahch/onenew/node-v0.1.8/customizations/onenew/node/install.sh';
 
     public static function make(string $panel, string $token, int $machineId): string
     {
+        return self::command($panel, $token, $machineId, false);
+    }
+
+    public static function upgrade(string $panel, int $machineId, string $token): string
+    {
+        return self::command($panel, $token, $machineId, true);
+    }
+
+    private static function command(string $panel, string $token, int $machineId, bool $upgrade): string
+    {
         self::validatePanel($panel, $machineId);
-        // The token is carried over stdin, never as a process argument. A local
-        // temporary script avoids competing with Bash's stdin for the token.
+        if ($token === '') {
+            throw new \InvalidArgumentException('服务器 Token 不能为空。');
+        }
+        // Download must succeed before execution; token travels over stdin.
         $template = <<<'SH'
 (
-set -e
-umask 077
-ONENEW_INSTALLER=$(mktemp /tmp/onenew-node-install.XXXXXX)
-trap 'rm -f -- "$ONENEW_INSTALLER"; unset NODE_TOKEN ONENEW_INSTALLER' EXIT
-curl --proto '=https' --tlsv1.2 -fsSL __INSTALLER__ -o "$ONENEW_INSTALLER"
-NODE_TOKEN=__TOKEN__
-if [ "$(id -u)" -eq 0 ]; then
-  printf '%s\n' "$NODE_TOKEN" | bash "$ONENEW_INSTALLER" --token-stdin --mode machine --panel __PANEL__ --machine-id __MACHINE__
-else
-  sudo -v </dev/tty
-  printf '%s\n' "$NODE_TOKEN" | sudo -n bash "$ONENEW_INSTALLER" --token-stdin --mode machine --panel __PANEL__ --machine-id __MACHINE__
-fi
+f=$(mktemp) || exit; trap 'rm -f "$f"' EXIT
+r=; if [ "$(id -u)" != 0 ]; then sudo -v </dev/tty || exit; r="sudo -n"; fi
+curl -fsSL __INSTALLER__ -o "$f" && printf '%s\n' __TOKEN__ | $r bash "$f" --token-stdin __UPGRADE__--mode machine --panel __PANEL__ --machine-id __MACHINE__
 )
 SH;
         return strtr($template, [
             '__INSTALLER__' => escapeshellarg(self::INSTALLER),
             '__TOKEN__' => escapeshellarg($token),
-            '__PANEL__' => escapeshellarg(rtrim($panel, '/')),
-            '__MACHINE__' => (string) $machineId,
-        ]);
-    }
-
-    public static function upgrade(string $panel, int $machineId): string
-    {
-        self::validatePanel($panel, $machineId);
-        // Always download the reviewed release installer, not mutable master.
-        // Authenticate the machine before touching binaries or credentials;
-        // install.sh enforces this even when called independently.
-        $template = <<<'SH'
-(
-set -e
-umask 077
-ONENEW_INSTALLER=$(mktemp /tmp/onenew-node-upgrade.XXXXXX)
-trap 'rm -f -- "$ONENEW_INSTALLER"; unset NODE_TOKEN ONENEW_INSTALLER' EXIT
-curl --proto '=https' --tlsv1.2 -fsSL __INSTALLER__ -o "$ONENEW_INSTALLER"
-if [ "$(id -u)" -ne 0 ]; then sudo -v </dev/tty; fi
-read -rsp '服务器 Token：' NODE_TOKEN </dev/tty
-printf '\n'
-if [ "$(id -u)" -eq 0 ]; then
-  printf '%s\n' "$NODE_TOKEN" | bash "$ONENEW_INSTALLER" --token-stdin --upgrade --mode machine --panel __PANEL__ --machine-id __MACHINE__
-else
-  printf '%s\n' "$NODE_TOKEN" | sudo -n bash "$ONENEW_INSTALLER" --token-stdin --upgrade --mode machine --panel __PANEL__ --machine-id __MACHINE__
-fi
-)
-SH;
-        return strtr($template, [
-            '__INSTALLER__' => escapeshellarg(self::INSTALLER),
+            '__UPGRADE__' => $upgrade ? '--upgrade ' : '',
             '__PANEL__' => escapeshellarg(rtrim($panel, '/')),
             '__MACHINE__' => (string) $machineId,
         ]);

@@ -43,7 +43,9 @@ class ProbeService
             // Oldest scheduled node first: a broken or unsupported node cannot starve
             // the other listeners on the same machine. One task is ever leased.
             $nodes = ServerService::getMachineNodes($machine)->sortBy(function (Server $node) {
-                return sprintf('%012d:%012d', $this->store->latest((int) $node->id)['created_at'] ?? 0, $node->id);
+                $last = $this->store->latest((int) $node->id);
+                $changed = $last && !hash_equals($last['revision'], $this->revision($node));
+                return sprintf('%d:%012d:%012d', $changed ? 0 : 1, $last['created_at'] ?? 0, $node->id);
             });
             foreach ($nodes as $node) {
                 $last = $this->store->latest((int) $node->id);
@@ -214,9 +216,9 @@ class ProbeService
     private function revision(Server $node): string
     {
         $fields = ['onenew_identity', 'machine_id', 'enabled', 'type', 'host', 'port', 'server_port', 'parent_id',
-            'protocol_settings', 'group_ids', 'custom_outbounds', 'custom_routes', 'route_ids', 'cert_config'];
+            'node_speed_limit_mbps', 'protocol_settings', 'group_ids', 'custom_outbounds', 'custom_routes', 'route_ids', 'cert_config'];
         // Invalidate cached unsupported results when the client builder changes.
-        $values = ['probe_schema_version' => 5];
+        $values = ['probe_schema_version' => 6];
         foreach ($fields as $field) {
             $value = $node->getAttribute($field);
             // The native port column is VARCHAR without a model scalar cast:
@@ -224,7 +226,7 @@ class ProbeService
             // database reload returns "443". Hash listener semantics rather than
             // incidental PDO/model scalar representations or absent empty arrays.
             $values[$field] = match ($field) {
-                'machine_id', 'server_port', 'parent_id' => (int) $value,
+                'machine_id', 'server_port', 'parent_id', 'node_speed_limit_mbps' => (int) $value,
                 'enabled' => (bool) $value,
                 'port' => is_numeric($value) ? (string) (int) $value : (string) $value,
                 'type', 'host' => (string) $value,
@@ -232,6 +234,7 @@ class ProbeService
                 default => $value,
             };
         }
+        $values['effective_egress'] = class_exists(MachineEgress::class) ? MachineEgress::forNode($node) : null;
         // Route IDs point to mutable records. Resolve the same collection as
         // buildNodeConfig, preserving its effective rule order rather than
         // independently sorting by node IDs or administrator labels. Fixed field
