@@ -24,9 +24,9 @@ final class NodeInstallCommandTest extends TestCase
         NodeInstallCommand::make('http://panel.example.test', 'fixture', 1);
     }
 
-    public function test_upgrade_command_uses_current_installer_and_prompts_for_token(): void
+    public function test_upgrade_command_uses_current_installer_and_embeds_token_without_prompt(): void
     {
-        $command = NodeInstallCommand::upgrade('https://panel.example.test/', 15);
+        $command = NodeInstallCommand::upgrade('https://panel.example.test/', 15, "fixture'private-token");
         self::assertStringContainsString('/node-v0.1.8/customizations/onenew/node/install.sh', $command);
         self::assertStringNotContainsString('/master/customizations/onenew/node/install.sh', $command);
         self::assertStringContainsString('--upgrade', $command);
@@ -34,10 +34,10 @@ final class NodeInstallCommandTest extends TestCase
         self::assertStringContainsString('trap ', $command);
         self::assertStringContainsString('--machine-id 15', $command);
         self::assertStringContainsString("--panel 'https://panel.example.test'", $command);
-        self::assertStringContainsString('read -rsp', $command);
-        self::assertStringContainsString('"$NODE_TOKEN"', $command);
-        self::assertStringContainsString('unset NODE_TOKEN', $command);
-        self::assertStringNotContainsString('fixture-private-token', $command);
+        self::assertStringNotContainsString('read -rsp', $command);
+        self::assertStringContainsString(escapeshellarg("fixture'private-token"), $command);
+        self::assertStringContainsString('&& printf', $command);
+        self::assertStringContainsString('mktemp', $command);
     }
 }
 
