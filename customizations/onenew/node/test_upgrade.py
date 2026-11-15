@@ -38,7 +38,10 @@ if [ "$1" = show ]; then
  --property=WorkingDirectory) echo "$FIXTURE_ROOT/etc/caddy";;
  --property=ExecStart) echo "{ path=$FIXTURE_ROOT/usr/local/bin/caddy ; argv[]=$FIXTURE_ROOT/usr/local/bin/caddy -c $FIXTURE_ROOT/etc/caddy/config.yml ; ignore_errors=no ; }";;
  --property=EnvironmentFiles) echo "$FIXTURE_ROOT/etc/caddy/credentials.env (ignore_errors=no)";;
- --property=DropInPaths) [ ! -e "$FIXTURE_ROOT/dropin" ] || echo /bad.conf;;
+ --property=DropInPaths)
+   if [ -e "$FIXTURE_ROOT/dropin" ]; then echo /bad.conf
+   elif [ -e "$FIXTURE_ROOT/lxc-dropin" ]; then echo /run/systemd/system/service.d/zzz-lxc-service.conf
+   fi;;
  esac
 fi
 exit 0
@@ -106,6 +109,12 @@ fi
             self.assertNotIn('stop', actions.read_text() if actions.exists() else '')
             for path, content in self.original.items(): self.assertEqual(Path(path).read_bytes(), content)
 
+    def test_lxc_global_dropin_does_not_block_upgrade(self):
+        self.root.joinpath('lxc-dropin').touch()
+        result = self.upgrade()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('candidate', self.installed.joinpath('caddy').read_text())
+
     def test_openrc_upgrade_is_rejected_without_changing_files(self):
         self.script('rc-service', '#!/bin/sh\nexit 0\n')
         self.script('supervise-daemon', '#!/bin/sh\nexit 0\n')
@@ -123,3 +132,4 @@ fi
 
 
 if __name__ == '__main__': unittest.main()
+
