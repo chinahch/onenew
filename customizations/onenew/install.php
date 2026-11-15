@@ -58,6 +58,9 @@ copyOverlay($custom . '/protocols/app', $root . '/app');
 require $custom . '/protocols/install.php';
 applyOnenewProtocolPatch($root);
 copyOverlay($custom . '/exit-probe/app', $root . '/app');
+copyOverlay($custom . '/landing-library/app', $root . '/app');
+require $custom . '/landing-library/install.php';
+applyOnenewLandingLibrary($root);
 replaceOnce($root . '/app/Services/ServerService.php',
     "            'kernel_status' => (bool) (\$metrics['kernel_status'] ?? false),",
     "            'kernel_status' => (bool) (\$metrics['kernel_status'] ?? false),\n"

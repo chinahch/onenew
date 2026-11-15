@@ -21,15 +21,18 @@ export function patchBundle(source,runtime){
   const start=source.indexOf('function l5t('),end=source.indexOf('const c5t=',start);
   let advanced=source.slice(start,end);
   if(sha(advanced)!==contract.advancedSha256)throw new Error('高级协议组件 SHA256 不匹配');
-  advanced=replaceOnce(advanced,'repeat(${2+(l?1:0)+(n?1:0)}','repeat(${1+(l?1:0)+(n?1:0)}');
-  advanced=replaceOnce(advanced,'i("dynamic_form.routing.outbounds_tab","Outbounds")','"落地链接解析"');
-  advanced=replaceOnce(advanced,',Q.jsx(ow,{value:"routes",className:"text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm",children:i("dynamic_form.routing.routes_tab","Routes")})','');
+  advanced=replaceOnce(advanced,'repeat(${2+(l?1:0)+(n?1:0)}','repeat(${Math.max(1,(l?1:0)+(n?1:0))}');
+  for(const [value,key,label] of [['outbounds','outbounds_tab','Outbounds'],['routes','routes_tab','Routes']]){
+    advanced=replaceOnce(advanced,',Q.jsx(ow,{value:"'+value+'",className:"text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm",children:i("dynamic_form.routing.'+key+'","'+label+'")})','');
+  }
   const paneStart=advanced.indexOf('Q.jsx(aw,{value:"outbounds"'),footer=advanced.indexOf('Q.jsxs(ftt,',paneStart);
   if(paneStart<0||footer<0)throw new Error('高级协议内容边界不存在');
-  advanced=advanced.slice(0,paneStart)+'Q.jsx(aw,{value:"outbounds",className:"mt-0",children:Q.jsx(OnenewAdmin.LandingEditor,{react:H,runtimeMetrics:e.getValues("metrics"),onRuntime:r=>e.setValue("metrics",r,{shouldDirty:!1}),network:e.getValues("protocol_settings.network"),nodeId:e.getValues("id"),machineId:e.getValues("machine_id"),get:IL,post:RL,outbounds:g,routes:_,setOutbounds:p,setRoutes:v})})]}),'+advanced.slice(footer);
+  advanced=advanced.slice(0,paneStart)+']}),'+advanced.slice(footer);
   const saveStart=advanced.indexOf('onClick:()=>{(()=>{let t=!1;'),saveEnd=advanced.indexOf('},className:"px-8',saveStart);
   if(saveStart<0||saveEnd<0)throw new Error('高级协议保存边界不存在');
-  advanced=advanced.slice(0,saveStart)+'onClick:()=>{try{const t=OnenewAdmin.prepareLandingSave({outbounds:g,routes:_,runtimeMetrics:e.getValues("metrics"),network:e.getValues("protocol_settings.network")});e.setValue(u,t.outbounds);e.setValue(h,t.routes);f(null);y(null);s(!1)}catch(t){f(t.message);gE.error(t.message)}'+advanced.slice(saveEnd);
+  // TLS/multiplex fields already write to the form; removed routing panes must
+  // never overwrite a library binding with their stale initialization snapshot.
+  advanced=advanced.slice(0,saveStart)+'onClick:()=>{s(!1)'+advanced.slice(saveEnd);
   source=source.slice(0,start)+advanced+source.slice(end);
   const menus=[
     '{id:"knowledge-management",title:"nav:knowledgeManagement",label:"",href:"/config/knowledge",icon:Q.jsx(af,{size:18})}',
@@ -53,6 +56,11 @@ export function patchBundle(source,runtime){
   const externalButton='children:[Q.jsx(YXt,{icon:"ion:add"}),Q.jsx("div",{children:e("form.add_node")})]}),Q.jsxs(ptt';
   source=replaceOnce(source,externalButton,'children:[Q.jsx(YXt,{icon:"ion:add"}),Q.jsx("div",{children:e("form.add_node")})]}),Q.jsx(OnenewAdmin.ExternalNodes,{react:H,get:IL,post:RL}),Q.jsxs(ptt');
   source=replaceOnce(source,'Q.jsx(OnenewAdmin.ExternalNodes,{react:H,get:IL,post:RL}),','Q.jsx(OnenewAdmin.ExternalNodes,{react:H,get:IL,post:RL}),Q.jsx(OnenewAdmin.BatchAddresses,{react:H,get:IL,post:RL,useQueryClient:lC}),');
+  source=replaceOnce(source,'Q.jsx(OnenewAdmin.ExternalNodes,{react:H,get:IL,post:RL}),','Q.jsx(OnenewAdmin.ExternalNodes,{react:H,get:IL,post:RL}),Q.jsx(OnenewAdmin.LandingLibraryButton,{react:H,get:IL,post:RL}),');
+  source=replaceOnce(source,'custom_outbounds:gy(hy()).default([]),','onenew_landing_bindings:gy(hy()).nullable().default(null),custom_outbounds:gy(hy()).default([]),');
+  source=replaceOnce(source,'custom_outbounds:[],custom_routes:[],protocol_settings:','onenew_landing_bindings:null,custom_outbounds:[],custom_routes:[],protocol_settings:');
+  source=replaceOnce(source,'Q.jsx($y,{control:x.control,name:"machine_id",','Q.jsx(OnenewAdmin.NodeLandingField,{react:H,form:x,get:IL,post:RL}),Q.jsx($y,{control:x.control,name:"machine_id",');
+  source=replaceOnce(source,'const t=x.getValues(),n=parseFloat(t.transfer_enable_gb||"0")','const t=x.getValues();if(t.onenew_landing_bindings!=null){const e=OnenewAdmin.validateLandingBindings(t.onenew_landing_bindings);if(e)return void gE.error(e)}const n=parseFloat(t.transfer_enable_gb||"0")');
   source=replaceOnce(source,'queryKey:["nodeList"],queryFn:async()=>{const{data:e}=await $L();return e}','queryKey:["nodeList"],queryFn:()=>OnenewAdmin.fetchManagedNodes($L,IL)');
   source=replaceOnce(source,'H.useEffect(()=>{!g&&Array.isArray(x)&&v(x)},[x,g]);','H.useEffect(()=>{const t=()=>w();window.addEventListener("onenew-external-changed",t);return()=>window.removeEventListener("onenew-external-changed",t)},[w]);H.useEffect(()=>{!g&&Array.isArray(x)&&v(x)},[x,g]);');
   source=replaceOnce(source,'columns:Z5t(w,e,b)','columns:OnenewAdmin.managedColumns(Z5t(w,e,b),H,RL,w)');
