@@ -108,7 +108,7 @@ fi
         self.root.joinpath('unhealthy').touch()
         result = self.upgrade()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('restored', result.stderr)
+        self.assertIn('Previous version verified healthy', result.stderr)
         self.assertEqual(list(self.installed.glob('.onenew-rollback.*')), [])
         for path, content in self.original.items(): self.assertEqual(Path(path).read_bytes(), content)
         self.assertNotIn('fixture-private-token', result.stdout + result.stderr)
