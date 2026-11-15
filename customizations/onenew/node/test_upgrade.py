@@ -24,7 +24,7 @@ class UpgradeTest(InstallerTest):
         self.installed = self.root / 'usr/local/bin'
         self.installed.mkdir(parents=True)
         self.installed.joinpath('caddy').write_text('#!/bin/sh\necho "caddy onenew-v0.1.0 (built old)"\n')
-        self.installed.joinpath('caddyctl').write_text('#!/bin/sh\necho old-cli\n')
+        self.installed.joinpath('caddyctl').write_text('#!/bin/sh\nif [ "$1" = instance ]; then printf "ID MODE PANEL TARGET SERVICE HEALTH\\nfixture machine https://panel.example.test machine_id=7 active ok\\n"; else echo old-cli; fi\n')
         for file in self.installed.iterdir(): file.chmod(0o755)
         self.original = {str(p): p.read_bytes() for p in [*self.native.iterdir(), *self.installed.iterdir(), self.system/'caddy.service']}
         self.script('id', '#!/bin/sh\necho 0\n')
@@ -59,7 +59,7 @@ else exit 10
 fi
 '''
         with tarfile.open(self.package, 'w:gz') as archive:
-            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.6 (built candidate)"\n'), ('caddyctl', cli)]:
+            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.7 (built candidate)"\n'), ('caddyctl', cli)]:
                 data = content.encode(); info = tarfile.TarInfo(name); info.size = len(data); info.mode = 0o755
                 archive.addfile(info, io.BytesIO(data))
         self.sums.write_text(hashlib.sha256(self.package.read_bytes()).hexdigest() + '  ' + self.package.name + '\n')
@@ -75,10 +75,10 @@ fi
         value = str(path).replace('\\', '/')
         return '/' + value[0].lower() + value[2:] if os.name == 'nt' else value
 
-    def upgrade(self, machine='7'):
+    def upgrade(self, machine='7', token='fixture-private-token'):
         env = {**os.environ, 'FIXTURE_ROOT': self.posix(self.root), 'MOCK_BIN': self.posix(self.bin)}
         bash = 'C:/Program Files/Git/bin/bash.exe' if os.name == 'nt' else shutil.which('bash')
-        return subprocess.run([bash, '--noprofile', '--norc', '-c', 'export PATH="$MOCK_BIN:$PATH"; exec bash "$@"', 'upgrade-test', self.posix(self.fixture_script), '--upgrade', '--panel', 'https://panel.example.test', '--token', 'fixture-private-token', '--machine-id', machine], env=env, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        return subprocess.run([bash, '--noprofile', '--norc', '-c', 'export PATH="$MOCK_BIN:$PATH"; exec bash "$@"', 'upgrade-test', self.posix(self.fixture_script), '--upgrade', '--panel', 'https://panel.example.test', '--token-stdin', '--machine-id', machine], env=env, input=token + '\n', capture_output=True, text=True, encoding='utf-8', errors='replace')
 
     def test_upgrade_preserves_configuration_certificate_and_unit(self):
         result = self.upgrade()
@@ -112,6 +112,23 @@ fi
         self.assertEqual(list(self.installed.glob('.onenew-rollback.*')), [])
         for path, content in self.original.items(): self.assertEqual(Path(path).read_bytes(), content)
         self.assertNotIn('fixture-private-token', result.stdout + result.stderr)
+
+    def test_panel_rejects_stale_token_before_service_stop(self):
+        result = self.upgrade(token='old-or-incorrect-token')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('authentication rejected (HTTP 403)', result.stderr)
+        actions = self.root/'service-actions'
+        self.assertNotIn('stop', actions.read_text() if actions.exists() else '')
+        for path, content in self.original.items():
+            self.assertEqual(Path(path).read_bytes(), content)
+
+    def test_panel_403_with_correct_looking_token_never_stops_service(self):
+        (self.root / 'panel403').touch()
+        result = self.upgrade()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('HTTP 403', result.stderr)
+        actions = self.root/'service-actions'
+        self.assertNotIn('stop', actions.read_text() if actions.exists() else '')
 
     def test_wrong_binding_and_dropin_refuse_before_stop(self):
         for machine in ['8', '7']:
