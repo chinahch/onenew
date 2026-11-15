@@ -91,4 +91,16 @@ class LandingLibraryTest extends TestCase
         $this->assertSame($value,\App\Onenew\LandingLibrary\Compiler::bindings($value));
     }
 
+    public function test_link_remark_names_are_derived_and_explicit_names_stay_unchanged(): void {
+        $this->admin();$draft=$this->draft();$draft['name']=null;$draft['link'].='#'.rawurlencode('马来家宽');
+        $id=$this->postJson(self::URL,$draft)->assertOk()->json('id');
+        $this->getJson(self::URL.'/'.$id)->assertJsonPath('name','马来家宽');
+        $draft['name']='自定义名称';$id2=$this->postJson(self::URL,$draft)->assertOk()->json('id');
+        $this->getJson(self::URL.'/'.$id2)->assertJsonPath('name','自定义名称');
+        $draft['name']='落地 exit.example';$old=$this->postJson(self::URL,$draft)->assertOk()->json('id');
+        $migration=require '/opt/onenew/landing-library/database/migrations/2026_11_15_000002_recover_landing_link_names.php';$migration->up();
+        $this->getJson(self::URL.'/'.$old)->assertJsonPath('name','马来家宽')->assertJsonPath('version',2);
+        $this->getJson(self::URL.'/'.$id2)->assertJsonPath('name','自定义名称');
+    }
+
 }
