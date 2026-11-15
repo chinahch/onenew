@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 class ProbeService
 {
     public const INTERVAL = 300;
+    public const RETRY_INTERVAL = 30;
     public const FRESHNESS = 600;
     public const LIFETIME = 120;
 
@@ -46,7 +47,7 @@ class ProbeService
             });
             foreach ($nodes as $node) {
                 $last = $this->store->latest((int) $node->id);
-                if ($last && $last['created_at'] + self::INTERVAL > $now
+                if ($last && $this->nextAttemptAt($last) > $now
                     && $last['machine_id'] === (int) $machine->id
                     && hash_equals($last['revision'], $this->revision($node))) {
                     continue;
@@ -92,6 +93,22 @@ class ProbeService
             }
             return [];
         });
+    }
+
+    private function nextAttemptAt(array $task): int
+    {
+        // A lost lease cannot finish after credentials expire. Retry at expiry;
+        // completed failures get a short cooldown, successes keep the normal cadence.
+        if ($task['state'] === 'running') {
+            return (int) $task['expires_at'];
+        }
+        if ($task['state'] === 'expired') {
+            return (int) $task['expires_at'];
+        }
+        if ($task['state'] === 'failed') {
+            return (int) ($task['finished_at'] ?? $task['created_at']) + self::RETRY_INTERVAL;
+        }
+        return (int) $task['created_at'] + self::INTERVAL;
     }
 
     public function accept(ServerMachine $machine, string $id, array $result): void

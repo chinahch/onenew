@@ -96,7 +96,7 @@ class ProbeHealthTest extends TestCase
         $this->assertSame('expired', app(ProbeService::class)->status($node)['state']);
     }
 
-    public function test_running_tasks_expire_and_node_schedule_waits_five_minutes(): void
+    public function test_expired_lease_is_replaced_on_next_poll_without_waiting_five_minutes(): void
     {
         [$machine, $node] = $this->fixture();
         $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->json('tasks.0');
@@ -106,9 +106,27 @@ class ProbeHealthTest extends TestCase
             'machine_id' => $machine->id, 'lease' => $task['lease'], 'state' => 'succeeded',
         ])->assertConflict();
         $this->assertSame('expired', app(ProbeService::class)->status($node)['state']);
+        $replacement = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertJsonCount(1, 'tasks')->json('tasks.0');
+        $this->assertNotSame($task['id'], $replacement['id']);
         $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertExactJson(['tasks' => []]);
-        $this->travel(180)->seconds();
-        $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertJsonCount(1, 'tasks');
+    }
+
+    public function test_failed_probe_retries_after_short_cooldown_and_recovers(): void
+    {
+        [$machine, $node] = $this->fixture();
+        $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->json('tasks.0');
+        $this->withToken($machine->token)->postJson('/api/v3/server/probes/'.$task['id'].'/result', [
+            'machine_id'=>$machine->id, 'lease'=>$task['lease'], 'state'=>'failed', 'error_code'=>'timeout',
+        ])->assertOk();
+        $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertExactJson(['tasks'=>[]]);
+        $this->travel(31)->seconds();
+        $next = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertJsonCount(1,'tasks')->json('tasks.0');
+        $this->withToken($machine->token)->postJson('/api/v3/server/probes/'.$next['id'].'/result', [
+            'machine_id'=>$machine->id, 'lease'=>$next['lease'], 'state'=>'succeeded', 'error_code'=>'',
+        ])->assertOk();
+        $this->assertSame('succeeded', app(ProbeService::class)->status($node)['state']);
+        $this->travel(31)->seconds();
+        $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertExactJson(['tasks'=>[]]);
     }
 
     public function test_editing_a_node_replaces_a_stale_running_probe_immediately(): void
