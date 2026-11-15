@@ -21,4 +21,18 @@ final class NodeInstallCommandTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         NodeInstallCommand::make('http://panel.example.test', 'fixture', 1);
     }
+
+    public function test_upgrade_command_uses_current_installer_and_prompts_for_token(): void
+    {
+        $command = NodeInstallCommand::upgrade('https://panel.example.test/', 15);
+        self::assertStringContainsString('/master/customizations/onenew/node/install.sh', $command);
+        self::assertStringContainsString('--upgrade', $command);
+        self::assertStringContainsString('--machine-id 15', $command);
+        self::assertStringContainsString("--panel 'https://panel.example.test'", $command);
+        self::assertStringContainsString('read -rsp', $command);
+        self::assertStringContainsString('"$NODE_TOKEN"', $command);
+        self::assertStringContainsString('unset NODE_TOKEN', $command);
+        self::assertStringNotContainsString('fixture-private-token', $command);
+    }
 }
+

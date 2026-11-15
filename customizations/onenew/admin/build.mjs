@@ -20,8 +20,8 @@ let esbuild;
 if(process.env.ONENEW_ESBUILD_MODULE)esbuild=await import(pathToFileURL(path.resolve(process.env.ONENEW_ESBUILD_MODULE)).href);
 else esbuild=await import('esbuild');
 if(esbuild.version!=='0.28.2')throw new Error('需要 esbuild 0.28.2');
-const modules=new Map(await Promise.all(['component.mjs','rules.mjs','traffic.mjs','landing-state.mjs','landing-probe.mjs','resources.mjs','migration.mjs','energy.mjs','unified-nodes.mjs','bandwidth.mjs','subscription-logs.mjs','landing-library.mjs','catalog.json'].map(async file=>[file,await fs.readFile(path.join(here,'src',file),'utf8')])));
-modules.set('component.mjs',modules.get('component.mjs')+"\nexport * from './traffic.mjs';\nexport * from './resources.mjs';\nexport * from './migration.mjs';\nexport * from './energy.mjs';\nexport * from './unified-nodes.mjs';\nexport * from './bandwidth.mjs';\nexport * from './subscription-logs.mjs';\nexport * from './landing-library.mjs';\n");
+const modules=new Map(await Promise.all(['component.mjs','rules.mjs','traffic.mjs','landing-state.mjs','landing-probe.mjs','resources.mjs','migration.mjs','energy.mjs','unified-nodes.mjs','bandwidth.mjs','subscription-logs.mjs','landing-library.mjs','upgrade-command.mjs','catalog.json'].map(async file=>[file,await fs.readFile(path.join(here,'src',file),'utf8')])));
+modules.set('component.mjs',modules.get('component.mjs')+"\nexport * from './traffic.mjs';\nexport * from './resources.mjs';\nexport * from './migration.mjs';\nexport * from './energy.mjs';\nexport * from './unified-nodes.mjs';\nexport * from './bandwidth.mjs';\nexport * from './subscription-logs.mjs';\nexport * from './landing-library.mjs';\nexport * from './upgrade-command.mjs';\n");
 // A virtual namespace prevents dependency/tsconfig walks outside the customization tree.
 const runtime=await esbuild.build({entryPoints:['component.mjs'],bundle:true,write:false,format:'iife',globalName:'OnenewAdmin',target:'es2022',minify:true,legalComments:'inline',tsconfigRaw:{},plugins:[{
   name:'onenew-local-source',setup(build){
@@ -40,3 +40,4 @@ await fs.writeFile(path.join(out,css),(await fs.readFile(path.join(upstream,css)
 const published=await fingerprintAssets(out);
 await fs.writeFile(path.join(out,'onenew-build.json'),JSON.stringify({upstreamCommit:contract.commit,upstreamBundleSha256:contract.files[bundlePath],patchedBundleSha256:createHash('sha256').update(patched).digest('hex'),...published,esbuild:esbuild.version},null,2)+'\n');
 console.log(`Onenew official-admin customization built: ${out}`);
+
