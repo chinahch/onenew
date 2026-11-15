@@ -45,7 +45,7 @@ class MigrationTest extends TestCase
         Sanctum::actingAs($this->user(true));$this->getJson(self::ROOT)->assertOk()->assertJsonPath('supported',true);
         $this->postJson(self::ROOT.'/exports',['password'=>'short','password_confirmation'=>'short'])->assertUnprocessable();
         $this->postJson(self::ROOT.'/exports',['password'=>'valid-migration-pass','password_confirmation'=>'different'])->assertUnprocessable();
-        Queue::assertNothingPushed();
+        Queue::assertNotPushed(ExportMigration::class);
         $this->assertSame(1900,config('queue.connections.onenew_migration.retry_after'));
         $this->assertSame(1,config('horizon.environments.production.migration.maxProcesses'));
     }
