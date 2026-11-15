@@ -40,7 +40,7 @@ final class EnergyController
     }
     public function adminIndex(Request $r)
     {
-        $p=$r->validate(['page'=>'sometimes|integer|min:1','status'=>'sometimes|in:pending,approved,rejected,cancelled','search'=>'sometimes|string|max:255']);
+        $p=$r->validate(['page'=>'sometimes|integer|min:1','status'=>'sometimes|in:pending,approved,rejected,cancelled','search'=>'sometimes|nullable|string|max:255']);
         $q=DB::table('onenew_energy_requests as e')->leftJoin('v2_user as u','u.id','=','e.user_id')->select([...self::FIELDS,'u.email']);
         if(!empty($p['status']))$q->where('e.status',$p['status']);
         if(!empty($p['search']))$q->where('u.email','like','%'.$p['search'].'%');

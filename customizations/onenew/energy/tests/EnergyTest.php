@@ -17,6 +17,11 @@ final class EnergyTest extends TestCase
         $this->postJson('/api/onenew/user/energy',['amount'=>'2','request_id'=>str_repeat('a',32)],$this->auth($u))->assertStatus(409);
         $this->getJson('/api/onenew/user/energy',$this->auth($u))->assertOk()->assertJsonPath('data.0.amount_cents',1234)->assertJsonMissingPath('data.0.request_hash');
     }
+    public function test_admin_list_accepts_an_empty_search_and_keeps_status_filter(): void {
+        $u=$this->account();$a=$this->account(true);$this->submit($u);
+        $this->getJson('/api/onenew/admin/energy?page=1&status=pending&search=',$this->auth($a))->assertOk()->assertJsonPath('total',1)->assertJsonPath('data.0.email',$u->email);
+        $this->getJson('/api/onenew/admin/energy?search=not-a-user',$this->auth($a))->assertOk()->assertJsonPath('total',0);
+    }
     public function test_approval_credits_native_balance_once_and_records_auditor(): void {
         $u=$this->account();$a=$this->account(true);$id=$this->submit($u);
         foreach([1,2] as $_)$this->postJson('/api/onenew/admin/energy/'.$id.'/review',['decision'=>'approved','note'=>'fixture'],$this->auth($a))->assertOk();
