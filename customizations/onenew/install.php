@@ -90,7 +90,7 @@ foreach (['XboardInstall.php', 'XboardUpdate.php'] as $command) {
 // deployments keep their administrator-selected registration and brand policy.
 replaceOnce($root . '/app/Console/Commands/XboardInstall.php',
     "            \$this->info('正在安装默认插件...');",
-    "            \\App\\Models\\Setting::createOrUpdate('invite_force', 1);\n            \\App\\Models\\Setting::createOrUpdate('app_name', 'onenew');\n            \$this->info('正在安装默认插件...');");
+    "            \\App\\Models\\Setting::createOrUpdate('invite_force', 1);\n            \\App\\Models\\Setting::createOrUpdate('app_name', '暖秋');\n            \$this->info('正在安装默认插件...');");
 replaceOnce($root . '/config/app.php',
     'App\\Providers\\ProtocolServiceProvider::class,',
     'App\\Providers\\ProtocolServiceProvider::class,' . "\n        App\\Onenew\\OnenewServiceProvider::class,");
@@ -118,7 +118,7 @@ Route::get('/', function () {
 });
 
 PHP;
-file_put_contents($web, str_replace("admin_setting('app_name', 'XBoard')", "admin_setting('app_name', 'onenew')", substr($source, 0, $start) . $homepage . substr($source, $end)));
+file_put_contents($web, str_replace("admin_setting('app_name', 'XBoard')", "admin_setting('app_name', '暖秋')", substr($source, 0, $start) . $homepage . substr($source, $end)));
 replaceOnce($web, "    return view('admin', [", "    return response()->view('admin', [");
 replaceOnce($web, "    ]);\n});\n\nRoute::get('/' . (admin_setting('subscribe_path', 's'))",
     "    ])->header('Cache-Control', 'no-store');\n});\n\nRoute::get('/' . (admin_setting('subscribe_path', 's'))");
@@ -131,7 +131,7 @@ foreach (['app', 'config'] as $folder) {
         if (!$file->isFile() || $file->getExtension() !== 'php') { continue; }
         $text = file_get_contents($file->getPathname());
         $next = str_replace(['xboard:', 'xboard-ws-server'], ['onenew:', 'onenew-ws'], $text);
-        $next = str_replace(["admin_setting('app_name', 'XBoard')", "admin_setting('app_name', 'Xboard')"], "admin_setting('app_name', 'onenew')", $next);
+        $next = str_replace(["admin_setting('app_name', 'XBoard')", "admin_setting('app_name', 'Xboard')"], "admin_setting('app_name', '暖秋')", $next);
         if ($file->getFilename() === 'horizon.php') { $next = str_replace("'Xboard' =>", "'onenew' =>", $next); }
         if ($next !== $text) { file_put_contents($file->getPathname(), $next); }
     }

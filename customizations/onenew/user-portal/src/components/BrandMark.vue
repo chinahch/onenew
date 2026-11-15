@@ -1,0 +1,1 @@
+<template><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 36 36" fill="none"><path d="M27 7C13 5 5 13 9 23c3 8 16 8 19-3 1-4 0-9-1-13Z" fill="currentColor" opacity=".95"/><path d="M10 28 25 12M16 22l-1-7m5 3 6 1" stroke="var(--green)" stroke-width="1.8" stroke-linecap="round"/></svg></span></template>
