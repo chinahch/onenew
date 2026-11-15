@@ -77,10 +77,10 @@ jobs:
       - name: Verify amd64 executable version and CLI configuration
         if: matrix.arch == 'amd64'
         run: |
-          dist/amd64/caddy -v | grep '^caddy onenew-v0.1.7 '
+          dist/amd64/caddy -v | grep '^caddy onenew-v0.1.8 '
           grep -aFq 'http://cp.cloudflare.com/generate_204' dist/amd64/caddy
           mkdir -m 700 /tmp/onenew-fixture
-          dist/amd64/caddyctl config init --mode machine --panel-url https://panel.example.test --token fixture-disposable-token --machine-id 7 --kernel singbox --health-port 65530 --version onenew-v0.1.7 --output /tmp/onenew-fixture/config.yml --credentials-out /tmp/onenew-fixture/credentials.env --meta /tmp/onenew-fixture/install-meta.json --install-root /etc/caddy
+          dist/amd64/caddyctl config init --mode machine --panel-url https://panel.example.test --token fixture-disposable-token --machine-id 7 --kernel singbox --health-port 65530 --version onenew-v0.1.8 --output /tmp/onenew-fixture/config.yml --credentials-out /tmp/onenew-fixture/credentials.env --meta /tmp/onenew-fixture/install-meta.json --install-root /etc/caddy
           test -s /tmp/onenew-fixture/config.yml
           test -s /tmp/onenew-fixture/credentials.env
       - uses: actions/upload-artifact@v4
@@ -109,8 +109,8 @@ jobs:
         run: |
           set -euo pipefail
           # Do not replace a previously published package or move its source tag.
-          if gh release view node-v0.1.7 >/dev/null 2>&1; then
-            echo 'node-v0.1.7 already published; keeping the existing release unchanged.'
+          if gh release view node-v0.1.8 >/dev/null 2>&1; then
+            echo 'node-v0.1.8 already published; keeping the existing release unchanged.'
             exit 0
           fi
-          gh release create node-v0.1.7 dist/*.tar.gz dist/SHA256SUMS-* dist/build-info-*.json --target "$GITHUB_SHA" --title 'Onenew native node v0.1.7' --prerelease --notes 'Fixes Cloudflare health target validation and NAT REALITY/TCP self probes. Upgrade nodes to this version when the panel uses the Cloudflare target. Native binary packages with tested systemd and OpenRC in-place upgrades and temporary rollback cleanup; the panel health interval is 60 seconds after panel deployment. Restores Argo and reverse-proxy plaintext WS origins with TLS subscriptions and certificate mode none. Self-probes use the fixed http://cp.cloudflare.com/generate_204 target shared with the panel and preserve actual local listener security. Configured certificate failures remain blocked; REALITY and remote exit probes remain unchanged. Includes previous node bandwidth and hot-apply fixes. SHA256 files included. amd64 smoke tested; arm64 cross-built, low-memory ARM64 runtime not validated. Existing caddy/php-fpm installations are preserved by the installer and need an explicit migration.'
+          gh release create node-v0.1.8 dist/*.tar.gz dist/SHA256SUMS-* dist/build-info-*.json --target "$GITHUB_SHA" --title 'Onenew native node v0.1.8' --prerelease --notes 'Fixes Cloudflare health target validation and NAT REALITY/TCP self probes. Upgrade nodes to this version when the panel uses the Cloudflare target. Native binary packages with tested systemd and OpenRC in-place upgrades and temporary rollback cleanup; the panel health interval is 60 seconds after panel deployment. Restores Argo and reverse-proxy plaintext WS origins with TLS subscriptions and certificate mode none. Self-probes use the fixed http://cp.cloudflare.com/generate_204 target shared with the panel and preserve actual local listener security. Configured certificate failures remain blocked; REALITY and remote exit probes remain unchanged. Includes previous node bandwidth and hot-apply fixes. SHA256 files included. amd64 smoke tested; arm64 cross-built, low-memory ARM64 runtime not validated. Existing caddy/php-fpm installations are preserved by the installer and need an explicit migration.'
