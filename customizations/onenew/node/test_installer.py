@@ -89,7 +89,7 @@ cp "$FIXTURE_ROOT/${url##*/}" "$dest"
 
     def test_installer_is_lf_only_and_bash_parses_cleanly(self):
         raw = (HERE / 'install.sh').read_bytes()
-        self.assertNotIn(b'\\r', raw)
+        self.assertNotIn(b'\r', raw)
         proc = subprocess.run(['bash', '-n', str(HERE / 'install.sh')], capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, proc.stderr)
 
