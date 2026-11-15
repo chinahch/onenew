@@ -7,7 +7,7 @@ use App\Models\User;
 use App\Protocols\SingBox;
 use App\Utils\Helper;
 
-/** Build a client to the actual listener, never a direct-to-target outbound. */
+/** Build a client through the same public entry used by subscribers. */
 class ProbeOutboundBuilder extends SingBox
 {
     public const TARGET = 'https://www.gstatic.com/generate_204';
@@ -25,8 +25,8 @@ class ProbeOutboundBuilder extends SingBox
         $type = $node->type;
         $network = data_get($settings, 'network') ?: 'tcp';
         $tls = data_get($settings, 'tls', 0);
-        $port = $node->server_port ?: $node->port;
-        if (!is_numeric($port) || (int) $port < 1 || (int) $port > 65535 || $node->parent_id) {
+        $port = $node->port ?: $node->server_port;
+        if (!$node->host || !is_numeric($port) || (int) $port < 1 || (int) $port > 65535 || $node->parent_id) {
             throw new ProbeUnavailable('configuration_unavailable');
         }
         // Use Xray's native client schema when Sing-box cannot preserve the node.
@@ -59,13 +59,13 @@ class ProbeOutboundBuilder extends SingBox
             $settings['utls'] = array_replace(['enabled' => true, 'fingerprint' => 'chrome'], $settings['utls'] ?? []);
             $settings['utls']['enabled'] = true;
         }
-        // Preserve the public certificate name before replacing the dial address with loopback.
+        // Keep the subscription's TLS name and dial through its public ingress.
         $tlsKey = in_array($type, ['hysteria', 'tuic', 'anytls'], true) ? 'tls' : 'tls_settings';
         if (!data_get($settings, $tlsKey . '.server_name')) {
             $settings[$tlsKey] = array_replace((array) ($settings[$tlsKey] ?? []), ['server_name' => $node->host]);
         }
         $server = [
-            'name' => 'onenew-probe', 'host' => '127.0.0.1', 'port' => (int) $port,
+            'name' => 'onenew-probe', 'host' => $node->host, 'port' => (int) $port,
             'protocol_settings' => $settings, 'password' => $node->generateServerPassword($user),
         ];
         $method = match ($type) {
@@ -128,8 +128,8 @@ class ProbeOutboundBuilder extends SingBox
             $account += ['security' => 'auto', 'alterId' => 0];
         }
         $protocolSettings = $type === 'trojan'
-            ? ['servers' => [['address' => '127.0.0.1', 'port' => $port, 'password' => $user->uuid]]]
-            : ['vnext' => [['address' => '127.0.0.1', 'port' => $port, 'users' => [$account]]]];
+            ? ['servers' => [['address' => $node->host, 'port' => $port, 'password' => $user->uuid]]]
+            : ['vnext' => [['address' => $node->host, 'port' => $port, 'users' => [$account]]]];
         $stream = ['network' => $network, 'security' => 'none'];
         $tls = (int) data_get($s, 'tls', 0);
         if ($tls === 1) {
@@ -295,3 +295,4 @@ class ProbeOutboundBuilder extends SingBox
         };
     }
 }
+
