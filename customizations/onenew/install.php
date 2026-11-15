@@ -76,9 +76,21 @@ $endCommand = $startCommand === false ? false : strpos($machineSource, "\n      
 if ($startCommand === false || $endCommand === false) {
     throw new RuntimeException('Pinned machine installer anchor changed');
 }
-file_put_contents($machineController, substr($machineSource, 0, $startCommand)
+$machineSource = substr($machineSource, 0, $startCommand)
     . '        return \\App\\Onenew\\NodeInstallCommand::make($panelUrl, $machine->token, (int) $machine->id);'
-    . substr($machineSource, $endCommand + strlen("\n        );")));
+    . substr($machineSource, $endCommand + strlen("\n        );"));
+$machineSource = str_replace(
+    "            'command' => \$this->buildInstallCommand(\$request, \$machine),",
+    "            'command' => \$this->buildInstallCommand(\$request, \$machine),\n"
+        . "            'upgrade_command' => \\App\\Onenew\\NodeInstallCommand::upgrade("
+        . "rtrim((string) (admin_setting('app_url') ?: \$request->getSchemeAndHttpHost()), '/'), (int) \$machine->id),",
+    $machineSource,
+    $upgradeCount
+);
+if ($upgradeCount !== 1) {
+    throw new RuntimeException('Pinned machine upgrade command anchor changed');
+}
+file_put_contents($machineController, $machineSource);
 require $custom . '/traffic/install.php';
 applyOnenewTrafficPatch($root);
 replaceOnce($root . '/app/Console/Kernel.php',
@@ -160,3 +172,4 @@ foreach (['octane' => 'web', 'horizon' => 'queue', 'redis' => 'cache', 'ws-serve
 $text .= "\n[program:onenew-scheduler]\ncommand=php /www/artisan schedule:work\nautostart=true\nautorestart=true\nuser=www\nredirect_stderr=true\nstdout_logfile=/dev/stdout\nstdout_logfile_maxbytes=0\nstopasgroup=true\nkillasgroup=true\npriority=600\n";
 file_put_contents($supervisor, $text);
 echo "Onenew overlay applied.\n";
+

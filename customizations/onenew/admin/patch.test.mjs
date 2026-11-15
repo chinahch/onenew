@@ -39,6 +39,12 @@ test('health column follows node ID and receives original proxy health record',(
   assert.equal(columns[1].cell({row:{original:node}}).props.node,node);
 });
 
+test('server detail shows the upgrade command next to installation instructions',()=>{
+ const patched=patchBundle(source,'');const a=patched.indexOf('function R3t('),b=patched.indexOf('function O3t(',a);
+ assert.ok(a>=0&&b>a);
+ assert.ok(patched.slice(a,b).includes('OnenewAdmin.UpgradeCommand,{react:H,command:a?.upgrade_command,loading:l}'));
+});
+
 test('main node form and toolbar expose reusable landings without an advanced routing pane',()=>{
  const patched=patchBundle(source,'');
  assert.ok(patched.includes('Q.jsx(OnenewAdmin.LandingLibraryButton,{react:H,get:IL,post:RL})'));
@@ -49,3 +55,4 @@ test('main node form and toolbar expose reusable landings without an advanced ro
  assert.ok(!advanced.includes('value:"routes"'));
  assert.ok(!advanced.includes('setValue(u,'));
 });
+
