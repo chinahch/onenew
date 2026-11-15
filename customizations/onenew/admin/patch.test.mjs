@@ -17,12 +17,11 @@ test('patched advanced component keeps TLS, multiplex and commits draft only thr
   const form={watch:()=>[],getValues:k=>k==='id'?42:k==='machine_id'?7:[],setValue:(k,v)=>saved.push([k,v])};
   const render=vm.runInNewContext(`(${patched.slice(a,b)})`,ctx);const tree=render({form,hasMultiplex:true});
   const nodes=[];function walk(node){if(!node||typeof node!=='object')return;nodes.push(node);for(const x of [].concat(node.props?.children||[]))walk(x)}walk(tree);
-  assert.deepEqual(nodes.filter(n=>n.type==='ow').map(n=>n.props.value),['cert','multiplex','outbounds']);
-  assert.equal(nodes.find(n=>n.type==='ow'&&n.props.value==='outbounds').props.children,'落地链接解析');
-  assert.equal(nodes.filter(n=>n.type==='LandingEditor').length,1);const landing=nodes.find(n=>n.type==='LandingEditor');assert.equal(landing.props.nodeId,42);assert.equal(landing.props.machineId,7);assert.equal(landing.props.get,ctx.IL);assert.equal(landing.props.post,ctx.RL);assert.equal(saved.length,0);
+  assert.deepEqual(nodes.filter(n=>n.type==='ow').map(n=>n.props.value),['cert','multiplex']);
+  assert.equal(nodes.filter(n=>n.type==='LandingEditor').length,0);assert.equal(saved.length,0);
   nodes.find(n=>n.type==='xtt'&&n.props.children==='Cancel').props.onClick();assert.equal(saved.length,0);
   nodes.find(n=>n.type==='xtt'&&n.props.children==='Save').props.onClick();
-  assert.deepEqual(JSON.parse(JSON.stringify(saved)),[['custom_outbounds',[{tag:'new'}]],['custom_routes',[{outbound:'new'}]]]);
+  assert.deepEqual(saved,[]);
 });
 test('sidebar removal leaves original menu hierarchy and unrelated navigation intact',()=>{
   const patched=patchBundle(source,'');const a=patched.indexOf('Vlt=[')+4,b=patched.indexOf(',Wlt=',a),expression=patched.slice(a,b);
@@ -40,18 +39,13 @@ test('health column follows node ID and receives original proxy health record',(
   assert.equal(columns[1].cell({row:{original:node}}).props.node,node);
 });
 
-test('actual advanced save migrates saved Sing-box SOCKS for reported Xray and refuses lossy cross-core writes',()=>{
- const patched=patchBundle(source,''),a=patched.indexOf('function l5t('),b=patched.indexOf('const c5t=',a);
- const outbound={tag:'landing',protocol:'socks',settings:{server:'exit.example',server_port:1080,version:'5',username:'u',password:'p'}};
- function save(out){const state=[true,'outbounds',JSON.stringify([out]),null,'[{"outbound":"landing"}]',null,''];let cursor=0;const writes=[],errors=[];
-  const ctx={H:{useState:()=>[state[cursor++],()=>{}]},Q:{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},jy:()=>({t:(_key,fallback)=>fallback}),OnenewAdmin:{LandingEditor:'LandingEditor',prepareLandingSave},IL:()=>{},RL:()=>{},gE:{error:m=>errors.push(m)}};
-  for(const name of ['xtt','flt','htt','ptt','rw','mtt','_tt','sw','ow','aw','w4t','a5t','ftt'])ctx[name]=name;
-  const form={watch:()=>[],getValues:k=>k==='metrics'?{kernel_type:'xray',onenew_runtime:true}:[],setValue:(k,v)=>writes.push([k,v])};
-  const tree=vm.runInNewContext(`(${patched.slice(a,b)})`,ctx)({form});
-  const nodes=[];function walk(n){if(!n||typeof n!=='object')return;nodes.push(n);for(const v of [].concat(n.props?.children||[]))walk(v)}walk(tree);
-  nodes.find(n=>n.type==='xtt'&&n.props.children==='Save').props.onClick();return{writes:JSON.parse(JSON.stringify(writes)),errors};
- }
- const result=save(outbound);assert.equal(result.errors.length,0);
- assert.deepEqual(result.writes,[['custom_outbounds',[{tag:'landing',protocol:'socks',settings:{servers:[{address:'exit.example',port:1080,users:[{user:'u',pass:'p'}]}]}}]],['custom_routes',[{type:'field',network:'tcp,udp',outboundTag:'landing'}]]]);
- const refused=save({...outbound,settings:{...outbound.settings,tls:{enabled:true}}});assert.equal(refused.writes.length,0);assert.match(refused.errors[0],/无法.*转换/);
+test('main node form and toolbar expose reusable landings without an advanced routing pane',()=>{
+ const patched=patchBundle(source,'');
+ assert.ok(patched.includes('Q.jsx(OnenewAdmin.LandingLibraryButton,{react:H,get:IL,post:RL})'));
+ assert.ok(patched.includes('Q.jsx(OnenewAdmin.NodeLandingField,{react:H,form:x,get:IL,post:RL})'));
+ assert.ok(patched.includes('onenew_landing_bindings:gy(hy()).nullable().default(null)'));
+ const a=patched.indexOf('function l5t('),b=patched.indexOf('const c5t=',a),advanced=patched.slice(a,b);
+ assert.ok(!advanced.includes('value:"outbounds"'));
+ assert.ok(!advanced.includes('value:"routes"'));
+ assert.ok(!advanced.includes('setValue(u,'));
 });
