@@ -64,7 +64,7 @@ def apply(source,core=None):
     text=replace(text,'user *protocol.MemoryUser) buf.Writer {','user *protocol.MemoryUser,upload ...bool) buf.Writer {')
     a=text.index('\tlim := limiter.GetUserLimiter(user.Email)',text.index('func applyBandwidthLimit'));z=text.index('\n}',a)
     text=text[:a]+'''\tif lim:=limiter.GetUserLimiter(user.Email);lim!=nil{writer=&RateLimitWriter{Writer:writer,Limiter:lim,Context:ctx}}
-    if lim:=limiter.GetNodeLimiter(len(upload)>0&&upload[0]);lim!=nil{writer=&RateLimitWriter{Writer:writer,Limiter:lim,Context:ctx}}
+    if lim:=limiter.GetNodeLimiter(len(upload)>0&&upload[0]);lim!=nil{if si:=session.InboundFromContext(ctx);si!=nil{si.CanSpliceCopy=3};writer=&RateLimitWriter{Writer:writer,Limiter:lim,Context:ctx}}
     return writer'''+text[z:];files[name]=text
     name='app/dispatcher/ratelimit.go';text=(core/name).read_text();a=text.index('\t\tif err := w.Limiter.WaitN');z=text.index('\n\t}\n\treturn w.Writer',a)
     text=text[:a]+'''\t\tremaining:=int(mb.Len())
