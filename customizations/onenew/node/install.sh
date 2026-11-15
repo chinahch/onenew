@@ -238,4 +238,3 @@ UNIT
   rc-service caddy status || fail 'Node failed to start; inspect /var/log/caddy.err'
 fi
 printf 'Installed %s. Configuration: /etc/caddy. Management: caddyctl\n' "$VERSION"
-
