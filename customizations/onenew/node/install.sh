@@ -58,7 +58,10 @@ if [ "$UPGRADE" -eq 1 ]; then
   [ "$(property Description)" = 'Onenew Native Node' ] && \
     [ "$(property FragmentPath)" = /etc/systemd/system/caddy.service ] && \
     [ "$(property WorkingDirectory)" = "$ROOT" ] || fail 'Unknown caddy systemd service; nothing was replaced'
-  [ -z "$(property DropInPaths)" ] && [ -z "$(property Environment)" ] || fail 'Systemd drop-ins or Environment overrides are not supported for upgrade'
+  DROPINS=$(property DropInPaths)
+  # LXC applies this runtime drop-in to every service; it is not a node override.
+  { [ -z "$DROPINS" ] || [ "$DROPINS" = /run/systemd/system/service.d/zzz-lxc-service.conf ]; } && \
+    [ -z "$(property Environment)" ] || fail 'Custom systemd drop-ins or Environment overrides are not supported for upgrade'
   [ "$(property EnvironmentFiles)" = "$ROOT/credentials.env (ignore_errors=no)" ] || fail 'Systemd credentials binding does not match the native installation'
   EXEC=$(property ExecStart)
   [[ "$EXEC" == '{ path=/usr/local/bin/caddy ; argv[]=/usr/local/bin/caddy -c /etc/caddy/config.yml ; ignore_errors=no ;'* ]] && \
@@ -189,3 +192,4 @@ UNIT
   rc-service caddy status || fail 'Node failed to start; inspect /var/log/caddy.err'
 fi
 printf 'Installed %s. Configuration: /etc/caddy. Management: caddyctl\n' "$VERSION"
+
