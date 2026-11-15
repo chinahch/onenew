@@ -53,6 +53,15 @@ export function patchBundle(source,runtime){
   const externalButton='children:[Q.jsx(YXt,{icon:"ion:add"}),Q.jsx("div",{children:e("form.add_node")})]}),Q.jsxs(ptt';
   source=replaceOnce(source,externalButton,'children:[Q.jsx(YXt,{icon:"ion:add"}),Q.jsx("div",{children:e("form.add_node")})]}),Q.jsx(OnenewAdmin.ExternalNodes,{react:H,get:IL,post:RL}),Q.jsxs(ptt');
   source=replaceOnce(source,'Q.jsx(OnenewAdmin.ExternalNodes,{react:H,get:IL,post:RL}),','Q.jsx(OnenewAdmin.ExternalNodes,{react:H,get:IL,post:RL}),Q.jsx(OnenewAdmin.BatchAddresses,{react:H,get:IL,post:RL,useQueryClient:lC}),');
+  source=replaceOnce(source,'queryKey:["nodeList"],queryFn:async()=>{const{data:e}=await $L();return e}','queryKey:["nodeList"],queryFn:()=>OnenewAdmin.fetchManagedNodes($L,IL)');
+  source=replaceOnce(source,'H.useEffect(()=>{!g&&Array.isArray(x)&&v(x)},[x,g]);','H.useEffect(()=>{const t=()=>w();window.addEventListener("onenew-external-changed",t);return()=>window.removeEventListener("onenew-external-changed",t)},[w]);H.useEffect(()=>{!g&&Array.isArray(x)&&v(x)},[x,g]);');
+  source=replaceOnce(source,'columns:Z5t(w,e,b)','columns:OnenewAdmin.managedColumns(Z5t(w,e,b),H,RL,w)');
+  const tableStart=source.indexOf('function X5t('),tableEnd=source.indexOf('function Q5t(',tableStart);
+  let nodeTable=source.slice(tableStart,tableEnd);
+  nodeTable=replaceOnce(nodeTable,'enableRowSelection:!0','enableRowSelection:e=>!e.original.onenew_external_id');
+  nodeTable=replaceOnce(nodeTable,'await QL(t)','await OnenewAdmin.saveManagedOrder(RL,t)');
+  source=source.slice(0,tableStart)+nodeTable+source.slice(tableEnd);
+  source=replaceOnce(source,'const n=e.getRowModel().rows,i=n.length>0&&n.every(e=>e.getIsSelected());','const n=e.getRowModel().rows.filter(e=>e.getCanSelect()),i=n.length>0&&n.every(e=>e.getIsSelected());');
   const machineStart=source.indexOf('function n3t('),machineEnd=source.indexOf('function i3t(',machineStart);
   let machine=source.slice(machineStart,machineEnd);
   if(sha(machine)!==contract.machineEditorSha256)throw new Error('服务器编辑器 SHA256 不匹配');
@@ -62,8 +71,8 @@ export function patchBundle(source,runtime){
   machine=replaceOnce(machine,'disabled:l||!s.formState.isValid','disabled:l||!s.formState.isValid||("edit"===i&&!onenewEgressReady)');
   machine=replaceOnce(machine,'className:"max-w-md gap-0 overflow-hidden p-0 sm:rounded-2xl"','className:"max-w-xl max-h-[90vh] gap-0 overflow-y-auto p-0 sm:rounded-2xl"');
   source=source.slice(0,machineStart)+machine+source.slice(machineEnd);
-  source=replaceOnce(source,'const KGt=[','const KGt=[{title:"一键迁移",key:"migration",icon:Q.jsx(Zm,{size:18}),href:"/config/system/migration",description:"加密导出并恢复到新服务器"},');
+  source=replaceOnce(source,'const KGt=[','const KGt=[{title:"能量补充审核",key:"energy",icon:Q.jsx(Zm,{size:18}),href:"/config/system/energy",description:"审核用户补充申请"},{title:"一键迁移",key:"migration",icon:Q.jsx(Zm,{size:18}),href:"/config/system/migration",description:"加密导出并恢复到新服务器"},');
   source=replaceOnce(source,'{path:"subscribe-template",element:Q.jsx(WQe,{})}',
-    '{path:"migration",element:Q.jsx(OnenewAdmin.MigrationPage,{react:H,get:IL,post:RL})},{path:"subscribe-template",element:Q.jsx(WQe,{})}');
+    '{path:"energy",element:Q.jsx(OnenewAdmin.EnergyRequests,{react:H,get:IL,post:RL})},{path:"migration",element:Q.jsx(OnenewAdmin.MigrationPage,{react:H,get:IL,post:RL})},{path:"subscribe-template",element:Q.jsx(WQe,{})}');
   return runtime+'\n'+source;
 }

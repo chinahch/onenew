@@ -19,7 +19,7 @@ class ExternalController extends Controller
                 'enabled'=>(bool)$row->enabled,'sort'=>(int)$row->sort,'user_ids'=>json_decode($row->user_ids,true),
                 'group_ids'=>json_decode($row->group_ids,true)];
         });
-        return response()->json(['data'=>$rows])->header('Cache-Control','no-store');
+        return response()->json(['data'=>$rows,'table_order'=>admin_setting('onenew_node_table_order',[])])->header('Cache-Control','no-store');
     }
 
     public function detail(int $id): mixed
@@ -97,6 +97,27 @@ class ExternalController extends Controller
             $ids = array_map('intval',$p['ids']); $existing = DB::table(ExternalNodes::TABLE)->pluck('id')->map(fn ($id)=>(int)$id)->all();
             $check = $ids; sort($check); sort($existing); abort_unless($check===$existing,409,'节点列表已变动，请刷新后重排');
             foreach ($ids as $position=>$id) DB::table(ExternalNodes::TABLE)->where('id',$id)->update(['sort'=>$position+1]);
+        },3);
+        return response()->json(['ok'=>true]);
+    }
+
+    public function toggle(Request $request): mixed
+    {
+        $p=$request->validate(['id'=>'required|integer|min:1','enabled'=>'required|boolean']);
+        DB::transaction(function()use($p){ResourceIds::lock(ExternalNodes::TABLE);abort_unless(DB::table(ExternalNodes::TABLE)->where('id',$p['id'])->exists(),404);DB::table(ExternalNodes::TABLE)->where('id',$p['id'])->update(['enabled'=>$p['enabled'],'updated_at'=>now()]);},3);
+        return response()->json(['ok'=>true]);
+    }
+    public function tableOrder(Request $request): mixed
+    {
+        $p=$request->validate(['ids'=>'present|array|max:12000','ids.*'=>'required|integer|distinct|not_in:0']);
+        DB::transaction(function()use($p){
+            ResourceIds::lock('v2_server');ResourceIds::lock(ExternalNodes::TABLE);
+            $native=\App\Models\Server::pluck('id')->map(fn($id)=>(int)$id)->all();
+            $external=DB::table(ExternalNodes::TABLE)->pluck('id')->map(fn($id)=>-(int)$id)->all();
+            $existing=array_merge($native,$external);$ids=array_map('intval',$p['ids']);$check=$ids;sort($check);sort($existing);
+            abort_unless($check===$existing,409,'节点列表已变动，请刷新后重排');
+            foreach($ids as $index=>$id){if($id>0)\App\Models\Server::whereKey($id)->update(['sort'=>$index+1]);else DB::table(ExternalNodes::TABLE)->where('id',-$id)->update(['sort'=>$index+1]);}
+            admin_setting(['onenew_node_table_order'=>$ids]);
         },3);
         return response()->json(['ok'=>true]);
     }

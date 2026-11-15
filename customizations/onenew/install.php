@@ -40,6 +40,7 @@ copyOverlay($custom . '/health/app', $root . '/app');
 copyOverlay($custom . '/user-portal/backend/app', $root . '/app');
 copyOverlay($custom . '/runtime/app', $root . '/app');
 copyOverlay($custom . '/migration/app', $root . '/app');
+copyOverlay($custom . '/energy/app', $root . '/app');
 require $custom . '/runtime/install-ids.php';
 applyOnenewResourceIds($root);
 copyOverlay($custom . '/external/app', $root . '/app');

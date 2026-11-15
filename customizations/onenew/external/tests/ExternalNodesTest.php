@@ -38,6 +38,19 @@ class ExternalNodesTest extends TestCase
         return app(ClientController::class)->subscribe($request);
     }
 
+    public function test_unified_order_and_toggle_preserve_external_identity_and_credentials(): void
+    {
+        $user=$this->user();Sanctum::actingAs($this->user(true));$id=$this->save($user,$this->link());
+        $server=Server::create(['name'=>'Native','rate'=>1,'type'=>'vless','host'=>'native.example','port'=>443,'server_port'=>443,'group_ids'=>[],'protocol_settings'=>['tls'=>0,'network'=>'tcp']]);
+        $cipher=DB::table(ExternalNodes::TABLE)->where('id',$id)->value('link_ciphertext');
+        $this->postJson(self::ROOT.'/table-order',['ids'=>[-$id,$server->id]])->assertOk();
+        $this->getJson(self::ROOT)->assertOk()->assertJsonPath('table_order.0',-$id)->assertJsonMissingPath('data.0.link');
+        $this->postJson(self::ROOT.'/toggle',['id'=>$id,'enabled'=>false])->assertOk();
+        self::assertSame($cipher,DB::table(ExternalNodes::TABLE)->where('id',$id)->value('link_ciphertext'));
+        self::assertSame(2,(int)$server->fresh()->sort);
+        $this->postJson(self::ROOT.'/table-order',['ids'=>[-$id]])->assertStatus(409);
+    }
+
     public function test_administration_requires_admin_and_batch_import_is_atomic_and_encrypted(): void
     {
         $this->getJson(self::ROOT)->assertForbidden();

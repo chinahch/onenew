@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {reviewEnergy} from './src/energy.mjs';
+test('energy review submits the decision to the protected endpoint and never a balance',async()=>{const calls=[];await reviewEnergy(async(...v)=>calls.push(v),'11111111-2222-4333-8444-555555555555','approved','fixture');assert.deepEqual(calls,[['/api/onenew/admin/energy/11111111-2222-4333-8444-555555555555/review',{decision:'approved',note:'fixture'},{baseURL:'/'}]]);assert.throws(()=>reviewEnergy(()=>assert.fail(),'invalid','approved'))});

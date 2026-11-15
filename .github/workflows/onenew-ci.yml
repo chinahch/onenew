@@ -40,7 +40,8 @@ jobs:
             cd /www
             composer install --no-interaction
             php /opt/onenew/migration/tests/core.php
-            APP_ENV=testing APP_KEY=base64:aGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGg= DB_CONNECTION=sqlite DB_DATABASE=:memory: CACHE_DRIVER=array QUEUE_CONNECTION=sync SESSION_DRIVER=array vendor/bin/phpunit --bootstrap /opt/onenew/testing/ci-bootstrap.php /opt/onenew/health/tests /opt/onenew/user-portal/tests /opt/onenew/traffic/tests /opt/onenew/plugins/tests /opt/onenew/protocols/tests /opt/onenew/exit-probe/tests /opt/onenew/external/tests /opt/onenew/egress/tests /opt/onenew/migration/tests
+            php /opt/onenew/energy/tests/amount.php
+            APP_ENV=testing APP_KEY=base64:aGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGg= DB_CONNECTION=sqlite DB_DATABASE=:memory: CACHE_DRIVER=array QUEUE_CONNECTION=sync SESSION_DRIVER=array vendor/bin/phpunit --bootstrap /opt/onenew/testing/ci-bootstrap.php /opt/onenew/health/tests /opt/onenew/user-portal/tests /opt/onenew/traffic/tests /opt/onenew/plugins/tests /opt/onenew/protocols/tests /opt/onenew/exit-probe/tests /opt/onenew/external/tests /opt/onenew/egress/tests /opt/onenew/migration/tests /opt/onenew/energy/tests
           '
       - name: Initialize isolated database
         run: |
