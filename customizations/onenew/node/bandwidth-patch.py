@@ -60,14 +60,15 @@ def apply(source,core=None):
     text+='\nfunc(m *Instance)SetNodeLimiters(up,down *rate.Limiter){m.mu.Lock();defer m.mu.Unlock();m.nodeUp=up;m.nodeDown=down}\nfunc(m *Instance)GetNodeLimiter(upload bool)*rate.Limiter{m.mu.RLock();defer m.mu.RUnlock();if upload{return m.nodeUp};return m.nodeDown}\n';files={name:text}
     name='app/dispatcher/default.go';text=(core/name).read_text()
     for old,new in [('inboundLink.Writer, d.bandwidth, user)','inboundLink.Writer, d.bandwidth, user,true)'),('outboundLink.Writer, d.bandwidth, user)','outboundLink.Writer, d.bandwidth, user,false)'),('link.Writer, bandwidthManager, user)','link.Writer, bandwidthManager, user,false)')]:text=replace(text,old,new)
-    text=replace(text,'user *protocol.MemoryUser) buf.Writer {','user *protocol.MemoryUser,upload bool) buf.Writer {')
+    text=replace(text,'link.Writer = applyBandwidthLimit(ctx, link.Writer, bandwidthManager, user,false)','link.Writer = applyBandwidthLimit(ctx, link.Writer, bandwidthManager, user,false)\n        if bandwidthManager != nil {\n            reader:=link.Reader.(*buf.TimeoutWrapperReader)\n            if lim:=bandwidthManager.GetUserLimiter(user.Email);lim!=nil{reader.Reader=&RateLimitReader{Reader:reader.Reader,Limiter:lim,Context:ctx}}\n            if lim:=bandwidthManager.GetNodeLimiter(true);lim!=nil{reader.Reader=&RateLimitReader{Reader:reader.Reader,Limiter:lim,Context:ctx}}\n        }')
+    text=replace(text,'user *protocol.MemoryUser) buf.Writer {','user *protocol.MemoryUser,upload ...bool) buf.Writer {')
     a=text.index('\tlim := limiter.GetUserLimiter(user.Email)',text.index('func applyBandwidthLimit'));z=text.index('\n}',a)
     text=text[:a]+'''\tif lim:=limiter.GetUserLimiter(user.Email);lim!=nil{writer=&RateLimitWriter{Writer:writer,Limiter:lim,Context:ctx}}
-    if lim:=limiter.GetNodeLimiter(upload);lim!=nil{writer=&RateLimitWriter{Writer:writer,Limiter:lim,Context:ctx}}
+    if lim:=limiter.GetNodeLimiter(len(upload)>0&&upload[0]);lim!=nil{writer=&RateLimitWriter{Writer:writer,Limiter:lim,Context:ctx}}
     return writer'''+text[z:];files[name]=text
     name='app/dispatcher/ratelimit.go';text=(core/name).read_text();a=text.index('\t\tif err := w.Limiter.WaitN');z=text.index('\n\t}\n\treturn w.Writer',a)
     text=text[:a]+'''\t\tremaining:=int(mb.Len())
-        for remaining>0{size:=remaining;if size>w.Limiter.Burst(){size=w.Limiter.Burst()};if err:=w.Limiter.WaitN(ctx,size);err!=nil{buf.ReleaseMulti(mb);return err};remaining-=size}'''+text[z:];files[name]=text
+        for remaining>0{size:=remaining;if size>w.Limiter.Burst(){size=w.Limiter.Burst()};if err:=w.Limiter.WaitN(ctx,size);err!=nil{buf.ReleaseMulti(mb);return err};remaining-=size}'''+text[z:];text+='\n// RateLimitReader stays inside TimeoutWrapperReader so sniffing keeps its concrete timeout interface.\ntype RateLimitReader struct { Reader buf.Reader; Limiter *rate.Limiter; Context context.Context }\nfunc(r *RateLimitReader)ReadMultiBuffer()(buf.MultiBuffer,error){\n mb,err:=r.Reader.ReadMultiBuffer();ctx:=r.Context;if ctx==nil{ctx=context.Background()};remaining:=int(mb.Len())\n for remaining>0{size:=remaining;if size>r.Limiter.Burst(){size=r.Limiter.Burst()};if e:=r.Limiter.WaitN(ctx,size);e!=nil{buf.ReleaseMulti(mb);return nil,e};remaining-=size};return mb,err\n}\nfunc(r *RateLimitReader)Close()error{return common.Close(r.Reader)}\nfunc(r *RateLimitReader)Interrupt(){common.Interrupt(r.Reader)}\n';files[name]=text
     for name,text in files.items():(core/name).write_text(text,encoding='utf-8',newline='\n')
     manifest.setdefault('features',[])
     if FEATURE not in manifest['features']:manifest['features'].append(FEATURE)
