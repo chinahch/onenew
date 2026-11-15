@@ -39,6 +39,7 @@ function copyOverlay(string $source, string $target): void
 copyOverlay($custom . '/health/app', $root . '/app');
 copyOverlay($custom . '/user-portal/backend/app', $root . '/app');
 copyOverlay($custom . '/runtime/app', $root . '/app');
+copyOverlay($custom . '/migration/app', $root . '/app');
 require $custom . '/runtime/install-ids.php';
 applyOnenewResourceIds($root);
 copyOverlay($custom . '/external/app', $root . '/app');
@@ -75,7 +76,7 @@ require $custom . '/traffic/install.php';
 applyOnenewTrafficPatch($root);
 replaceOnce($root . '/app/Console/Kernel.php',
     'app(PluginManager::class)->registerPluginSchedules($schedule);',
-    'app(PluginManager::class)->registerPluginSchedules($schedule);' . "\n        \$schedule->command('onenew:prune-telemetry')->dailyAt('03:10')->withoutOverlapping();");
+    'app(PluginManager::class)->registerPluginSchedules($schedule);' . "\n        \$schedule->command('onenew:prune-telemetry')->dailyAt('03:10')->withoutOverlapping();\n        \$schedule->command('onenew:prune-migrations')->everyTenMinutes()->withoutOverlapping();");
 foreach (['XboardInstall.php', 'XboardUpdate.php'] as $command) {
     replaceOnce($root . '/app/Console/Commands/' . $command,
         'PluginManager::installDefaultPlugins();',

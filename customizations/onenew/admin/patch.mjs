@@ -62,5 +62,8 @@ export function patchBundle(source,runtime){
   machine=replaceOnce(machine,'disabled:l||!s.formState.isValid','disabled:l||!s.formState.isValid||("edit"===i&&!onenewEgressReady)');
   machine=replaceOnce(machine,'className:"max-w-md gap-0 overflow-hidden p-0 sm:rounded-2xl"','className:"max-w-xl max-h-[90vh] gap-0 overflow-y-auto p-0 sm:rounded-2xl"');
   source=source.slice(0,machineStart)+machine+source.slice(machineEnd);
+  source=replaceOnce(source,'const KGt=[','const KGt=[{title:"一键迁移",key:"migration",icon:Q.jsx(Zm,{size:18}),href:"/config/system/migration",description:"加密导出并恢复到新服务器"},');
+  source=replaceOnce(source,'{path:"subscribe-template",element:Q.jsx(WQe,{})}',
+    '{path:"migration",element:Q.jsx(OnenewAdmin.MigrationPage,{react:H,get:IL,post:RL})},{path:"subscribe-template",element:Q.jsx(WQe,{})}');
   return runtime+'\n'+source;
 }

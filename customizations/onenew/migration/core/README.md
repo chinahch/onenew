@@ -1,0 +1,21 @@
+# Portable migration core
+
+Require MigrationBundle.php; no Laravel bootstrap is needed. Namespace App\Onenew\Migration.
+
+- MigrationBundle::pack(sourceRoot, newPackageFilename, password, revision): array
+- MigrationBundle::inspect(packageFilename): array (unverified, nonsecret header only)
+- MigrationBundle::unpack(packageFilename, password, newOrEmptyDestination): array
+
+pack/unpack return revision, files, bytes. Passwords contain 12–128 bytes without C0/DEL control characters; revision is exactly 40 lowercase hexadecimal characters. Exceptions indicate failure and contain no credentials. inspect is only for selecting the matching source revision; trust it only after unpack authenticates the entire package. New package filenames use exclusive creation. unpack decrypts into its own random private sibling directory and publishes only after the authenticated end marker and EOF; failures remove only that private directory. Existing nonempty destinations are refused.
+
+Prepared sources contain only regular .env, data/database/**, plugins/**, storage/theme/** files. All symlinks and special files are rejected. .env and at least one database file are required. APP_KEY, database filenames, plugin and theme contents remain byte-identical. Each file uses SHA-256 integrity verification. Limits: 2 GiB total plaintext, 50,000 files, 1024-byte relative paths, 1 MiB data chunks. No compression means decompression bombs are impossible. No package code is executed.
+
+## Format version 1
+
+Eight-byte ONENEW1 newline magic, four-byte unsigned big-endian JSON-header length (at most 1024), then raw header JSON. Header fields: format=1, revision, salt (16 random bytes as hex), nonce (8 random bytes as hex), iterations=210000. PBKDF2-HMAC-SHA256 derives a 32-byte AES-256-GCM key. Each record is four-byte big-endian ciphertext-plus-tag length, 16-byte GCM tag, ciphertext. IV is nonce plus four-byte big-endian record index starting at zero. AAD is exact raw header JSON plus the same index. Header changes, reordering, duplication and record modification fail authentication. Record plaintext starts with F (JSON path and size), D (raw data), H (hex file SHA-256), or E (JSON total files and bytes). F/D*/H sequences must end with E and immediate EOF. The final authenticated marker prevents truncation. Strict path validation rejects absolute, traversal, backslash, colon, control and duplicate entries.
+
+core/restore.php PACKAGE EMPTY_DEST REVISION reads a password line from protected stdin, verifies requested/header revisions match, performs authenticated extraction, and emits only nonsecret counts/revision. Never pass the password through arguments or environment. restore.sh downloads fixed chinahch/onenew source at the requested revision, builds that trusted source, decrypts with no Docker network/socket and a read-only root filesystem, then copies only known payload paths into the fresh source checkout. Each restore generates a unique onenew-restored project and image identity; existing matching containers or images cause refusal. The trusted Compose template must contain the expected name/image anchors before those identities are rewritten. The original .env is never sourced and does not participate in Compose interpolation. Container entrypoint assigns restored mount ownership to www before application startup. Host target is untouched until the full package has been validated. Compose waits for service health before a trusted onenew:migration-assets command republishes assets for installed plugins without changing plugin state. New Redis and log mount directories are created under the private staging umask. Deployment startup errors leave the restored target available for inspection/retry; they do not remove existing deployments.
+
+## Verification
+
+Run php -d extension=openssl customizations/onenew/migration/tests/core.php and bash customizations/onenew/migration/tests/restore.sh. Core tests cover multi-chunk byte-identical roundtrip, original APP_KEY/database preservation, incorrect passwords, modified header/ciphertext, truncation, path refusal, existing destination and exclusive package refusal. Bootstrap tests mock external dependencies and cover missing Docker, nonempty target refusal, download failure and private-stage cleanup. Full Docker/app login smoke coverage belongs to repository CI.
