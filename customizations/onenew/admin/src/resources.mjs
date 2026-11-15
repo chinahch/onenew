@@ -46,7 +46,8 @@ export function ExternalNodes({react:React,get,post}){
   const [detail,users]=await Promise.all([read(get,externalRoot+'/'+row.id),row.user_ids.length?read(get,externalRoot+'/lookups',{user_ids:row.user_ids}):Promise.resolve({users:[]})]);
   if(token!==generation.current)return;for(const user of users.users||[])chosen.current.set(user.id,user);setSearch('');setDraft({...row,links:detail.link});
  }catch(e){setError(message(e))}finally{setBusy(false)}}
- async function run(fn){if(busy)return;setBusy(true);setError('');try{await fn();await load()}catch(e){setError(message(e))}finally{setBusy(false)}}
+ React.useEffect(()=>{const listener=e=>{const row=e.detail;if(!row?.onenew_external_id)return;setOpen(true);edit({...row,id:row.onenew_external_id})};window.addEventListener('onenew-external-edit',listener);return()=>window.removeEventListener('onenew-external-edit',listener)},[get]);
+ async function run(fn){if(busy)return;setBusy(true);setError('');try{await fn();await load();window.dispatchEvent(new Event('onenew-external-changed'))}catch(e){setError(message(e))}finally{setBusy(false)}}
  function toggle(field,id){setDraft(d=>({...d,[field]:d[field].includes(id)?d[field].filter(value=>value!==id):[...d[field],id]}))}
  async function save(){const d=draft;await run(async()=>{
   const common={user_ids:d.user_ids,group_ids:d.group_ids};

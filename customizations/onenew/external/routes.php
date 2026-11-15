@@ -11,6 +11,8 @@ Route::middleware(['api','admin'])->prefix('/api/onenew/admin/external-nodes')->
     Route::get('/{id}',[ExternalController::class,'detail'])->whereNumber('id');
     Route::post('/save',[ExternalController::class,'save']);
     Route::post('/import',[ExternalController::class,'import']);
+    Route::post('/toggle',[ExternalController::class,'toggle']);
+    Route::post('/table-order',[ExternalController::class,'tableOrder']);
     Route::post('/order',[ExternalController::class,'order']);
     Route::post('/delete',[ExternalController::class,'drop']);
 });

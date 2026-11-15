@@ -23,6 +23,7 @@ class OnenewServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom($root . '/runtime/database/migrations');
         $this->loadMigrationsFrom($root . '/external/database/migrations');
         $this->loadMigrationsFrom($root . '/egress/database/migrations');
+        $this->loadMigrationsFrom($root . '/energy/database/migrations');
         $this->commands([\App\Onenew\Traffic\PruneTelemetry::class,\App\Onenew\Migration\PruneMigrations::class,\App\Onenew\Migration\RestoreAssets::class]);
         require $root . '/health/routes.php';
         require $root . '/user-portal/backend/routes.php';
@@ -31,5 +32,6 @@ class OnenewServiceProvider extends ServiceProvider
         require $root . '/external/routes.php';
         require $root . '/egress/routes.php';
         require $root . '/migration/routes.php';
+        require $root . '/energy/routes.php';
     }
 }

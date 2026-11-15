@@ -3,6 +3,7 @@ import {computed,onMounted,ref} from 'vue'
 import {NAlert,NButton,NIcon,NProgress,NTag} from 'naive-ui'
 import {ArrowRight,ChartBar,Link,Receipt,Server,Users,Wallet,Calendar,Package} from '@vicons/tabler'
 import {api,bytes} from '../api'
+import {energyName} from '../energy'
 import {cycleStamp} from '../featureState'
 const props=defineProps<{me:any;zone:string}>(),emit=defineEmits<{navigate:[string]}>()
 const plan=ref<any>(null),error=ref('')
@@ -18,7 +19,7 @@ onMounted(async()=>{try{const data=await api('/api/me/renewal-plan');plan.value=
  <section class="user-stat-grid">
   <article class="surface user-metric"><span class="metric-symbol"><n-icon :component="Wallet" size="23"/></span><span class="muted">剩余流量</span><strong>{{bytes(remaining)}}</strong><small class="muted">本周期额度 {{bytes(me.quota_bytes)}}</small></article>
   <article class="surface user-metric"><span class="metric-symbol"><n-icon :component="Calendar" size="23"/></span><span class="muted">有效期</span><strong class="metric-date">{{me.expires_at?new Date(me.expires_at).toLocaleDateString('zh-CN'):'长期有效'}}</strong><small class="muted">{{expired?'续期后即可恢复服务':me.expires_at?'按账号有效期使用':'未设置到期时间'}}</small></article>
-  <article class="surface user-metric"><span class="metric-symbol"><n-icon :component="Package" size="23"/></span><span class="muted">当前套餐</span><strong class="metric-plan">{{plan?.name||'尚未分配'}}</strong><small class="muted">{{plan?bytes(plan.quota_bytes)+(plan.period_label?' / '+plan.period_label:''):'请联系管理员开通'}}</small></article>
+  <article class="surface user-metric"><span class="metric-symbol"><n-icon :component="Package" size="23"/></span><span class="muted">当前套餐</span><strong class="metric-plan">{{energyName(plan?.name)||'尚未分配'}}</strong><small class="muted">{{plan?bytes(plan.quota_bytes)+(plan.period_label?' / '+plan.period_label:''):'请联系管理员开通'}}</small></article>
  </section>
  <section class="surface service-overview"><div class="section-heading"><div><h2>我的服务</h2><p class="muted">流量与订阅，一目了然</p></div><n-button secondary size="small" @click="emit('navigate','orders')"><template #icon><n-icon :component="Receipt"/></template>续期与订单</n-button></div><div class="traffic-labels"><span>本周期已用 <strong>{{bytes(me.used_bytes)}}</strong></span><span class="muted">{{percentage.toFixed(1)}}%</span></div><n-progress type="line" :percentage="percentage" :show-indicator="false" :height="8" border-radius="8"/><div class="service-bottom"><span class="small muted">{{me.next_reset_at?'下次流量重置：'+cycleStamp(me.next_reset_at,zone):(me.quota_bytes?'无计划重置':'尚未开通')}}</span><n-button type="primary" @click="emit('navigate','subscription')">查看我的订阅 <template #icon><n-icon :component="ArrowRight"/></template></n-button></div></section>
  <section class="user-shortcuts"><button v-for="item in shortcuts" :key="item.key" class="surface user-shortcut" @click="emit('navigate',item.key)"><span class="metric-symbol"><n-icon :component="item.icon" size="24"/></span><span><strong>{{item.title}}</strong><small class="muted">{{item.text}}</small></span><n-icon class="shortcut-arrow" :component="ArrowRight" size="18"/></button></section>
