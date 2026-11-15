@@ -17,3 +17,5 @@
 .onenew-node-landings [role=alertdialog]{border:1px solid #c78836;padding:12px;border-radius:8px;margin:10px 0}
 .onenew-library-dialog button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:600px){.onenew-library-overlay{padding:8px}.onenew-library-dialog{padding:12px;max-height:95vh}.onenew-library-item{flex-wrap:wrap}.onenew-library-item>span{flex-basis:100%}.onenew-library-actions{display:flex;flex-wrap:wrap}}
+
+.onenew-landing-services{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px;border:0;padding:0;margin:16px 0}.onenew-landing-services legend{font-size:13px;font-weight:600;margin-bottom:10px}.onenew-library-binding .onenew-landing-service{display:flex;align-items:center;gap:7px;margin:0;font-size:12px}.onenew-landing-service input{accent-color:hsl(var(--primary))}@media(max-width:500px){.onenew-landing-services{grid-template-columns:repeat(2,minmax(0,1fr))}}

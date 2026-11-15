@@ -15,3 +15,14 @@ test('library editing reads original link then cancel and close never post crede
 test('node actual metrics selects xray variant and legacy shows saved protocol address immediately',()=>{const runner=harness(),props={get:()=>Promise.resolve({data:[]}),form:{getValues:()=>({metrics:{kernel_type:'xray',onenew_runtime:true},custom_outbounds:[{tag:'old-exit',protocol:'socks',settings:{servers:[{address:'saved.example',port:1080}]}}],onenew_landing_bindings:null}),watch:()=>({unsubscribe(){}})}};const tree=runner.render(mod.NodeLandingField,props);assert.match(label(tree),/Xray（Onenew 扩展）/);assert.match(label(tree),/现有配置（未加入落地库）/);assert.match(label(tree),/old-exit.*socks.*saved.example:1080/);runner.cleanup()});
 
 test('redundant preset suffixes within one landing are accepted',()=>{assert.equal(mod.validateLandingBindings([{landing_id:1,global:false,domains:['example.com','sub.example.com']}]),'')});
+
+test('landing names preserve percent encoded remarks and VMess ps',()=>{
+ assert.equal(mod.publicLandingName('socks://u:p@example.com:1080#%E9%A9%AC%E6%9D%A5%E5%AE%B6%E5%AE%BD'),'马来家宽');
+ assert.equal(mod.publicLandingName('socks://u:p@example.com:1080'),'');
+ assert.equal(mod.publicLandingName('vmess://'+Buffer.from(JSON.stringify({ps:'住宅测试'})).toString('base64')),'住宅测试');
+});
+test('service toggles restore presets and preserve custom domains without touching input',()=>{
+ const original=['custom.example'];const selected=mod.toggleLandingService(original,'8',true);
+ assert.ok(selected.includes('telegram.org'));assert.ok(selected.includes('custom.example'));
+ assert.deepEqual(mod.toggleLandingService(selected,'8',false),original);assert.deepEqual(original,['custom.example']);
+});

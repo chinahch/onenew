@@ -21,6 +21,11 @@ final class Library
         return ['id'=>(int)$row->id,'name'=>$row->name,'protocol'=>$link['type'],'host'=>$link['host'],'port'=>(int)$link['port'],
             'enabled'=>(bool)$row->enabled,'sort'=>(int)$row->sort,'version'=>(int)$row->version,'reference_count'=>self::references((int)$row->id)->count()];
     }
+    public static function name(string $link,?string $requested=null): string {
+        if(trim($requested??'')!=='')return trim($requested);
+        $parsed=ShareLink::parse($link);$name=trim($parsed['name']);
+        return $name!==''?\Illuminate\Support\Str::limit($name,160,''):'落地 '.$parsed['host'];
+    }
     public static function validatePayload(string $link,array $variants): array {
         try{$parsed=ShareLink::parse($link);}catch(\InvalidArgumentException $e){abort(422,$e->getMessage());}
         abort_unless($variants && count($variants)<=3 && !array_diff(array_keys($variants),['singbox','xray','xray-caddy']),422,'至少需要一种受支持的内核配置');
