@@ -8,7 +8,7 @@ with tempfile.TemporaryDirectory(prefix='onenew-bootstrap-') as folder:
     root=pathlib.Path(folder); source=root/'source'; data=root/'original'; bin_dir=root/'bin'
     (source/'customizations/onenew/migration/core').mkdir(parents=True); bin_dir.mkdir()
     (source/'Dockerfile').write_text('FROM scratch\n'); (source/'customizations/onenew/migration/core/restore.php').write_text('<?php\n')
-    (source/'compose.onenew.sample.yaml').write_text('name: onenew\nservices:\n  onenew:\n    image: onenew:local\n    ports:\n      - "${ONENEW_BIND_IP:-127.0.0.1}:${ONENEW_PORT:-7001}:7001"\n')
+    (source/'compose.onenew.sample.yaml').write_text('name: onenew\nservices:\n  onenew:\n    image: onenew:local\n    build:\n      args:\n        ONENEW_REVISION: "${ONENEW_REVISION:-local}"\n    ports:\n      - "${ONENEW_BIND_IP:-127.0.0.1}:${ONENEW_PORT:-7001}:7001"\n')
     (data/'data/database').mkdir(parents=True); (data/'plugins/demo').mkdir(parents=True)
     (data/'.env').write_text('APP_KEY=original\nDO_NOT_SOURCE=$(touch '+str(root/'executed')+')\n')
     (data/'data/database/database.sqlite').write_text('database fixture'); (data/'plugins/demo/config.json').write_text('{}')
@@ -50,6 +50,7 @@ exit 0
     assert not (root/'executed').exists()
     assert (root/'new/.env').read_bytes()==(data/'.env').read_bytes()
     compose=(root/'new/compose.yaml').read_text();assert 'name: onenew-restored-' in compose and 'image: onenew-restored-' in compose
+    assert 'ONENEW_REVISION: "' + 'a'*40 + '"' in compose and '${ONENEW_REVISION' not in compose
     assert '0.0.0.0:7001:7001' in compose and 'ONENEW_BIND_IP' not in compose
     assert b'Public listener: 0.0.0.0:7001' in output
     log=(root/'docker.log').read_text();assert 'up -d --build --wait' in log and 'onenew:migration-assets' in log
