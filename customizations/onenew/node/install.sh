@@ -2,8 +2,8 @@
 # Native binary installation; no Docker is used on the node server.
 set -Eeuo pipefail
 umask 077
-VERSION=onenew-v0.1.5
-RELEASE=node-v0.1.5
+VERSION=onenew-v0.1.6
+RELEASE=node-v0.1.6
 BASE="https://github.com/chinahch/onenew/releases/download/$RELEASE"
 ROOT=/etc/caddy
 PANEL= TOKEN= MACHINE= CHECK=0 UPGRADE=0
@@ -45,30 +45,40 @@ if command -v rc-service >/dev/null && command -v supervise-daemon >/dev/null; t
 elif command -v systemctl >/dev/null; then MANAGER=systemd
 else fail 'systemd or OpenRC with supervise-daemon is required'; fi
 if [ "$UPGRADE" -eq 1 ]; then
-  [ "$MANAGER" = systemd ] || fail 'Upgrade currently requires systemd; OpenRC configuration was preserved'
-  # Upgrade is deliberately restricted to this installer's native service.
-  for path in "$ROOT/config.yml" "$ROOT/credentials.env" /usr/local/bin/caddy /usr/local/bin/caddyctl /etc/systemd/system/caddy.service; do
+  # Upgrade only known Onenew services; do not change node configuration or certificates.
+  for path in "$ROOT/config.yml" "$ROOT/credentials.env" /usr/local/bin/caddy /usr/local/bin/caddyctl; do
     [ -f "$path" ] && [ ! -L "$path" ] || fail 'Upgrade requires a complete native Onenew installation with regular files'
   done
   [ ! -L "$ROOT" ] || fail 'Upgrade refuses a symlinked configuration directory'
-  for path in /etc/php-fpm/config.yml /etc/xboard-node/config.yml /etc/init.d/caddy; do
+  for path in /etc/php-fpm/config.yml /etc/xboard-node/config.yml; do
     [ ! -e "$path" ] && [ ! -L "$path" ] || fail 'Conflicting node service found; upgrade refused'
   done
-  property() { systemctl show "--property=$1" --value caddy.service; }
-  [ "$(property Description)" = 'Onenew Native Node' ] && \
-    [ "$(property FragmentPath)" = /etc/systemd/system/caddy.service ] && \
-    [ "$(property WorkingDirectory)" = "$ROOT" ] || fail 'Unknown caddy systemd service; nothing was replaced'
-  DROPINS=$(property DropInPaths)
-  # LXC applies this runtime drop-in to every service; it is not a node override.
-  { [ -z "$DROPINS" ] || [ "$DROPINS" = /run/systemd/system/service.d/zzz-lxc-service.conf ]; } && \
-    [ -z "$(property Environment)" ] || fail 'Custom systemd drop-ins or Environment overrides are not supported for upgrade'
-  [ "$(property EnvironmentFiles)" = "$ROOT/credentials.env (ignore_errors=no)" ] || fail 'Systemd credentials binding does not match the native installation'
-  EXEC=$(property ExecStart)
-  [[ "$EXEC" == '{ path=/usr/local/bin/caddy ; argv[]=/usr/local/bin/caddy -c /etc/caddy/config.yml ; ignore_errors=no ;'* ]] && \
-    [ "$(printf '%s' "$EXEC" | grep -o 'argv\[\]=' | wc -l)" -eq 1 ] || fail 'Systemd ExecStart does not match the native installation'
-  for hook in ExecStartPre ExecStartPost ExecStop ExecStopPost ExecReload; do
-    [ -z "$(property "$hook")" ] || fail 'Custom systemd execution hooks are not supported for upgrade'
-  done
+  if [ "$MANAGER" = systemd ]; then
+    [ ! -e /etc/init.d/caddy ] && [ ! -L /etc/init.d/caddy ] || fail 'Conflicting OpenRC caddy service found'
+    [ -f /etc/systemd/system/caddy.service ] && [ ! -L /etc/systemd/system/caddy.service ] || fail 'Native Onenew systemd service missing'
+    property() { systemctl show "--property=$1" --value caddy.service; }
+    [ "$(property Description)" = 'Onenew Native Node' ] && \
+      [ "$(property FragmentPath)" = /etc/systemd/system/caddy.service ] && \
+      [ "$(property WorkingDirectory)" = "$ROOT" ] || fail 'Unknown caddy systemd service; nothing was replaced'
+    DROPINS=$(property DropInPaths)
+    { [ -z "$DROPINS" ] || [ "$DROPINS" = /run/systemd/system/service.d/zzz-lxc-service.conf ]; } && \
+      [ -z "$(property Environment)" ] || fail 'Custom systemd drop-ins or Environment overrides are not supported for upgrade'
+    [ "$(property EnvironmentFiles)" = "$ROOT/credentials.env (ignore_errors=no)" ] || fail 'Systemd credentials binding does not match the native installation'
+    EXEC=$(property ExecStart)
+    [[ "$EXEC" == '{ path=/usr/local/bin/caddy ; argv[]=/usr/local/bin/caddy -c /etc/caddy/config.yml ; ignore_errors=no ;'* ]] && \
+      [ "$(printf '%s' "$EXEC" | grep -o 'argv\\[\\]=' | wc -l)" -eq 1 ] || fail 'Systemd ExecStart does not match the native installation'
+    for hook in ExecStartPre ExecStartPost ExecStop ExecStopPost ExecReload; do
+      [ -z "$(property "$hook")" ] || fail 'Custom systemd execution hooks are not supported for upgrade'
+    done
+  else
+    [ ! -e /etc/systemd/system/caddy.service ] && [ ! -L /etc/systemd/system/caddy.service ] || fail 'Conflicting systemd caddy service found'
+    [ -f /etc/init.d/caddy ] && [ ! -L /etc/init.d/caddy ] && [ -x /etc/init.d/caddy ] || fail 'Native Onenew OpenRC service missing'
+    grep -Fxq 'description="Onenew Native Node"' /etc/init.d/caddy && \
+      grep -Fxq 'command="/usr/local/bin/caddy"' /etc/init.d/caddy && \
+      grep -Fxq 'command_args="-c /etc/caddy/config.yml"' /etc/init.d/caddy && \
+      grep -Fxq 'supervisor="supervise-daemon"' /etc/init.d/caddy || fail 'Unknown OpenRC caddy service; nothing was replaced'
+    rc-service caddy status >/dev/null 2>&1 || fail 'Existing OpenRC caddy service must be running before upgrade'
+  fi
   OLD_VERSION=$(/usr/local/bin/caddy -v 2>/dev/null) || fail 'Cannot identify installed native binary'
   [[ "$OLD_VERSION" == 'caddy onenew-v'*' (built '* ]] || fail 'Installed caddy is not an Onenew native node'
 fi
@@ -99,42 +109,78 @@ if [ "$UPGRADE" -eq 1 ]; then
     --panel-url "${PANEL%/}" --machine-id "$MACHINE" >/dev/null 2>&1 || fail 'Upgrade panel/machine binding or private credential validation failed; existing service preserved'
   unset TOKEN
   cmp -s "$ROOT/config.yml" "$STAGE/config.yml" || fail 'Candidate CLI changed configuration; upgrade refused'
-  BACKUP=$(mktemp -d "$ROOT.upgrade-backup.XXXXXXXX")
-  chmod 700 "$BACKUP"
-  cp -a "$ROOT" "$BACKUP/config"
-  cp -p /usr/local/bin/caddy "$BACKUP/caddy"
-  cp -p /usr/local/bin/caddyctl "$BACKUP/caddyctl"
-  cp -p /etc/systemd/system/caddy.service "$BACKUP/caddy.service"
+  # No long-lived backups. Previous binaries are moved on the same filesystem.
+  cp -p "$ROOT/credentials.env" "$STAGE/credentials.previous"
+  ROLLBACK=$(mktemp -d /usr/local/bin/.onenew-rollback.XXXXXXXX)
+  chmod 700 "$ROLLBACK"
+  manager_stop() {
+    if [ "$MANAGER" = systemd ]; then systemctl stop caddy.service; else rc-service caddy stop; fi
+  }
+  manager_start() {
+    if [ "$MANAGER" = systemd ]; then systemctl start caddy.service; else rc-service caddy start; fi
+  }
+  manager_running() {
+    if [ "$MANAGER" = systemd ]; then systemctl is-active --quiet caddy.service; else rc-service caddy status >/dev/null 2>&1; fi
+  }
   rollback_upgrade() {
+    local reason="${1:-unexpected failure}"
     trap - ERR INT TERM
     set +e
-    systemctl stop caddy.service >/dev/null 2>&1
-    if install -m 755 "$BACKUP/caddy" /usr/local/bin/caddy && \
-      install -m 755 "$BACKUP/caddyctl" /usr/local/bin/caddyctl && \
-      install -m 600 "$BACKUP/config/credentials.env" "$ROOT/credentials.env" && \
-      systemctl start caddy.service >/dev/null 2>&1 && systemctl is-active --quiet caddy.service; then
-      printf 'ERROR: Upgrade failed; previous binaries and credentials restored. Private backup: %s\n' "$BACKUP" >&2
+    printf 'ERROR: Upgrade failed (%s); restoring previous version...\n' "$reason" >&2
+    manager_stop >/dev/null 2>&1
+    if [ -f "$ROLLBACK/caddy" ]; then
+      rm -f /usr/local/bin/caddy
+      mv "$ROLLBACK/caddy" /usr/local/bin/caddy
+    fi
+    if [ -f "$ROLLBACK/caddyctl" ]; then
+      rm -f /usr/local/bin/caddyctl
+      mv "$ROLLBACK/caddyctl" /usr/local/bin/caddyctl
+    fi
+    install -m 600 "$STAGE/credentials.previous" "$ROOT/credentials.env"
+    manager_start >/dev/null 2>&1
+    if manager_running && [ -f /usr/local/bin/caddy ] && [ -f /usr/local/bin/caddyctl ]; then
+      rm -rf -- "$ROLLBACK"
+      printf 'ERROR: Previous binaries and credentials restored; temporary rollback files removed.\n' >&2
     else
-      printf 'ERROR: Upgrade failed and automatic recovery needs attention. Private backup: %s\n' "$BACKUP" >&2
+      printf 'ERROR: Automatic recovery incomplete; emergency files retained at %s\n' "$ROLLBACK" >&2
     fi
     exit 1
   }
-  trap rollback_upgrade ERR INT TERM
-  systemctl stop caddy.service
+  trap 'rollback_upgrade "unexpected command error at line $LINENO"' ERR
+  trap 'rollback_upgrade "interrupted"' INT TERM
+  manager_stop
+  mv /usr/local/bin/caddy "$ROLLBACK/caddy"
+  mv /usr/local/bin/caddyctl "$ROLLBACK/caddyctl"
   install -m 755 "$STAGE/caddy" /usr/local/bin/caddy
   install -m 755 "$STAGE/caddyctl" /usr/local/bin/caddyctl
   install -m 600 "$STAGE/credentials.env" "$ROOT/credentials.env"
-  systemctl start caddy.service
+  manager_start
   HEALTHY=0
-  for attempt in 1 2 3 4 5; do
+  for attempt in {1..15}; do
     sleep 2
-    if systemctl is-active --quiet caddy.service && \
+    if manager_running && \
       /usr/local/bin/caddyctl instance list --output text 2>/dev/null | \
-      awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" 'NR > 1 && $2 == "machine" && $3 == panel && $4 == target && $5 == "active" && $6 == "ok" { found=1 } END { exit !found }'; then HEALTHY=1; break; fi
+      awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" 'NR > 1 && $2 == "machine" && $3 == panel && $4 == target && $6 == "ok" { found=1 } END { exit !found }'; then
+      HEALTHY=1
+      break
+    fi
   done
-  [ "$HEALTHY" -eq 1 ] || rollback_upgrade
+  if [ "$HEALTHY" -ne 1 ]; then
+    printf 'Diagnostic: manager=%s, service=' "$MANAGER" >&2
+    if manager_running; then printf 'running\n' >&2; else printf 'not-running\n' >&2; fi
+    /usr/local/bin/caddyctl instance list --output text 2>/dev/null | \
+      awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" '$2 == "machine" && $3 == panel && $4 == target {printf "Diagnostic: matching machine health=%s\\n", $6; found=1} END {if(!found) print "Diagnostic: matching machine not found"}' >&2 || true
+    rollback_upgrade "matching machine health not ready within 30 seconds"
+  fi
   trap - ERR INT TERM
-  printf 'Upgraded %s; configuration, certificates and service unit preserved. Private backup: %s\n' "$VERSION" "$BACKUP"
+  rm -rf -- "$ROLLBACK"
+  # Remove only old installer-created directories with the expected file structure.
+  for old in "$ROOT".upgrade-backup.*; do
+    if [ -d "$old" ] && [ ! -L "$old" ] && [ -f "$old/caddy" ] && [ -f "$old/caddyctl" ] && [ -f "$old/config/credentials.env" ]; then
+      rm -rf -- "$old"
+    fi
+  done
+  printf 'Upgraded %s (%s); node configuration preserved and old installer backups cleaned.\n' "$VERSION" "$MANAGER"
   exit 0
 fi
 mkdir -p "$ROOT" /usr/local/bin

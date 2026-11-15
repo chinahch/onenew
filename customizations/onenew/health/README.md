@@ -30,12 +30,12 @@ Xboard database, APP_KEY and Redis configuration remain authoritative.
   included. The model accessor has the same safe projection.
 
 The existing worker polls drive the schedule; no cron or queue daemon is required.
-Nodes are attempted oldest-first. Successful checks use a five-minute interval;
+Nodes are attempted oldest-first. Successful checks use a one-minute interval;
 failed checks retry after a 30-second cooldown and lost leases retry on the next
 poll after expiry. The scheduler still permits only one active lease per machine,
 with a 120-second lease and a 10-second proxy request
 budget. Polls with another active task return no task. Capacity is bounded by the
-worker polling interval and request duration, so five minutes is a minimum spacing,
+worker polling interval and request duration, so one minute is a minimum spacing,
 not a guarantee that an arbitrarily large machine completes every listener in five
 minutes. Unsupported/no-account nodes consume their own interval, without starving
 other nodes. No task creation endpoint accepts an arbitrary URL, command, account,
@@ -111,7 +111,7 @@ loopback result; no TLS stripping or speculative insecure fallback is attempted.
 `tests/ProbeHealthTest.php` is a Laravel feature suite for the installed overlay.
 It covers Bearer auth and disabled machines, one active task, real native user
 selection, loopback target, encrypted cache storage, owner/lease/duplicate results,
-expiry/freshness/five-minute spacing, entitlement filtering, safe projections and
+expiry/freshness/one-minute spacing, entitlement filtering, safe projections and
 SNI/REALITY preservation. Run with normal upstream development dependencies and
 an isolated migrated database, for example:
 

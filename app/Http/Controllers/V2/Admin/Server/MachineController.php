@@ -202,14 +202,7 @@ class MachineController extends Controller
     private function buildInstallCommand(Request $request, ServerMachine $machine): string
     {
         $panelUrl = rtrim((string) (admin_setting('app_url') ?: $request->getSchemeAndHttpHost()), '/');
-        $installerUrl = 'https://raw.githubusercontent.com/cedar2025/xboard-node/dev/install.sh';
-
-        return sprintf(
-            'curl -fsSL %s | sudo bash -s -- --mode machine --panel %s --token %s --machine-id %d',
-            $installerUrl,
-            escapeshellarg($panelUrl),
-            escapeshellarg($machine->token),
-            $machine->id
-        );
+        // Generated commands must use our verified versioned native installer, never the upstream XB installer.
+        return \App\Onenew\NodeInstallCommand::make($panelUrl, (string) $machine->token, (int) $machine->id);
     }
 }

@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class ProbeService
 {
-    public const INTERVAL = 300;
+    public const INTERVAL = 60;
     public const RETRY_INTERVAL = 30;
     public const FRESHNESS = 600;
     public const LIFETIME = 120;

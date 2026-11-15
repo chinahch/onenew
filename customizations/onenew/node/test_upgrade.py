@@ -59,7 +59,7 @@ else exit 10
 fi
 '''
         with tarfile.open(self.package, 'w:gz') as archive:
-            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.5 (built candidate)"\n'), ('caddyctl', cli)]:
+            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.6 (built candidate)"\n'), ('caddyctl', cli)]:
                 data = content.encode(); info = tarfile.TarInfo(name); info.size = len(data); info.mode = 0o755
                 archive.addfile(info, io.BytesIO(data))
         self.sums.write_text(hashlib.sha256(self.package.read_bytes()).hexdigest() + '  ' + self.package.name + '\n')
@@ -88,15 +88,28 @@ fi
         self.assertIn('candidate', self.installed.joinpath('caddy').read_text())
         self.assertIn('fixture-private-token', self.native.joinpath('credentials.env').read_text())
         self.assertNotIn('fixture-private-token', result.stdout + result.stderr)
-        backups = list(self.root.glob('etc/caddy.upgrade-backup.*'))
-        self.assertEqual(len(backups), 1)
-        self.assertEqual((backups[0]/'config/cert.pem').read_text(), 'private-cert-fixture')
+        self.assertEqual(list(self.root.glob('etc/caddy.upgrade-backup.*')), [])
+        self.assertEqual(list(self.installed.glob('.onenew-rollback.*')), [])
+
+    def test_cleans_recognized_legacy_backups_only(self):
+        legacy = self.root/'etc/caddy.upgrade-backup.fixture'
+        (legacy/'config').mkdir(parents=True)
+        (legacy/'caddy').write_text('old')
+        (legacy/'caddyctl').write_text('old')
+        (legacy/'config/credentials.env').write_text('private')
+        unrelated = self.root/'etc/user-backup'
+        unrelated.mkdir()
+        result = self.upgrade()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(legacy.exists())
+        self.assertTrue(unrelated.exists())
 
     def test_failed_health_rolls_back_binaries_and_credentials(self):
         self.root.joinpath('unhealthy').touch()
         result = self.upgrade()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('restored', result.stderr)
+        self.assertEqual(list(self.installed.glob('.onenew-rollback.*')), [])
         for path, content in self.original.items(): self.assertEqual(Path(path).read_bytes(), content)
         self.assertNotIn('fixture-private-token', result.stdout + result.stderr)
 
@@ -115,13 +128,33 @@ fi
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('candidate', self.installed.joinpath('caddy').read_text())
 
-    def test_openrc_upgrade_is_rejected_without_changing_files(self):
-        self.script('rc-service', '#!/bin/sh\nexit 0\n')
+    def _prepare_openrc(self, valid=True):
+        self.script('rc-service', '#!/bin/sh\necho "$2" >> "$FIXTURE_ROOT/service-actions"\nexit 0\n')
         self.script('supervise-daemon', '#!/bin/sh\nexit 0\n')
+        init = self.root / 'etc/init.d/caddy'
+        init.parent.mkdir(parents=True, exist_ok=True)
+        description = 'Onenew Native Node' if valid else 'Foreign Service'
+        init.write_text('description="' + description + '"\ncommand="/usr/local/bin/caddy"\ncommand_args="-c /etc/caddy/config.yml"\nsupervisor="supervise-daemon"\n')
+        init.chmod(0o755)
+        (self.system/'caddy.service').unlink()
+
+    def test_openrc_upgrade_succeeds_without_persistent_backups(self):
+        self._prepare_openrc()
+        original_cert = (self.native/'cert.pem').read_bytes()
+        result = self.upgrade()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('candidate', (self.installed/'caddy').read_text())
+        self.assertEqual((self.native/'cert.pem').read_bytes(), original_cert)
+        self.assertEqual(list(self.installed.glob('.onenew-rollback.*')), [])
+        self.assertEqual(list(self.root.glob('etc/caddy.upgrade-backup.*')), [])
+
+    def test_openrc_refuses_foreign_service_before_mutation(self):
+        self._prepare_openrc(valid=False)
         result = self.upgrade()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('OpenRC', result.stderr)
-        for path, content in self.original.items(): self.assertEqual(Path(path).read_bytes(), content)
+        self.assertIn('Unknown OpenRC', result.stderr)
+        actions = self.root/'service-actions'
+        self.assertNotIn('stop', actions.read_text() if actions.exists() else '')
 
     def test_web_caddy_binary_is_rejected_before_stop(self):
         self.installed.joinpath('caddy').write_text('#!/bin/sh\necho v2.9.1\n')

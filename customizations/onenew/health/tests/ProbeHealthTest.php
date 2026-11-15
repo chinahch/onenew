@@ -96,7 +96,7 @@ class ProbeHealthTest extends TestCase
         $this->assertSame('expired', app(ProbeService::class)->status($node)['state']);
     }
 
-    public function test_expired_lease_is_replaced_on_next_poll_without_waiting_five_minutes(): void
+    public function test_expired_lease_is_replaced_on_next_poll_without_waiting_one_minute(): void
     {
         [$machine, $node] = $this->fixture();
         $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->json('tasks.0');
@@ -127,6 +127,20 @@ class ProbeHealthTest extends TestCase
         $this->assertSame('succeeded', app(ProbeService::class)->status($node)['state']);
         $this->travel(31)->seconds();
         $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertExactJson(['tasks'=>[]]);
+    }
+
+    public function test_succeeded_probe_is_rescheduled_after_one_minute(): void
+    {
+        [$machine, $node] = $this->fixture();
+        $first = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->json('tasks.0');
+        $this->withToken($machine->token)->postJson('/api/v3/server/probes/'.$first['id'].'/result', [
+            'machine_id' => $machine->id, 'lease' => $first['lease'], 'state' => 'succeeded', 'error_code' => '',
+        ])->assertOk();
+        $this->travel(59)->seconds();
+        $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertExactJson(['tasks'=>[]]);
+        $this->travel(2)->seconds();
+        $next = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertJsonCount(1, 'tasks')->json('tasks.0');
+        $this->assertNotSame($first['id'], $next['id']);
     }
 
     public function test_editing_a_node_replaces_a_stale_running_probe_immediately(): void
@@ -195,7 +209,7 @@ class ProbeHealthTest extends TestCase
                 'machine_id' => $machine->id, 'lease' => $task['lease'], 'state' => 'failed', 'error_code' => $code,
             ])->assertOk();
             $this->assertSame($expected, app(ProbeService::class)->status($node)['state']);
-            $this->travel(301)->seconds();
+            $this->travel(61)->seconds();
         }
     }
 

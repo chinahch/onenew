@@ -53,3 +53,7 @@ VLESS/VMess with subscription TLS and effective certificate mode `none` retain p
 面板和原生 Worker 的固定代理检测目标统一为 `http://cp.cloudflare.com/generate_204`；旧 v0.1.4 Worker 接收到该目标时会返回 `configuration_unavailable`，表现为节点实际可用但面板持续“待检测”。新包必须通过探测目标回归测试及两个平台架构的原生构建后发布。已存在的 `node-v0.1.4` Release 保持不可变。
 
 注意：`install.sh --upgrade` 当前仅支持符合原生安装约束的 systemd 节点，**Alpine/OpenRC 节点会被安全拒绝自动升级**。需先在一台测试节点备份配置及二进制，核验新包 SHA256 后按 OpenRC 专用方案升级与回滚，不能直接对其运行系统d升级命令。节点升级后验证代理与自动检测两条链路。
+
+## node-v0.1.6: OpenRC/systemd upgrades and cleanup
+
+Native systemd and Alpine/OpenRC supervise-daemon nodes are eligible for in-place upgrades after validating their service definition and panel/machine identity. Prior executables are moved (not duplicated) to a private short-lived rollback directory on the same filesystem; configuration, certificates and service units remain unchanged. On success, rollback files and recognized old installer backups in `/etc/caddy.upgrade-backup.*` are removed. If an upgrade fails, binaries and credentials are restored automatically; emergency files are retained only if recovery itself fails. The updated panel schedules connectivity health probes after a 60-second minimum interval per node; a single active lease per machine can delay some nodes. Panel container redeployment is required to activate the scheduler change.
