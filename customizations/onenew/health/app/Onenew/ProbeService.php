@@ -226,7 +226,7 @@ class ProbeService
             // database reload returns "443". Hash listener semantics rather than
             // incidental PDO/model scalar representations or absent empty arrays.
             $values[$field] = match ($field) {
-                'machine_id', 'server_port', 'parent_id' => (int) $value,
+                'machine_id', 'server_port', 'parent_id', 'node_speed_limit_mbps' => (int) $value,
                 'enabled' => (bool) $value,
                 'port' => is_numeric($value) ? (string) (int) $value : (string) $value,
                 'type', 'host' => (string) $value,
