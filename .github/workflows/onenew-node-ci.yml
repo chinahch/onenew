@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: chinahch/caddy
-          ref: 11f025992aa163204c5d4d2d8fb0934a0ab2e893
+          ref: 1d1565f03960760902379e4e7e25daa3c236684f
           path: caddy
       - uses: actions/checkout@v4
         with:
