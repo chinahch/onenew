@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {initialPublicView} from './publicView.ts';
+test('public home and login preserve authenticated dashboard and invitation entry',()=>{assert.equal(initialPublicView('',''),'home');assert.equal(initialPublicView('#login',''),'login');assert.equal(initialPublicView('','?invite=fixture'),'login');assert.equal(initialPublicView('#features',''),'home')});

@@ -49,6 +49,17 @@ final class SubscriptionGuardFeatureTest extends TestCase
         return User::create($extra+['email'=>'guard-'.Str::random(12).'@example.test','password'=>'unused',
             'uuid'=>(string)Str::uuid(),'token'=>bin2hex(random_bytes(16)),'transfer_enable'=>1000000,'u'=>0,'d'=>0,'banned'=>false]);
     }
+    public function test_native_user_selection_filters_logs_and_keeps_unselected_view_empty():void
+    {
+        $one=$this->account();$two=$this->account();$plugin=$this->guard();
+        $this->pull($plugin,$one,'192.0.2.10');$this->pull($plugin,$two,'192.0.2.20');
+        Sanctum::actingAs($one);$this->getJson('/api/onenew/admin/subscription-logs/users')->assertForbidden();
+        Sanctum::actingAs($this->account(['is_admin'=>true]));
+        $this->getJson('/api/onenew/admin/subscription-logs')->assertOk()->assertJsonPath('total',0);
+        $this->getJson('/api/onenew/admin/subscription-logs?user_id='.$one->id)->assertOk()->assertJsonPath('total',1)->assertJsonPath('data.0.ip','192.0.2.10')->assertJsonPath('data.0.user_id',$one->id);
+        $this->getJson('/api/onenew/admin/subscription-logs/users?search='.urlencode($two->email))->assertOk()->assertJsonCount(1,'data')->assertJsonPath('data.0.id',$two->id);
+    }
+
     private function guard(array $config=[]):Plugin
     {
         $p=new Plugin('subscription_guard');$p->setConfig($config+['rate_limit_seconds'=>0,'enable_telegram_notify'=>false]);return $p;
