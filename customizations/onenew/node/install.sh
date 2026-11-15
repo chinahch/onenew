@@ -2,8 +2,8 @@
 # Native binary installation; no Docker is used on the node server.
 set -Eeuo pipefail
 umask 077
-VERSION=onenew-v0.1.6
-RELEASE=node-v0.1.6
+VERSION=onenew-v0.1.7
+RELEASE=node-v0.1.7
 BASE="https://github.com/chinahch/onenew/releases/download/$RELEASE"
 ROOT=/etc/caddy
 PANEL= TOKEN= MACHINE= CHECK=0 UPGRADE=0
@@ -15,6 +15,7 @@ while [ "$#" -gt 0 ]; do
     --mode) [ "${2:-}" = machine ] || fail 'Only machine mode is supported'; shift 2 ;;
     --panel) [ "$#" -ge 2 ] || fail 'Missing panel'; PANEL="$2"; shift 2 ;;
     --token) [ "$#" -ge 2 ] || fail 'Missing token'; TOKEN="$2"; shift 2 ;;
+    --token-stdin) [ -z "$TOKEN" ] || fail 'Conflicting token options'; IFS= read -r TOKEN || fail 'Token stdin missing'; shift ;;
     --machine-id) [ "$#" -ge 2 ] || fail 'Missing machine ID'; MACHINE="$2"; shift 2 ;;
     *) fail 'Unknown installation argument' ;;
   esac
@@ -100,6 +101,20 @@ done
 OBSERVED=$("$STAGE/caddy" -v)
 [[ "$OBSERVED" == "caddy $VERSION (built "* ]] || fail 'Unexpected node version'
 if [ "$CHECK" -eq 1 ]; then printf 'Verified %s (%s); no service or configuration changed.\n' "$VERSION" "$ARCH"; exit 0; fi
+# Never rotate local credentials or stop a working service until the panel
+# has accepted exactly this machine ID and token. A CLI-only token rewrite
+# cannot detect stale or mistyped tokens, and previously caused outage loops.
+[[ "$TOKEN" =~ ^[A-Za-z0-9_+./=~-]{16,256}$ ]] || fail 'Machine token contains unsupported characters'
+printf '{"machine_id":%s,"token":"%s"}' "$MACHINE" "$TOKEN" > "$STAGE/auth-request.json"
+AUTH_STATUS=$(curl --proto '=https' --tlsv1.2 -sS --max-time 15 \
+  --request POST --header 'Content-Type: application/json' \
+  --data-binary @"$STAGE/auth-request.json" \
+  --output "$STAGE/auth-response.json" --write-out '%{http_code}' \
+  "${PANEL%/}/api/v2/server/machine/nodes") || fail 'Panel authentication request failed; existing service untouched'
+if [ "$AUTH_STATUS" != 200 ] || ! grep -Eq '"nodes"[[:space:]]*:' "$STAGE/auth-response.json"; then
+  fail "Panel machine authentication rejected (HTTP $AUTH_STATUS); existing service untouched"
+fi
+rm -f -- "$STAGE/auth-request.json" "$STAGE/auth-response.json"
 if [ "$UPGRADE" -eq 1 ]; then
   # Validate identity and rotate only the referenced credential on a private copy.
   cp -p "$ROOT/config.yml" "$STAGE/config.yml"
@@ -122,6 +137,12 @@ if [ "$UPGRADE" -eq 1 ]; then
   manager_running() {
     if [ "$MANAGER" = systemd ]; then systemctl is-active --quiet caddy.service; else rc-service caddy status >/dev/null 2>&1; fi
   }
+  # Check the exact requested machine and require the service to be active.
+  machine_healthy() {
+    manager_running && /usr/local/bin/caddyctl instance list --output text 2>/dev/null |
+      awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" \
+        'NR > 1 && $2 == "machine" && $3 == panel && $4 == target && $5 == "active" && $6 == "ok" { found=1 } END { exit !found }'
+  }
   rollback_upgrade() {
     local reason="${1:-unexpected failure}"
     trap - ERR INT TERM
@@ -138,11 +159,18 @@ if [ "$UPGRADE" -eq 1 ]; then
     fi
     install -m 600 "$STAGE/credentials.previous" "$ROOT/credentials.env"
     manager_start >/dev/null 2>&1
-    if manager_running && [ -f /usr/local/bin/caddy ] && [ -f /usr/local/bin/caddyctl ]; then
+    local restored=0
+    # A transient systemd "active" result is insufficient: wait for the
+    # previous machine to authenticate and report healthy before cleanup.
+    for attempt in {1..15}; do
+      if machine_healthy; then restored=1; break; fi
+      sleep 2
+    done
+    if [ "$restored" -eq 1 ] && [ -f /usr/local/bin/caddy ] && [ -f /usr/local/bin/caddyctl ]; then
       rm -rf -- "$ROLLBACK"
-      printf 'ERROR: Previous binaries and credentials restored; temporary rollback files removed.\n' >&2
+      printf 'ERROR: Previous version verified healthy; temporary rollback files removed.\n' >&2
     else
-      printf 'ERROR: Automatic recovery incomplete; emergency files retained at %s\n' "$ROLLBACK" >&2
+      printf 'ERROR: Previous files restored but service is NOT healthy; emergency files retained at %s\n' "$ROLLBACK" >&2
     fi
     exit 1
   }
@@ -156,13 +184,14 @@ if [ "$UPGRADE" -eq 1 ]; then
   install -m 600 "$STAGE/credentials.env" "$ROOT/credentials.env"
   manager_start
   HEALTHY=0
-  for attempt in {1..15}; do
+  CONSECUTIVE=0
+  for attempt in {1..30}; do
     sleep 2
-    if manager_running && \
-      /usr/local/bin/caddyctl instance list --output text 2>/dev/null | \
-      awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" 'NR > 1 && $2 == "machine" && $3 == panel && $4 == target && $6 == "ok" { found=1 } END { exit !found }'; then
-      HEALTHY=1
-      break
+    if machine_healthy; then
+      CONSECUTIVE=$((CONSECUTIVE + 1))
+      if [ "$CONSECUTIVE" -ge 2 ]; then HEALTHY=1; break; fi
+    else
+      CONSECUTIVE=0
     fi
   done
   if [ "$HEALTHY" -ne 1 ]; then
@@ -170,7 +199,7 @@ if [ "$UPGRADE" -eq 1 ]; then
     if manager_running; then printf 'running\n' >&2; else printf 'not-running\n' >&2; fi
     /usr/local/bin/caddyctl instance list --output text 2>/dev/null | \
       awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" '$2 == "machine" && $3 == panel && $4 == target {printf "Diagnostic: matching machine health=%s\\n", $6; found=1} END {if(!found) print "Diagnostic: matching machine not found"}' >&2 || true
-    rollback_upgrade "matching machine health not ready within 30 seconds"
+    rollback_upgrade "matching machine health not stable within 60 seconds"
   fi
   trap - ERR INT TERM
   rm -rf -- "$ROLLBACK"
@@ -212,6 +241,18 @@ UNIT
   systemctl enable --now caddy.service
   sleep 3
   systemctl is-active --quiet caddy.service || fail 'Node failed to start; inspect journalctl -u caddy'
+  # A systemd process can briefly be active while machine discovery is
+  # failing with HTTP 403. Verify the configured machine after installation.
+  READY=0
+  for attempt in {1..30}; do
+    if /usr/local/bin/caddyctl instance list --output text 2>/dev/null |
+      awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" \
+        'NR > 1 && $2 == "machine" && $3 == panel && $4 == target && $5 == "active" && $6 == "ok" { found=1 } END { exit !found }'; then
+      READY=1; break
+    fi
+    sleep 2
+  done
+  [ "$READY" -eq 1 ] || fail 'Node did not reach healthy machine state after install; inspect journalctl -u caddy'
 else
   cat > /etc/init.d/caddy <<'UNIT'
 #!/sbin/openrc-run
@@ -236,5 +277,15 @@ UNIT
   rc-service caddy start
   sleep 3
   rc-service caddy status || fail 'Node failed to start; inspect /var/log/caddy.err'
+  READY=0
+  for attempt in {1..30}; do
+    if /usr/local/bin/caddyctl instance list --output text 2>/dev/null |
+      awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" \
+        'NR > 1 && $2 == "machine" && $3 == panel && $4 == target && $5 == "active" && $6 == "ok" { found=1 } END { exit !found }'; then
+      READY=1; break
+    fi
+    sleep 2
+  done
+  [ "$READY" -eq 1 ] || fail 'Node did not reach healthy machine state after install; inspect /var/log/caddy.err'
 fi
 printf 'Installed %s. Configuration: /etc/caddy. Management: caddyctl\n' "$VERSION"
