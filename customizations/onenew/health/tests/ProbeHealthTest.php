@@ -138,7 +138,7 @@ class ProbeHealthTest extends TestCase
         $next = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk()->json('tasks.0');
         $this->assertNotNull($next);
         $this->assertNotSame($first['id'], $next['id']);
-        $this->assertSame(23456, $next['payload']['outbound']['settings']['server_port']);
+        $this->assertSame(443, $next['payload']['outbound']['settings']['server_port']);
         $this->assertSame('running', app(ProbeService::class)->status($node->fresh())['state']);
         $this->withToken($machine->token)->postJson('/api/v3/server/probes/' . $first['id'] . '/result', [
             'machine_id' => $machine->id, 'lease' => $first['lease'], 'state' => 'succeeded',
