@@ -41,7 +41,7 @@ class ExternalNodesTest extends TestCase
     public function test_unified_order_and_toggle_preserve_external_identity_and_credentials(): void
     {
         $user=$this->user();Sanctum::actingAs($this->user(true));$id=$this->save($user,$this->link());
-        $server=Server::create(['name'=>'Native','type'=>'vless','host'=>'native.example','port'=>443,'server_port'=>443,'group_ids'=>[],'protocol_settings'=>['tls'=>0,'network'=>'tcp']]);
+        $server=Server::create(['name'=>'Native','rate'=>1,'type'=>'vless','host'=>'native.example','port'=>443,'server_port'=>443,'group_ids'=>[],'protocol_settings'=>['tls'=>0,'network'=>'tcp']]);
         $cipher=DB::table(ExternalNodes::TABLE)->where('id',$id)->value('link_ciphertext');
         $this->postJson(self::ROOT.'/table-order',['ids'=>[-$id,$server->id]])->assertOk();
         $this->getJson(self::ROOT)->assertOk()->assertJsonPath('table_order.0',-$id)->assertJsonMissingPath('data.0.link');
