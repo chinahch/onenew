@@ -14,7 +14,7 @@ func TestOnenewHealthTargetContract(t *testing.T) {
    Payload:Payload{Target:target, Kernel:"singbox"}}
   r := runTask(context.Background(), task,
    func(context.Context, Payload)(string,int64){called=true;return "",0}, nil)
-  allowed := target != "https://arbitrary.invalid/"
+  allowed := target == Target
   if called != allowed || (allowed && r.State != "succeeded") || (!allowed && r.Error != "configuration_unavailable") {
    t.Fatalf("target %q: called=%v state=%s code=%s",target,called,r.State,r.Error)
   }
