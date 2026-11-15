@@ -55,6 +55,6 @@ sed -e "s/^name: onenew$/name: $project/" -e "s/^    image: onenew:local$/    im
 mv -T -n -- "$work/source" "$target"
 [[ ! -e "$work/source" ]] || { echo 'Target changed concurrently; refusing to overwrite.' >&2; exit 1; }
 cd -- "$target"
-docker compose --env-file .env.compose.restore -f compose.yaml up -d --build --wait
-docker compose --env-file .env.compose.restore -f compose.yaml exec -T onenew php artisan onenew:migration-assets
+ONENEW_REVISION="$revision" docker compose --project-name "$project" --env-file .env.compose.restore -f compose.yaml up -d --build --wait
+ONENEW_REVISION="$revision" docker compose --project-name "$project" --env-file .env.compose.restore -f compose.yaml exec -T onenew php artisan onenew:migration-assets
 printf 'Restored to %s. Verify the local service and credentials, then switch DNS/proxy/tunnel. Keep the old server available for rollback.\n' "$target"

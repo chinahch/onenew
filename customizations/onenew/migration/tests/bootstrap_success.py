@@ -29,7 +29,7 @@ fi
 exit 0
 ''')
     for file in bin_dir.iterdir():file.chmod(0o700)
-    env=os.environ.copy();env.update(PATH=str(bin_dir)+':'+env['PATH'],TEST_ARCHIVE=str(archive),TEST_DATA=str(data),TEST_LOG=str(root/'docker.log'))
+    env=os.environ.copy();env.update(PATH=str(bin_dir)+':'+env['PATH'],TEST_ARCHIVE=str(archive),TEST_DATA=str(data),TEST_LOG=str(root/'docker.log'),COMPOSE_PROJECT_NAME='existing-deployment',ONENEW_REVISION='wrong-inherited-version')
     pid,fd=pty.fork()
     if pid==0:os.execvpe('bash',['bash',str(script),'--revision','a'*40,'--package',str(package),'--target',str(root/'new')],env)
     output=b'';sent=False;status=None;deadline=time.time()+20
@@ -51,5 +51,7 @@ exit 0
     assert (root/'new/.env').read_bytes()==(data/'.env').read_bytes()
     compose=(root/'new/compose.yaml').read_text();assert 'name: onenew-restored-' in compose and 'image: onenew-restored-' in compose
     log=(root/'docker.log').read_text();assert 'up -d --build --wait' in log and 'onenew:migration-assets' in log
+    for line in log.splitlines():
+        if ' up ' in line or ' exec ' in line:assert 'compose --project-name onenew-restored-' in line and 'existing-deployment' not in line
     assert not list(root.glob('.onenew-restore.*'))
 print('Full bootstrap TTY, isolated project, preserved files and no secret argv passed')

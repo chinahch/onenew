@@ -22,6 +22,6 @@ test('download ticket goes through a form POST rather than URL or browser-sized 
  try{downloadMigration('b'.repeat(64));assert.equal(calls[0].name,'ticket');assert.equal(calls[0].value,'b'.repeat(64));assert.deepEqual(calls[1],{method:'POST',action:'/api/onenew/migration/download'})}finally{globalThis.document=before}
 });
 test('system settings includes a dedicated migration route and navigation entry',()=>{
- const original=fs.readFileSync(new URL('../../../../xboard-admin-dist/assets/index-CEIYH7i8.js',import.meta.url),'utf8');const result=patchBundle(original,'');
+ const original=fs.readFileSync(process.env.ONENEW_ADMIN_UPSTREAM?`${process.env.ONENEW_ADMIN_UPSTREAM}/assets/index-CEIYH7i8.js`:new URL('../../../../xboard-admin-dist/assets/index-CEIYH7i8.js',import.meta.url),'utf8');const result=patchBundle(original,'');
  assert.ok(result.includes('href:"/config/system/migration"'));assert.ok(result.includes('OnenewAdmin.MigrationPage,{react:H,get:IL,post:RL}'));
 });
