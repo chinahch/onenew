@@ -8,7 +8,7 @@ def apply(source):
     text = file.read_text(encoding='utf-8')
     old = 'const Target = "https://www.gstatic.com/generate_204"'
     new = 'const Target = "http://cp.cloudflare.com/generate_204"'
-    if text.count(old) != 1:
+    if text.count(old) + text.count(new) != 1:
         raise ValueError('Health target contract anchor changed')
     # Accept only the two fixed targets during a rolling panel/node upgrade.
     text = text.replace(old, new).replace(
