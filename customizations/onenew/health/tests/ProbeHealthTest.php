@@ -345,6 +345,27 @@ class ProbeHealthTest extends TestCase
         app(ProbeOutboundBuilder::class)->build($node, $user);
     }
 
+    public function test_changed_configuration_is_probed_before_older_unchanged_nodes(): void
+    {
+        [$machine, $node] = $this->fixture();
+        $url = $this->pollUrl($machine);
+        $first = $this->withToken($machine->token)->getJson($url)->json('tasks.0');
+        $this->withToken($machine->token)->postJson('/api/v3/server/probes/'.$first['id'].'/result', [
+            'machine_id'=>$machine->id, 'lease'=>$first['lease'], 'state'=>'succeeded', 'error_code'=>'',
+        ])->assertOk();
+        // An untested sibling would normally sort ahead of this recently tested node.
+        $sibling = $node->replicate();
+        $sibling->name = 'older-untested';
+        $sibling->server_port = 23457;
+        $sibling->save();
+        $node->update(['server_port'=>23456]);
+        $next = $this->withToken($machine->token)->getJson($url)->assertOk()->json('tasks.0');
+        $this->assertSame($node->id, app(ProbeStore::class)->latest($node->id)['node_id']);
+        $this->assertSame('running', app(ProbeStore::class)->latest($node->id)['state']);
+        $this->assertNull(app(ProbeStore::class)->latest($sibling->id));
+        $this->assertNotSame($first['id'], $next['id']);
+    }
+
     private function fixture(): array
     {
         $machine = ServerMachine::create(['name' => 'probe-machine', 'token' => 'machine-secret-' . bin2hex(random_bytes(6)), 'is_active' => true]);
