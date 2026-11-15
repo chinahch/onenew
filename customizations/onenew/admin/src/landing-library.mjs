@@ -33,7 +33,7 @@ export function validateLandingBindings(bindings){
  }
  return '';
 }
-function button(h,label,onClick,disabled=false){return h('button',{type:'button',className:'onenew-button',onClick,disabled},label)}
+function button(h,label,onClick,disabled=false){return h('button',{type:'button',className:'onenew-resource-button onenew-landing-action',onClick,disabled},label)}
 export function LandingLibraryButton({react:React,get,post}){
  const h=React.createElement,[open,setOpen]=React.useState(false),[items,setItems]=React.useState([]),[draft,setDraft]=React.useState(null),[batch,setBatch]=React.useState(''),[error,setError]=React.useState(''),[status,setStatus]=React.useState(''),[busy,setBusy]=React.useState(false),generation=React.useRef(0);
  React.useEffect(()=>{if(!open)return;let active=true;setBusy(true);get(root,opts).then(v=>{if(active)setItems(unwrap(v))}).catch(e=>{if(active)setError(message(e))}).finally(()=>{if(active)setBusy(false)});return()=>{active=false;generation.current++}},[open,get]);
