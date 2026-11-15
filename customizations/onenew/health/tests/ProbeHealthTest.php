@@ -45,7 +45,7 @@ class ProbeHealthTest extends TestCase
         $task = $response->json('tasks.0');
         $this->assertCount(1, $response->json('tasks'));
         $this->assertSame(10000, $task['timeout_ms']);
-        $this->assertSame('https://www.gstatic.com/generate_204', $task['payload']['target']);
+        $this->assertSame('http://cp.cloudflare.com/generate_204', $task['payload']['target']);
         $this->assertSame('public.example', $task['payload']['outbound']['settings']['server']);
         $this->assertSame(443, $task['payload']['outbound']['settings']['server_port']);
         $this->assertSame($user->uuid, $task['payload']['outbound']['settings']['uuid']);
@@ -312,6 +312,8 @@ class ProbeHealthTest extends TestCase
         $out = app(ProbeOutboundBuilder::class)->build($node, $user)['outbound']['settings'];
         $this->assertSame('public-key', $out['tls']['reality']['public_key']);
         $this->assertSame('reality.example', $out['tls']['server_name']);
+        $this->assertSame('127.0.0.1', $out['server']);
+        $this->assertSame(12345, $out['server_port']);
         $node->protocol_settings = ['network' => 'xhttp', 'tls' => 2,
             'network_settings' => ['path' => '/native', 'host' => 'edge.example', 'mode' => 'packet-up'],
             'reality_settings' => ['server_name' => 'reality.example', 'public_key' => 'public-key', 'private_key' => 'private-never-export', 'short_id' => 'abcd'],
