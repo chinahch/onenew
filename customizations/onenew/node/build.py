@@ -3,7 +3,7 @@ import argparse, gzip, hashlib, io, json, os, subprocess, tarfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = 'onenew-v0.1.6'
+VERSION = 'onenew-v0.1.7'
 UPSTREAM = '0a29338e1f102a462363ce3527417029f89bab28'
 
 def validate_source(source):
