@@ -128,12 +128,13 @@ namespace {
         check($payload['target'] === \App\Onenew\ProbeOutboundBuilder::TARGET, $name . ': wrong target');
         check(!str_contains(json_encode($payload), 'private-never-export'), $name . ': private value exported');
         if ($payload['kernel_type'] === 'xray') {
-            check(data_get($out, 'settings.vnext.0.address') === '127.0.0.1', $name . ': bypassed ingress');
+            check(data_get($out, 'settings.vnext.0.address') === 'public.example', $name . ': wrong public ingress');
+            check(data_get($out, 'settings.vnext.0.port') === 443, $name . ': wrong public port');
             check(data_get($out, 'settings.vnext.0.users.0.id') === $uuid, $name . ': wrong user');
             check(isset($out['stream_settings']), $name . ': stream_settings missing');
         } else {
-            check(data_get($out, 'settings.server') === '127.0.0.1', $name . ': bypassed ingress');
-            check(data_get($out, 'settings.server_port') === 12345, $name . ': wrong listener port');
+            check(data_get($out, 'settings.server') === 'public.example', $name . ': wrong public ingress');
+            check(data_get($out, 'settings.server_port') === 443, $name . ': wrong public port');
         }
         if ($type === 'shadowsocks') {
             check(data_get($out, 'settings.password') === \App\Utils\Helper::getServerKey(1700000000, 16) . ':' . \App\Utils\Helper::uuidToBase64($uuid, 16), 'SS2022 native password mismatch');
@@ -174,3 +175,4 @@ namespace {
         'Equivalent integer/string native listener ports produced different health revisions');
     echo count($cases) . " native builder projections, 5 refusal checks and port revision canonicalization passed (attribute shim, not Laravel/runtime validation)\n";
 }
+

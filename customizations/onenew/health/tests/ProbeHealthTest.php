@@ -38,7 +38,7 @@ class ProbeHealthTest extends TestCase
         $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertForbidden();
     }
 
-    public function test_poll_uses_real_user_and_loopback_and_encrypts_cached_credentials(): void
+    public function test_poll_uses_real_user_and_public_entry_and_encrypts_cached_credentials(): void
     {
         [$machine, $node, $user] = $this->fixture();
         $response = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk();
@@ -46,8 +46,8 @@ class ProbeHealthTest extends TestCase
         $this->assertCount(1, $response->json('tasks'));
         $this->assertSame(10000, $task['timeout_ms']);
         $this->assertSame('https://www.gstatic.com/generate_204', $task['payload']['target']);
-        $this->assertSame('127.0.0.1', $task['payload']['outbound']['settings']['server']);
-        $this->assertSame(12345, $task['payload']['outbound']['settings']['server_port']);
+        $this->assertSame('public.example', $task['payload']['outbound']['settings']['server']);
+        $this->assertSame(443, $task['payload']['outbound']['settings']['server_port']);
         $this->assertSame($user->uuid, $task['payload']['outbound']['settings']['uuid']);
         $stored = app(ProbeStore::class)->task($task['id']);
         $this->assertStringNotContainsString($user->uuid, json_encode($stored));
@@ -138,7 +138,7 @@ class ProbeHealthTest extends TestCase
         $next = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk()->json('tasks.0');
         $this->assertNotNull($next);
         $this->assertNotSame($first['id'], $next['id']);
-        $this->assertSame(23456, $next['payload']['outbound']['settings']['server_port']);
+        $this->assertSame(443, $next['payload']['outbound']['settings']['server_port']);
         $this->assertSame('running', app(ProbeService::class)->status($node->fresh())['state']);
         $this->withToken($machine->token)->postJson('/api/v3/server/probes/' . $first['id'] . '/result', [
             'machine_id' => $machine->id, 'lease' => $first['lease'], 'state' => 'succeeded',
@@ -292,6 +292,18 @@ class ProbeHealthTest extends TestCase
     public function test_builder_preserves_tls_sni_reality_and_refuses_unrepresentable_native_options(): void
     {
         [, $node, $user] = $this->fixture();
+        $node->type = 'vless';
+        $node->host = '101.69.181.108';
+        $node->protocol_settings = ['tls' => 1, 'network' => 'ws',
+            'tls_settings' => ['server_name' => 'aethercloud-us.chinaone.ggff.net'],
+            'network_settings' => ['path' => '/juhost28000', 'headers' => ['Host' => 'aethercloud-us.chinaone.ggff.net']]];
+        $public = app(ProbeOutboundBuilder::class)->build($node, $user)['outbound']['settings'];
+        $this->assertSame('101.69.181.108', $public['server']);
+        $this->assertSame(443, $public['server_port']);
+        $this->assertSame('aethercloud-us.chinaone.ggff.net', $public['tls']['server_name']);
+        $this->assertSame('/juhost28000', $public['transport']['path']);
+        $this->assertSame('aethercloud-us.chinaone.ggff.net', $public['transport']['headers']['Host']);
+        $node->host = 'public.example';
         $node->protocol_settings = ['tls' => 1, 'tls_settings' => ['server_name' => 'certificate.example']];
         $payload = app(ProbeOutboundBuilder::class)->build($node, $user);
         $this->assertSame('certificate.example', $payload['outbound']['settings']['tls']['server_name']);
@@ -307,7 +319,7 @@ class ProbeHealthTest extends TestCase
         $payload = app(ProbeOutboundBuilder::class)->build($node, $user);
         $this->assertSame('xray', $payload['kernel_type']);
         $this->assertSame('native-public-key', $payload['outbound']['settings']['vnext'][0]['users'][0]['encryption']);
-        $this->assertSame('127.0.0.1', $payload['outbound']['settings']['vnext'][0]['address']);
+        $this->assertSame('public.example', $payload['outbound']['settings']['vnext'][0]['address']);
         $this->assertSame('xhttp', $payload['outbound']['stream_settings']['network']);
         $this->assertSame('/native', $payload['outbound']['stream_settings']['xhttpSettings']['path']);
         $this->assertSame('public-key', $payload['outbound']['stream_settings']['realitySettings']['publicKey']);
@@ -342,3 +354,4 @@ class ProbeHealthTest extends TestCase
         return $route;
     }
 }
+
