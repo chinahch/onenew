@@ -134,7 +134,7 @@ fi
         init = self.root / 'etc/init.d/caddy'
         init.parent.mkdir(parents=True, exist_ok=True)
         description = 'Onenew Native Node' if valid else 'Foreign Service'
-        init.write_text('description="' + description + '"\ncommand="/usr/local/bin/caddy"\ncommand_args="-c /etc/caddy/config.yml"\nsupervisor="supervise-daemon"\n')
+        init.write_text('description="' + description + '"\ncommand="' + self.posix(self.installed) + '/caddy"\ncommand_args="-c ' + self.posix(self.native) + '/config.yml"\nsupervisor="supervise-daemon"\n')
         init.chmod(0o755)
         (self.system/'caddy.service').unlink()
 

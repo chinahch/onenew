@@ -66,7 +66,7 @@ if [ "$UPGRADE" -eq 1 ]; then
     [ "$(property EnvironmentFiles)" = "$ROOT/credentials.env (ignore_errors=no)" ] || fail 'Systemd credentials binding does not match the native installation'
     EXEC=$(property ExecStart)
     [[ "$EXEC" == '{ path=/usr/local/bin/caddy ; argv[]=/usr/local/bin/caddy -c /etc/caddy/config.yml ; ignore_errors=no ;'* ]] && \
-      [ "$(printf '%s' "$EXEC" | grep -o 'argv\\[\\]=' | wc -l)" -eq 1 ] || fail 'Systemd ExecStart does not match the native installation'
+      [ "$(printf '%s' "$EXEC" | grep -o 'argv\[\]=' | wc -l)" -eq 1 ] || fail 'Systemd ExecStart does not match the native installation'
     for hook in ExecStartPre ExecStartPost ExecStop ExecStopPost ExecReload; do
       [ -z "$(property "$hook")" ] || fail 'Custom systemd execution hooks are not supported for upgrade'
     done
