@@ -10,10 +10,8 @@ def apply(source):
     new = 'const Target = "http://cp.cloudflare.com/generate_204"'
     if text.count(old) + text.count(new) != 1:
         raise ValueError('Health target contract anchor changed')
-    # Accept only the two fixed targets during a rolling panel/node upgrade.
-    text = text.replace(old, new).replace(
-        't.Payload.Target != Target ||',
-        '(t.Payload.Target != Target && t.Payload.Target != "https://www.gstatic.com/generate_204") ||')
+    # The production gate continues to accept only the fixed Cloudflare target.
+    text = text.replace(old, new)
     file.write_text(text, encoding='utf-8', newline='\n')
     shutil.copyfile(here / 'health_contract_test.go', source / 'internal/probe/onenew_health_contract_test.go')
     manifest = source / 'build-source.json'
