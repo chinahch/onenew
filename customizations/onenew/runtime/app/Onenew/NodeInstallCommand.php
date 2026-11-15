@@ -8,7 +8,7 @@ final class NodeInstallCommand
     public static function make(string $panel, string $token, int $machineId): string
     {
         self::validatePanel($panel, $machineId);
-        $installer = 'https://raw.githubusercontent.com/chinahch/onenew/node-v0.1.4/customizations/onenew/node/install.sh';
+        $installer = 'https://raw.githubusercontent.com/chinahch/onenew/node-v0.1.5/customizations/onenew/node/install.sh';
         // Works when pasted into either a root shell or a sudo-enabled account.
         return sprintf('curl -fsSL %s | %s -- --mode machine --panel %s --token %s --machine-id %d',
             escapeshellarg($installer), '$(if [ "$(id -u)" -eq 0 ]; then printf "bash -s"; else printf "sudo bash -s"; fi)',

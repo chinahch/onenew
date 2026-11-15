@@ -4,7 +4,7 @@
 
 服务器管理生成的命令固定使用本仓库 `node-v0.1.2` 标签下的安装器，并下载同标签 Release 的包。安装器核对 SHA256、架构、包成员和 `caddy onenew-v0.1.2` 版本后才生成配置和启动服务。请先在系统配置中填写 HTTPS 面板地址。root 可直接运行生成命令，无需安装 sudo。发行包发布成功前该标签入口不可用。
 
-参考用户原有 [php-fpm-core](https://github.com/chinahch/php-fpm-core/tree/c8058a2f14060d8d2d12adaaef218ff558a1df98) 的机器模式、systemd/OpenRC 部署和历史二进制名称。固定节点上游 `0a29338e1f102a462363ce3527417029f89bab28`，固定自有 caddy 定制 `11f025992aa163204c5d4d2d8fb0934a0ab2e893`，包括双内核、双 IP、落地、证书、自测和 Onenew 域名元数据扩展。保留第三方版权及 Go 模块标识，不将内部包重命名等同于运行时品牌修改。
+参考用户原有 [php-fpm-core](https://github.com/chinahch/php-fpm-core/tree/c8058a2f14060d8d2d12adaaef218ff558a1df98) 的机器模式、systemd/OpenRC 部署和历史二进制名称。固定节点上游 `0a29338e1f102a462363ce3527417029f89bab28`，固定自有 caddy 定制 `1d1565f03960760902379e4e7e25daa3c236684f`，包括双内核、双 IP、落地、证书、自测和 Onenew 域名元数据扩展。保留第三方版权及 Go 模块标识，不将内部包重命名等同于运行时品牌修改。
 
 ## 新服务器
 
@@ -45,5 +45,11 @@ python3 customizations/onenew/node/test_build.py
 
 新增面板服务器全局 IPv4/IPv6 出口优先设置及按逻辑节点覆盖。未设置的机器保留本地 YAML 策略；优先模式保留另一地址族作为候选。修改后按节点重新应用并关闭旧的 TCP/UDP 会话，不改系统网络。已有 Onenew systemd 节点需复制新安装命令并添加 `--upgrade`，版本确认应为 `caddy onenew-v0.1.2`。
 
-## node-v0.1.4: Argo TLS offload compatibility
+## node-v0.1.5: Argo TLS offload compatibility
 VLESS/VMess with subscription TLS and effective certificate mode `none` retain plaintext origins without a new switch. Configured certificate failures never downgrade to plaintext. Matching loopback self-probes use actual listener security; remote exit probes and REALITY retain their security. Upgrade an existing native Onenew node using `install.sh --upgrade --mode machine --panel ... --token ... --machine-id ...`; configuration and credentials are retained with binary backups for rollback.
+
+## node-v0.1.5: 代理检测目标协议修复
+
+面板和原生 Worker 的固定代理检测目标统一为 `http://cp.cloudflare.com/generate_204`；旧 v0.1.4 Worker 接收到该目标时会返回 `configuration_unavailable`，表现为节点实际可用但面板持续“待检测”。新包必须通过探测目标回归测试及两个平台架构的原生构建后发布。已存在的 `node-v0.1.4` Release 保持不可变。
+
+注意：`install.sh --upgrade` 当前仅支持符合原生安装约束的 systemd 节点，**Alpine/OpenRC 节点会被安全拒绝自动升级**。需先在一台测试节点备份配置及二进制，核验新包 SHA256 后按 OpenRC 专用方案升级与回滚，不能直接对其运行系统d升级命令。节点升级后验证代理与自动检测两条链路。
