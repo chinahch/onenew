@@ -7,5 +7,5 @@ export function probeLabel(probe?:Probe|null){
  if(!probe)return '尚未检测'
  if(probe.error_code==='machine_unavailable')return '服务器未连接'
  if(probe.state==='succeeded')return '连通正常'
- return ({queued:'排队中',running:'检测中',failed:'请求失败',unsupported:'不支持检测',expired:'任务过期',pending:'待检测'} as Record<string,string>)[probe.state]||'未知状态'
+ return ({queued:'排队中',running:'检测中',failed:'请求失败',unsupported:'不支持检测',expired:'检测超时',pending:'待检测'} as Record<string,string>)[probe.state]||'未知状态'
 }

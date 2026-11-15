@@ -239,7 +239,9 @@ export function planRules({link,core,tag,services,customDomains='',mode='replace
   return {outbounds,routes,summary:`${mode==='replace'?'整节点覆盖：清除全部旧出口和规则':'仅替换选定服务：保留其他规则'}；出口 ${oldOutbounds.length} → ${outbounds.length}，规则 ${oldRoutes.length} → ${routes.length}。`};
 }
 export function healthLabel(node,now=Date.now()){
-  const h=node?.proxy_health,t=Date.parse(h?.finished_at||''),age=now-t;
+  const h=node?.proxy_health,t=Date.parse(h?.finished_at||h?.created_at||''),age=now-t;
+  if(Number.isFinite(t)&&age>=0&&age<600000&&h?.state==='running')return {label:'检测中',tone:'pending',detail:'服务器正在执行真实代理自测'};
+  if(h?.state==='expired')return {label:'检测超时',tone:'pending',detail:'上次自测任务已过期，等待服务器重新领取检测任务'};
   if(!Number.isFinite(t)||age<0||age>=600000||!['succeeded','failed'].includes(h?.state))return {label:'待检测',tone:'pending',detail:'尚无十分钟内的真实代理检测结果'};
   return {label:h.state==='succeeded'?'连通在线':'故障',tone:h.state==='succeeded'?'success':'failed',detail:`真实代理检测：${h.finished_at}${h.error_code?' · '+h.error_code:''}`};
 }

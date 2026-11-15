@@ -7,7 +7,7 @@ import {connectionState} from '../serverState'
 import {nodeAvailability} from '../serverCards'
 const rows=ref<any[]>([]),busy=ref(false),error=ref(''),now=ref(Date.now())
 const summary=computed(()=>rows.value.reduce((s,n)=>{s[nodeAvailability(n,now.value).group]++;return s},{online:0,abnormal:0,pending:0}))
-const errors:Record<string,string>={timeout:'真实代理请求超时',proxy_failed:'代理链路连接失败',target_failed:'测试目标访问失败',configuration_unavailable:'节点配置暂不可用',no_eligible_users:'暂无满足套餐、额度及有效期条件的账号，未执行代理自测',account_unavailable:'自测账号已不可用，将在下一轮重新选择',machine_unavailable:'服务器未连接',upgrade_required:'请升级原生节点服务',connector_only:'此连接器请查看下方实际运行状态',expired:'自测任务未在有效期内完成'}
+const errors:Record<string,string>={timeout:'真实代理请求超时',proxy_failed:'代理链路连接失败',target_failed:'测试目标访问失败',configuration_unavailable:'节点配置暂不可用',no_eligible_users:'暂无满足套餐、额度及有效期条件的账号，未执行代理自测',account_unavailable:'自测账号已不可用，将在下一轮重新选择',machine_unavailable:'服务器未连接',upgrade_required:'请升级原生节点服务',connector_only:'此连接器请查看下方实际运行状态',expired:'自测任务已过期，服务器下次轮询将自动重试'}
 const connectorLabels:Record<string,string>={ready:'连接器就绪',starting:'正在连接',unhealthy:'检查失败',stopped:'已停止',queue_blocked:'上报队列阻塞'}
 let timer:ReturnType<typeof setTimeout>|undefined,active=true
 async function load(){busy.value=true;try{const data=await api('/api/me/nodes');if(active){rows.value=data;now.value=Date.now();error.value=''}}catch(e){if(active){now.value=Date.now();error.value=(e as Error).message}}finally{busy.value=false;if(active)timer=setTimeout(load,15000)}}

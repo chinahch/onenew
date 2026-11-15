@@ -130,3 +130,9 @@ test('reserved outbound tags cannot suppress built-in routing for any target ker
     assert.throws(()=>planRules({...base,core,tag,link:'socks://exit.example:1080'}),/保留/);
   }
 });
+
+test('health distinguishes an active or expired task from a generic pending state',()=>{
+ const now=Date.parse('2026-11-14T12:00:00Z');
+ assert.equal(healthLabel({proxy_health:{state:'running',created_at:'2026-11-14T11:59:00Z'}},now).label,'检测中');
+ assert.equal(healthLabel({proxy_health:{state:'expired',created_at:'2026-11-14T11:55:00Z'}},now).label,'检测超时');
+});
