@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {restoreCommand,startMigration,downloadMigration} from './src/migration.mjs';
+import {restoreCommand,startMigration,downloadMigration,stopOldServerCommand,cleanOldServerCommand} from './src/migration.mjs';
 import {patchBundle} from './patch.mjs';
 test('migration password stays in POST body and invalid confirmations never enqueue',async()=>{
  const calls=[];await startMigration(async(...args)=>calls.push(args),'private-migration-pass','private-migration-pass');
@@ -24,4 +24,17 @@ test('download ticket goes through a form POST rather than URL or browser-sized 
 test('system settings includes a dedicated migration route and navigation entry',()=>{
  const original=fs.readFileSync(process.env.ONENEW_ADMIN_UPSTREAM?`${process.env.ONENEW_ADMIN_UPSTREAM}/assets/index-CEIYH7i8.js`:new URL('../../../../xboard-admin-dist/assets/index-CEIYH7i8.js',import.meta.url),'utf8');const result=patchBundle(original,'');
  assert.ok(result.includes('href:"/config/system/migration"'));assert.ok(result.includes('OnenewAdmin.MigrationPage,{react:H,get:IL,post:RL}'));
+});
+
+test('old-server cleanup is explicit, confirmed and confined to the installation directory',()=>{
+ assert.ok(stopOldServerCommand.includes('-f /opt/onenew/compose.yaml down --remove-orphans'));
+ assert.ok(!stopOldServerCommand.includes('rm '));
+ assert.ok(stopOldServerCommand.includes('cd /opt/onenew &&'));
+ assert.ok(cleanOldServerCommand.includes('-u COMPOSE_PROJECT_NAME -u COMPOSE_FILE'));
+ assert.ok(cleanOldServerCommand.includes("|| { echo '目录校验失败，停止'; exit 1; }"));
+ assert.ok(cleanOldServerCommand.includes('realpath -- "$target"'));
+ assert.ok(cleanOldServerCommand.includes('DELETE-OLD-ONENEW'));
+ assert.ok(cleanOldServerCommand.includes('rm -rf --one-file-system -- /opt/onenew'));
+ assert.ok(!cleanOldServerCommand.includes('system prune'));
+ assert.ok(!cleanOldServerCommand.includes('systemctl'));
 });
