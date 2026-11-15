@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-revision='' package='' target='/opt/onenew'
+revision='' package='' target='/opt/onenew' port='7001' public_host='' 
 while (($#)); do
   case "$1" in
-    --revision|--package|--target) (($# >= 2)) || { echo 'Missing argument' >&2; exit 1; }; key="$1"; value="$2"; shift 2; case "$key" in --revision) revision="$value";; --package) package="$value";; --target) target="$value";; esac;;
+    --revision|--package|--target|--port|--public-host) (($# >= 2)) || { echo 'Missing argument' >&2; exit 1; }; key="$1"; value="$2"; shift 2; case "$key" in --revision) revision="$value";; --package) package="$value";; --target) target="$value";; --port) port="$value";; --public-host) public_host="$value";; esac;;
     *) echo 'Unknown argument' >&2; exit 1;;
   esac
 done
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo 'A full lowercase source revision is required.' >&2; exit 1; }
+[[ "$port" =~ ^[0-9]{1,5}$ ]] && ((10#$port >= 1 && 10#$port <= 65535)) || { echo 'Invalid public port.' >&2; exit 1; }
+port=$((10#$port))
+[[ -z "$public_host" || "$public_host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || { echo 'Public host must be an IPv4 address or hostname without a scheme.' >&2; exit 1; }
 for command in docker curl tar mktemp realpath; do command -v "$command" >/dev/null || { echo "Missing prerequisite: $command" >&2; exit 1; }; done
 docker compose version >/dev/null
 [[ -f "$package" && ! -L "$package" ]] || { echo 'Package must be a regular file.' >&2; exit 1; }
@@ -50,11 +53,33 @@ done
 printf 'ONENEW_REVISION=%s\n' "$revision" > "$work/source/.env.compose.restore"
 template="$work/source/compose.onenew.sample.yaml"
 [[ $(grep -c '^name: onenew$' "$template") == 1 && $(grep -c '^    image: onenew:local$' "$template") == 1 ]] || { echo 'Unexpected trusted Compose template; refusing to deploy.' >&2; exit 1; }
-sed -e "s/^name: onenew$/name: $project/" -e "s/^    image: onenew:local$/    image: $image/" "$template" > "$work/source/compose.yaml"
+binding='      - "${ONENEW_BIND_IP:-127.0.0.1}:${ONENEW_PORT:-7001}:7001"'
+[[ $(grep -Fxc -- "$binding" "$template") == 1 ]] || { echo 'Unexpected Compose port binding.' >&2; exit 1; }
+sed -e '/ONENEW_BIND_IP/c\      - "0.0.0.0:'"$port"':7001"' -e "s/^name: onenew$/name: $project/" -e "s/^    image: onenew:local$/    image: $image/" "$template" > "$work/source/compose.yaml"
 [[ ! -e "$target" ]] || rmdir -- "$target"
 mv -T -n -- "$work/source" "$target"
 [[ ! -e "$work/source" ]] || { echo 'Target changed concurrently; refusing to overwrite.' >&2; exit 1; }
 cd -- "$target"
 ONENEW_REVISION="$revision" docker compose --project-name "$project" --env-file .env.compose.restore -f compose.yaml up -d --build --wait
 ONENEW_REVISION="$revision" docker compose --project-name "$project" --env-file .env.compose.restore -f compose.yaml exec -T onenew php artisan onenew:migration-assets
-printf 'Restored to %s. Verify the local service and credentials, then switch DNS/proxy/tunnel. Keep the old server available for rollback.\n' "$target"
+# Resolve the host through a physical default interface, avoiding WARP/tunnel egress.
+if [[ -z "$public_host" ]] && command -v ip >/dev/null; then
+  iface=$(ip -4 route show table main default | awk '{for(i=1;i<=NF;i++) if($i=="dev") {print $(i+1);exit}}')
+  case "$iface" in ''|*warp*|*WARP*|wg*|tun*|tap*|docker*|br-*|veth*|cni*|tailscale*) ;;
+    *) candidate=$(curl -4 --noproxy '*' --interface "$iface" --fail --silent --connect-timeout 3 --max-time 5 https://api.ipify.org || true)
+       if [[ "$candidate" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then public_host="$candidate"; fi;;
+  esac
+fi
+printf '\nRestored to %s. Public listener: 0.0.0.0:%s\n' "$target" "$port"
+# Read the restored admin route using the same fallback as routes/web.php. Works with older source revisions too.
+ONENEW_REVISION="$revision" docker compose --project-name "$project" --env-file .env.compose.restore -f compose.yaml exec -T onenew php /dev/stdin "$public_host" "$port" <<'PHP'
+<?php
+require '/www/vendor/autoload.php';
+$app = require '/www/bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$path = (string) admin_setting('secure_path', admin_setting('frontend_admin_path', hash('crc32b', config('app.key'))));
+$path = implode('/', array_map('rawurlencode', explode('/', trim($path, '/'))));
+$host = $argv[1] ?: 'YOUR_PUBLIC_IP';
+printf("User URL: http://%s:%s/\nAdmin URL: http://%s:%s/%s\n", $host, $argv[2], $host, $argv[2], $path);
+PHP
+printf 'Allow TCP %s in the server firewall/security group. Verify login and subscriptions before switching DNS/proxy/tunnel. Keep the old server for rollback.\n' "$port"

@@ -5,6 +5,21 @@ export function restoreCommand(revision,filename){
  if(!/^[a-f0-9]{40}$/.test(revision)||!/^onenew-migration-[a-f0-9-]{36}\.onm$/.test(filename))throw new Error('迁移版本或文件名无效');
  return `bash <(curl -fsSL 'https://raw.githubusercontent.com/chinahch/onenew/${revision}/customizations/onenew/migration/restore.sh') --revision '${revision}' --package '/root/${filename}' --target '/opt/onenew'`;
 }
+export const stopOldServerCommand = `cd /opt/onenew && env -u COMPOSE_PROJECT_NAME -u COMPOSE_FILE docker compose --env-file /dev/null -f /opt/onenew/compose.yaml down --remove-orphans`;
+export const cleanOldServerCommand = `# 仅在旧服务器执行；先确认新站登录、订阅及节点正常，并保存迁移包。
+(
+  set -eu
+  target=/opt/onenew
+  [ "$(realpath -- "$target")" = /opt/onenew ] && [ ! -L "$target" ] || { echo '目录校验失败，停止'; exit 1; }
+  [ -f "$target/compose.yaml" ] || { echo '未找到旧面板 compose.yaml，停止'; exit 1; }
+  printf '当前服务器: '; hostname
+  read -r -p '永久删除旧面板全部数据？输入 DELETE-OLD-ONENEW: ' answer </dev/tty
+  [ "$answer" = DELETE-OLD-ONENEW ] || exit 1
+  cd "$target"
+  env -u COMPOSE_PROJECT_NAME -u COMPOSE_FILE docker compose --env-file /dev/null -f /opt/onenew/compose.yaml down --remove-orphans
+  cd /opt
+  rm -rf --one-file-system -- /opt/onenew
+)`;
 export function startMigration(post,password,confirmation){
  const bytes=new TextEncoder().encode(password).length;
  if(bytes<12||bytes>128||/[\x00-\x1f\x7f]/.test(password)||password!==confirmation)throw new Error('请填写两次相同的迁移密码（12–128 字节，不含控制字符）');
@@ -43,7 +58,8 @@ export function MigrationPage({react:React,get,post}){
    h('button',{type:'button',className:'onenew-resource-button',onClick:async()=>{try{await navigator.clipboard.writeText(command);setCopied(true)}catch{setError('复制失败，请手动复制命令')}}},copied?'已复制':'复制恢复命令')),
   h('div',{className:'onenew-notice'},h('strong',null,'切换步骤'),h('ol',null,
    h('li',null,'安排维护窗口，生成最终迁移包；包只包含生成时的数据，之后的新写入不会自动同步。'),
-   h('li',null,'新服务器恢复到新的 /opt/onenew 目录；目录非空时停止，不覆盖现有部署。'),
+   h('li',null,'新服务器恢复到新的 /opt/onenew 目录，自动开启公网 7001 端口并显示用户及管理后台地址；请放行安全组端口。目录非空时停止。'),
    h('li',null,'确认新站登录、订阅和节点凭据正常，再切换域名解析、反向代理或 CF Tunnel。沿用原域名时节点机无需重新安装。'),
-   h('li',null,'缓存、登录会话与运行中的队列任务不迁移。保留旧服务器，以便回退。'))));
+   h('li',null,'缓存、登录会话与运行中的队列任务不迁移。保留旧服务器，以便回退。'))),
+  h('div',{className:'onenew-preview'},h('h3',null,'旧服务器卸载与清理'),h('p',{className:'onenew-help'},'确认域名已切换，新站登录、订阅、节点正常后，仅在旧服务器执行。先停止旧面板，保留数据供回退：'),h('pre',null,stopOldServerCommand),h('p',{className:'onenew-help'},'确认无需回退后，再执行永久清理。将删除 /opt/onenew 内数据库、配置、插件及本地迁移包；提前下载备份。不会卸载 Docker、清理其他项目或停止节点机 caddy。自定义安装目录请手工核对处理。'),h('pre',null,cleanOldServerCommand)));
 }
