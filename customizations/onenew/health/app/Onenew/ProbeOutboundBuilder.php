@@ -139,7 +139,7 @@ class ProbeOutboundBuilder extends SingBox
         $ns = $s['network_settings'];
         $headers = $ns['headers'] ?? (isset($ns['host']) ? ['Host'=>$ns['host']] : []);
         $stream = ['network'=>'ws', 'security'=>$tls ? 'tls' : 'none',
-            'wsSettings'=>['path'=>$ns['path'] ?? '/', 'headers'=>$headers ?: new \\stdClass()]];
+            'wsSettings'=>['path'=>$ns['path'] ?? '/', 'headers'=>$headers ?: new \stdClass()]];
         if ($tls) $stream['tlsSettings'] = ['serverName'=>$s['tls_settings']['server_name']];
         return ['kernel_type'=>'xray', 'target'=>self::TARGET, 'outbound'=>[
             'tag'=>'onenew-probe', 'protocol'=>'shadowsocks',
