@@ -104,7 +104,7 @@ if [ "$CHECK" -eq 1 ]; then printf 'Verified %s (%s); no service or configuratio
 # Never rotate local credentials or stop a working service until the panel
 # has accepted exactly this machine ID and token. A CLI-only token rewrite
 # cannot detect stale or mistyped tokens, and previously caused outage loops.
-[[ "$TOKEN" =~ ^[A-Za-z0-9_+./=~-]{16,256}$ ]] || fail 'Machine token contains unsupported characters'
+[[ ${#TOKEN} -ge 16 && ${#TOKEN} -le 256 && "$TOKEN" =~ ^[A-Za-z0-9_+./=~-]+$ ]] || fail 'Machine token contains unsupported characters'
 printf '{"machine_id":%s,"token":"%s"}' "$MACHINE" "$TOKEN" > "$STAGE/auth-request.json"
 AUTH_STATUS=$(curl --proto '=https' --tlsv1.2 -sS --max-time 15 \
   --request POST --header 'Content-Type: application/json' \
