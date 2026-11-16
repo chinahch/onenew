@@ -1,3 +1,4 @@
+import {WebRestore} from './web-restore.mjs';
 import {CloudBackup} from './cloud-backup.mjs';
 const root='/api/onenew/admin/migration';
 const getApi=(get,url)=>get(url,{baseURL:'/'});
@@ -45,9 +46,9 @@ export function MigrationPage({react:React,get,post}){
  const inProgress=task&&!['ready','failed','expired'].includes(task.state);
  const filename=task?`onenew-migration-${task.id}.onm`:'';
  const command=info?.supported&&task?restoreCommand(task.revision||info.revision,filename):'';
- return h('section',{className:'onenew-migration onenew-landing','aria-label':'一键迁移'},
-  h('h2',null,'一键迁移'),h('p',{className:'onenew-help'},'源码仓库私有化后，新面板服务器需先将仅可读取源码的 GitHub 凭据保存到 /root/.config/onenew/github.token，权限600。不要使用节点 Token；此凭据不包含在迁移包内。'),h('p',{className:'onenew-help'},'生成加密迁移包，在新服务器执行一条恢复命令。保留账号、订阅链接、节点凭据、插件及站点设置。'),
-  h(CloudBackup,{react:React,get,post}),
+ return h('section',{className:'onenew-migration onenew-landing','aria-label':'备份与恢复'},
+  h('h2',null,'备份与恢复'),h('p',{className:'onenew-help'},'生成加密备份、自动上传 Google 云盘，或选择电脑上的备份文件验证恢复。保留账号、订阅、节点、落地及站点设置。'),
+  h(WebRestore,{react:React,get,post}),h(CloudBackup,{react:React,get,post}),
   error&&h('p',{role:'alert',className:'onenew-error'},error),!info&&!error&&h('p',null,'正在检查部署…'),
   info&&!info.supported&&h('p',{className:'onenew-notice'},info.reason),
   info?.supported&&h(React.Fragment,null,
@@ -56,7 +57,7 @@ export function MigrationPage({react:React,get,post}){
    h('p',{className:'onenew-help'},'密码请自行保管，恢复时需要输入。迁移包在服务器保留 1 小时，下载后请妥善保存。'),
    h('button',{type:'button',className:'onenew-button',disabled:busy||!!inProgress||!password||!confirmation,onClick:generate},inProgress?'正在生成…':'生成加密迁移包')),
   task&&h('div',{className:'onenew-notice',role:'status'},h('strong',null,phases[task.state]||'正在生成'),task.error&&h('p',null,task.error),task.state==='ready'&&h('div',{className:'onenew-resource-actions'},h('span',null,`${(task.bytes/1048576).toFixed(1)} MiB`),h('button',{type:'button',className:'onenew-resource-button',disabled:busy,onClick:download},'下载迁移包'))),
-  command&&h('div',{className:'onenew-preview'},h('h3',null,'在新服务器恢复'),h('p',{className:'onenew-help'},`先将 ${filename} 上传到新服务器 /root，安装好 Docker Compose，再在终端执行：`),h('pre',null,command),
+  command&&h('div',{className:'onenew-preview'},h('h3',null,'新服务器尚未安装面板时恢复'),h('p',{className:'onenew-help'},`先将 ${filename} 上传到新服务器 /root，安装好 Docker Compose，再在终端执行：`),h('pre',null,command),
    h('button',{type:'button',className:'onenew-resource-button',onClick:async()=>{try{await navigator.clipboard.writeText(command);setCopied(true)}catch{setError('复制失败，请手动复制命令')}}},copied?'已复制':'复制恢复命令')),
   h('div',{className:'onenew-notice'},h('strong',null,'切换步骤'),h('ol',null,
    h('li',null,'安排维护窗口，生成最终迁移包；包只包含生成时的数据，之后的新写入不会自动同步。'),

@@ -23,6 +23,7 @@ RUN pnpm test && pnpm build
 
 FROM upstream AS runtime
 WORKDIR /www
+RUN apk add --no-cache su-exec
 ARG ONENEW_REVISION=local
 COPY customizations/onenew /opt/onenew
 # Immutable local IPv4/IPv6 lookup data; no end-user IP is sent off-server.

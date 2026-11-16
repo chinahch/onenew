@@ -71,6 +71,21 @@ final class SubscriptionGuardFeatureTest extends TestCase
         self::assertSame('',DB::table('v2_subscribe_log')->where('user_id',$user->id)->value('ip_region'));
     }
 
+    public function test_daily_same_ip_lists_only_latest_pull_without_removing_raw_history():void
+    {
+        $user=$this->account();$plugin=$this->guard();
+        $this->pull($plugin,$user,'120.229.45.2','old-client');
+        $this->pull($plugin,$user,'120.229.45.2','new-client');
+        $this->pull($plugin,$user,'120.229.45.2','yesterday-client');
+        DB::table('v2_subscribe_log')->where('user_agent','yesterday-client')->update(['created_at'=>now()->subDay()]);
+        Sanctum::actingAs($this->account(['is_admin'=>true]));
+        $response=$this->getJson('/api/onenew/admin/subscription-logs?user_id='.$user->id)->assertOk()->assertJsonPath('total',2)->assertJsonPath('data.0.user_agent','new-client');
+        $today=collect($response->json('data'))->firstWhere('user_agent','new-client');
+        self::assertNotNull($today);self::assertSame(2,$today['pull_count']);self::assertSame('中国移动',$today['ip_isp']);
+        self::assertSame(3,DB::table('v2_subscribe_log')->where('user_id',$user->id)->count());
+        $this->getJson('/api/onenew/admin/subscription-logs?user_id='.$user->id.'&search=old-client')->assertOk()->assertJsonPath('total',0);
+    }
+
     private function guard(array $config=[]):Plugin
     {
         $p=new Plugin('subscription_guard');$p->setConfig($config+['rate_limit_seconds'=>0,'enable_telegram_notify'=>false]);return $p;

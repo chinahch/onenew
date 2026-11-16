@@ -89,7 +89,7 @@ export function patchBundle(source,runtime){
   if(!install.endsWith(installSuffix))throw new Error('服务器安装命令组件边界已变更');
   install=install.slice(0,-installSuffix.length)+',Q.jsx(OnenewAdmin.UpgradeCommand,{react:H,command:a?.upgrade_command,loading:l})'+installSuffix;
   source=source.slice(0,installStart)+install+source.slice(installEnd);
-  source=replaceOnce(source,'const KGt=[','const KGt=[{title:"能量补充审核",key:"energy",icon:Q.jsx(Zm,{size:18}),href:"/config/system/energy",description:"审核用户补充申请"},{title:"一键迁移",key:"migration",icon:Q.jsx(Zm,{size:18}),href:"/config/system/migration",description:"加密导出并恢复到新服务器"},');
+  source=replaceOnce(source,'const KGt=[','const KGt=[{title:"能量补充审核",key:"energy",icon:Q.jsx(Zm,{size:18}),href:"/config/system/energy",description:"审核用户补充申请"},{title:"备份与恢复",key:"migration",icon:Q.jsx(Zm,{size:18}),href:"/config/system/migration",description:"加密备份、云盘上传及网页恢复"},');
   source=replaceOnce(source,'{path:"subscribe-template",element:Q.jsx(WQe,{})}',
     '{path:"energy",element:Q.jsx(OnenewAdmin.EnergyRequests,{react:H,get:IL,post:RL})},{path:"migration",element:Q.jsx(OnenewAdmin.MigrationPage,{react:H,get:IL,post:RL})},{path:"subscribe-template",element:Q.jsx(WQe,{})}');
   source=replaceOnce(source,'{path:"plugins/:pluginCode/*",','{path:"plugins/subscription_guard/logs",element:Q.jsx(OnenewAdmin.SubscriptionLogsPage,{react:H,get:IL})},{path:"plugins/:pluginCode/*",');

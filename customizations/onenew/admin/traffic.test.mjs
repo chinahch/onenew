@@ -134,3 +134,5 @@ test('actual API coverage enums render Chinese notices and never expose unknown 
   runner.cleanup();
  }
 });
+
+test('page selection is bounded and rejects invalid input',async()=>{const {trafficPage}=await import('./src/traffic.mjs');assert.equal(trafficPage('12',15),12);assert.equal(trafficPage('99',15),15);assert.equal(trafficPage('0',15),1);assert.equal(trafficPage('',15),null);assert.equal(trafficPage('1.5',15),null)});

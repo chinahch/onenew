@@ -1,0 +1,11 @@
+# Browser backup restore
+
+System settings → 备份与恢复 accepts a computer-selected encrypted `.onm` package. Uploads use ordered 512KiB chunks with idempotent retry. Verification authenticates/decrypts into a private directory, checks SQLite integrity, required tables and known migration compatibility, and shows counts before confirmation. Wrong passwords or incompatible packages never modify live data.
+
+Only official SQLite Docker deployments using the bundled local Redis (including `/data/redis.sock`) are supported. The feature first requires upgrading the panel image; it cannot install Docker on a completely empty server. Target `.env` infrastructure/DB path stay intact; backup APP_KEY, panel DB, plugins and theme are restored. Tokens/queues are cleared and cloud backup is disabled. The confirmed action overwrites current data, not merges it.
+
+The fixed root coordinator controls only known Supervisor writer groups via a root-only Unix socket and, during pre-start recovery, resets the bundled Redis persistence at fixed paths. It never boots Laravel or executes uploaded package scripts. All verification, file writes and migrations run as `www`. Signed bounded requests contain no plaintext password; credentials stay encrypted in private files and passwords never enter argv. Root intent records and a child execution lock fence restarts. An interrupted data switch is rolled back before startup, including stale settings cache, before writers resume. No Docker socket is mounted.
+
+Before switching, a private SQLite snapshot and encrypted rollback package are created. Restore failures roll back key, DB and resources. Recent rollback packages can be downloaded by administrators for 24 hours, using one-time POST download tickets. Their password is the supplied restore password. Temporary decrypted data/credentials are removed after completion; expired tasks are pruned. Hard storage/permission failures keep writers stopped rather than serve a half-restored database.
+
+Validation includes portable wrong-password/schema/key/DB/plugin/theme rollback tests, protected upload/confirmation/status tests, and disposable-container HTTP tests covering real upload, restart, deliberate coordinator interruption and stale imported Redis settings.

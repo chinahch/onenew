@@ -62,7 +62,8 @@ jobs:
             php /opt/onenew/domains/tests/domains.php
             php /opt/onenew/cloud-backup/tests/schedule.php
             php /opt/onenew/geoip/tests/regions.php
-            APP_ENV=testing APP_KEY=base64:aGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGg= DB_CONNECTION=sqlite DB_DATABASE=:memory: CACHE_DRIVER=array QUEUE_CONNECTION=sync SESSION_DRIVER=array vendor/bin/phpunit --bootstrap /opt/onenew/testing/ci-bootstrap.php /opt/onenew/health/tests /opt/onenew/user-portal/tests /opt/onenew/traffic/tests /opt/onenew/plugins/tests /opt/onenew/protocols/tests /opt/onenew/exit-probe/tests /opt/onenew/external/tests /opt/onenew/egress/tests /opt/onenew/migration/tests /opt/onenew/energy/tests /opt/onenew/bandwidth/tests /opt/onenew/landing-library/tests /opt/onenew/domains/tests /opt/onenew/cloud-backup/tests
+            php /opt/onenew/web-restore/tests/core.php
+            APP_ENV=testing APP_KEY=base64:aGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGg= DB_CONNECTION=sqlite DB_DATABASE=:memory: CACHE_DRIVER=array QUEUE_CONNECTION=sync SESSION_DRIVER=array vendor/bin/phpunit --bootstrap /opt/onenew/testing/ci-bootstrap.php /opt/onenew/health/tests /opt/onenew/user-portal/tests /opt/onenew/traffic/tests /opt/onenew/plugins/tests /opt/onenew/protocols/tests /opt/onenew/exit-probe/tests /opt/onenew/external/tests /opt/onenew/egress/tests /opt/onenew/migration/tests /opt/onenew/energy/tests /opt/onenew/bandwidth/tests /opt/onenew/landing-library/tests /opt/onenew/domains/tests /opt/onenew/cloud-backup/tests /opt/onenew/web-restore/tests
           '
       - name: Initialize isolated database
         run: |
@@ -86,6 +87,8 @@ jobs:
           if grep -Ei 'xboard' /tmp/onenew-processes; then exit 1; fi
       - name: Export encrypted migration and restore into a fresh instance
         run: ONENEW_MIGRATION_CI=isolated-only bash customizations/onenew/migration/tests/ci-smoke.sh
+      - name: Exercise browser upload validation and live restore
+        run: ONENEW_WEB_RESTORE_CI=isolated-only python3 customizations/onenew/web-restore/tests/ci-smoke.py
       - name: Snapshot and restore isolated instance
         run: |
           sh customizations/onenew/backup.sh /tmp/onenew-ci-backup.tar.gz
