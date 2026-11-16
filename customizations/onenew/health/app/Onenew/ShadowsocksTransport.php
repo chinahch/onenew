@@ -13,6 +13,11 @@ final class ShadowsocksTransport
         if ($tls !== 0 && $tls !== 1) self::fail('Shadowsocks 仅支持关闭 TLS 或启用 TLS。');
         if ($network !== 'ws') {
             if ($tls) self::fail('启用 Shadowsocks TLS 时请选择 WebSocket。');
+            if (!empty($s['onenew_transport_managed'])) {
+                $s['plugin'] = '';
+                $s['plugin_opts'] = '';
+                $s['onenew_transport_managed'] = false;
+            }
             return $s;
         }
         if (!in_array($s['cipher'], ['aes-128-gcm','aes-256-gcm','chacha20-ietf-poly1305','2022-blake3-aes-128-gcm','2022-blake3-aes-256-gcm'], true)) {
@@ -29,6 +34,7 @@ final class ShadowsocksTransport
             || !empty($s['tls_settings']['allow_insecure']) || !empty($s['tls_settings']['ech']['enabled'])) {
             self::fail('SS WS 的 Host 与 TLS 域名须相同；路径须以 / 开头且不含分号；暂不支持额外请求头、跳过证书验证或 ECH。');
         }
+        $s['onenew_transport_managed'] = true;
         $s['plugin'] = 'v2ray-plugin';
         $s['plugin_opts'] = 'mode=websocket'.($tls ? ';tls' : '').';host='.$host.';path='.$path;
         return $s;
