@@ -20,6 +20,22 @@ jobs:
       ONENEW_REVISION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
+      - name: Verify read-only authenticated source archive download
+        shell: bash
+        env:
+          ONENEW_SOURCE_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          stage=$(mktemp -d)
+          trap 'rm -rf -- "$stage"' EXIT
+          printf '%s\n' "$ONENEW_SOURCE_TOKEN" > "$stage/github.token"
+          unset ONENEW_SOURCE_TOKEN
+          chmod 600 "$stage/github.token"
+          source customizations/onenew/migration/source-download.sh
+          onenew_download_source "$GITHUB_SHA" "$stage/source.tar.gz" "$stage" "$stage/github.token"
+          tar -tzf "$stage/source.tar.gz" > "$stage/archive-list"
+          grep -q '/Dockerfile$' "$stage/archive-list"
       - name: Prepare isolated deployment
         run: |
           cp compose.onenew.sample.yaml compose.yaml
