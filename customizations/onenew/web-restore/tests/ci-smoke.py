@@ -20,6 +20,12 @@ def wait(path,terminal,data=None,token=True,limit=150):
         time.sleep(1)
     raise AssertionError('Timed out waiting for restore lifecycle')
 
+# Keep the actual key but reproduce valid dotenv CRLF/export/quoted/comment formatting.
+format_environment=r"""
+require 'vendor/autoload.php';$path='/www/.env';$text=file_get_contents($path);$key=Dotenv\Dotenv::parse($text)['APP_KEY'];
+$text=preg_replace('/^APP_KEY=[^\r\n]*/m','export APP_KEY="'.$key.'" # web-restore CI',$text);$text=str_replace("\n","\r\n",str_replace("\r\n","\n",$text));file_put_contents($path,$text);
+"""
+subprocess.run(['docker','compose','exec','-T','onenew','php','-r',format_environment],check=True,stdout=subprocess.DEVNULL)
 auth=request('/api/v1/passport/auth/login',{'email':'ci-onenew@example.test','password':'ci-onenew-disposable-2048'},token=False)['data']['auth_data']
 print('::add-mask::'+auth)
 info=request('/api/onenew/admin/restore')

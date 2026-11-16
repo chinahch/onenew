@@ -6,6 +6,9 @@ function expect($ok,$why){if(!$ok)throw new RuntimeException($why);}
 $root=sys_get_temp_dir().'/onenew-recovery-'.bin2hex(random_bytes(6));mkdir($root,0700);$source=$root.'/target';$input=$root.'/input';$id='00000000-0000-4000-8000-000000000001';$pass='private-test-backup-password';$old='base64:'.base64_encode(str_repeat('a',32));$new='base64:'.base64_encode(str_repeat('b',32));
 try{
  expect(!Recovery::validId('../bad'),'Unsafe ID accepted');
+ foreach(["APP_KEY=$old\r\n","  APP_KEY = '$old' # comment\r\n","export APP_KEY=\"$old\" # inline\n","\xef\xbb\xbfAPP_KEY=$old\r\n"] as $environment)expect(Recovery::key($environment)===$old,'Valid dotenv key rejected');
+ expect(Recovery::key(Recovery::environmentWithKey("APP_KEY='$old' # inline\r\nAPP_URL=https://target.example\r\nAPP_KEY=$old\r\n",$new))===$new,'Formatted environment key update failed');
+
  foreach([$source,$input] as $path){mkdir($path.'/.docker/.data',0700,true);mkdir($path.'/plugins/Example',0700,true);mkdir($path.'/storage/theme',0700,true);}
  file_put_contents($source.'/.env',"APP_KEY=$old\nAPP_URL=https://target.example\nDB_DATABASE=.docker/.data/panel.sqlite\n");
  file_put_contents($source.'/plugins/Example/test.php','old-plugin');file_put_contents($source.'/storage/theme/theme.json','old-theme');

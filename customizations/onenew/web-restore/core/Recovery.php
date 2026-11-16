@@ -29,9 +29,26 @@ final class Recovery
     }
     public static function key(string $environment):string
     {
-        if(!preg_match('/^APP_KEY\s*=\s*([^\r\n]+)$/m',$environment,$m))throw new \RuntimeException('Missing application key');
-        $key=trim(trim($m[1]),"\"'");$bytes=str_starts_with($key,'base64:')?base64_decode(substr($key,7),true):$key;
+        // Production callers run as www and use exactly Laravel's dotenv parser.
+        // The root coordinator obtains this value over a private child pipe instead.
+        if(class_exists(\Dotenv\Dotenv::class)){
+            $parsed=\Dotenv\Dotenv::parse($environment);$key=$parsed['APP_KEY']??null;
+        }else{
+            // Portable core/test fallback for literal generated keys, including CRLF/BOM.
+            if(str_starts_with($environment,"\xef\xbb\xbf"))$environment=substr($environment,3);
+            if(!preg_match_all('/^[ \t]*(?:export[ \t]+)?APP_KEY[ \t]*=[ \t]*([^\r\n]*)\r?$/m',$environment,$matches))throw new \RuntimeException('Missing application key');
+            $value=trim(end($matches[1]));
+            if(preg_match('/^([\'"])(.*?)\1[ \t]*(?:#.*)?$/D',$value,$quoted))$key=$quoted[1]==='"'?stripcslashes($quoted[2]):$quoted[2];
+            else $key=rtrim(preg_split('/[ \t]+#/',$value,2)[0]);
+        }
+        $bytes=is_string($key)?(str_starts_with($key,'base64:')?base64_decode(substr($key,7),true):$key):false;
         if(!is_string($bytes)||strlen($bytes)!==32)throw new \RuntimeException('Invalid application key');return $key;
+    }
+    public static function environmentWithKey(string $environment,string $key):string
+    {
+        $count=0;
+        $next=preg_replace_callback('/^(\xef\xbb\xbf)?[ \t]*(?:export[ \t]+)?APP_KEY[ \t]*=[^\r\n]*(\r?)$/m',function($match)use($key,&$count){return ($match[1]??'').(++$count===1?'APP_KEY='.$key:'# duplicate APP_KEY removed').($match[2]??'');},$environment);
+        if($count<1||self::key($next)!==$key)throw new \RuntimeException('Cannot update application key');return $next;
     }
     public static function copyTree(string $from,string $to):void
     {
@@ -107,7 +124,7 @@ final class Recovery
     public static function apply(string $source,string $relative,string $dir,string $stage,string $database):void
     {
         self::write($dir.'/switching','1');$key=self::key(file_get_contents($stage.'/.env'));$env=file_get_contents($source.'/.env');
-        $env=preg_replace_callback('/^APP_KEY\s*=\s*[^\r\n]+/m',fn()=>'APP_KEY='.$key,$env,1);
+        $env=self::environmentWithKey($env,$key);
         self::replaceDatabase($database,self::databasePath($source,$relative));self::replaceResources($source,$stage);self::environment($source.'/.env',$env);
         $pdo=new \PDO('sqlite:'.self::databasePath($source,$relative));$pdo->setAttribute(\PDO::ATTR_ERRMODE,\PDO::ERRMODE_EXCEPTION);
         $tables=$pdo->query("SELECT name FROM sqlite_master WHERE type='table'")->fetchAll(\PDO::FETCH_COLUMN);

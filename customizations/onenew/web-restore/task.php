@@ -5,7 +5,10 @@ require __DIR__.'/../migration/core/MigrationBundle.php';
 use App\Onenew\WebRestore\Recovery;
 use App\Onenew\Migration\MigrationBundle;
 $mode=$argv[1]??'';$id=$argv[2]??'';$source='/www';
-if(!in_array($mode,['verify','apply','finalize','rollback','rollback-offline','prune','claim','clean-request','reject','complete','cache-reset-complete'],true))exit(2);
+if(!in_array($mode,['verify','apply','finalize','rollback','rollback-offline','prune','claim','clean-request','reject','complete','cache-reset-complete','read-key'],true))exit(2);
+if($mode==='read-key'){
+    try{require '/www/vendor/autoload.php';$key=Recovery::key(file_get_contents($source.'/.env'));fwrite(STDOUT,$key);exit(0);}catch(Throwable){exit(1);}
+}
 if($mode==='prune'){
     foreach(glob(Recovery::root($source).'/*/status.json')?:[] as $path){try{Recovery::dir($source,basename(dirname($path)));$s=Recovery::json($path);if($s['expires_at']<time()&&!is_file(dirname($path).'/switching')&&!is_file(dirname($path).'/cache-reset-required'))Recovery::clear(dirname($path));}catch(Throwable){}}
     exit(0);
@@ -19,6 +22,7 @@ if(in_array($mode,['verify','apply','finalize','rollback','rollback-offline','co
 function clearCompiled():void{foreach(['/www/bootstrap/cache/config.php','/www/bootstrap/cache/routes-v7.php','/www/bootstrap/cache/events.php'] as $file){if(is_link($file))throw new RuntimeException('Linked cache');if(is_file($file)&&!unlink($file))throw new RuntimeException('Cannot clear compiled cache');}}
 try{
     if($mode==='claim'){
+        require '/www/vendor/autoload.php';
         $f=fopen($dir.'/lock','c+');if(!flock($f,LOCK_EX))exit(1);
         try{$request=Recovery::json($dir.'/request.json');$key=Recovery::key(file_get_contents($source.'/.env'));
             if(!is_string($request['body']??null)||!hash_equals(hash_hmac('sha256',$request['body'],$key),$request['mac']??''))exit(1);
