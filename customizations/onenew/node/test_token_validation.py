@@ -8,8 +8,8 @@ class TokenValidationTest(unittest.TestCase):
                     if "Machine token contains unsupported characters" in line)
         gate = line.split(' || fail ',1)[0]
         bash = 'C:/Program Files/Git/bin/bash.exe' if os.name=='nt' else shutil.which('bash')
-        return subprocess.run([bash,'--noprofile','--norc','-c','TOKEN=$1\n'+gate,'token-test',token],
-                              capture_output=True,text=True).returncode
+        return subprocess.run([bash,'--noprofile','--norc','-c','TOKEN=$ONENEW_TOKEN_FIXTURE\n'+gate,'token-test'],
+                              capture_output=True,text=True,env={**os.environ,'ONENEW_TOKEN_FIXTURE':token}).returncode
     def test_valid_ascii_tokens_and_length_boundaries(self):
         for token in ['fixture0123456789ABCDEF','A'*16,'A'*255,'A'*256,'Az09_+./=~-fixture']:
             with self.subTest(length=len(token)):
