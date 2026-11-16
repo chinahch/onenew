@@ -28,6 +28,9 @@ printf archive > "$dest"
   p,args,cfg,left=self.run_case();self.assertEqual(p.returncode,0,p.stderr);self.assertNotIn('--config',args);self.assertEqual(cfg,'')
  def test_saved_token_is_not_in_process_arguments_and_temp_config_is_removed(self):
   p,args,cfg,left=self.run_case('github_pat_fixture_1234567890123456\n');self.assertEqual(p.returncode,0,p.stderr);self.assertNotIn('github_pat_fixture',args);self.assertIn('github_pat_fixture',cfg);self.assertNotIn('github_pat_fixture',p.stdout+p.stderr);self.assertEqual(left,[]);self.assertIn('--disable',args);self.assertIn('https://api.github.com/repos/chinahch/onenew/tarball/',args)
+ def test_current_github_installation_jwt_is_accepted_without_fixed_length_assumption(self):
+  token='ghs_123_'+('a'*600)+'.base64url-with_dash.signature'
+  p,args,cfg,left=self.run_case(token);self.assertEqual(p.returncode,0,p.stderr);self.assertIn(token,cfg);self.assertNotIn(token,args+p.stdout+p.stderr)
  def test_invalid_token_fails_before_network(self):
   p,args,cfg,left=self.run_case('invalid"\nuser=malicious');self.assertNotEqual(p.returncode,0);self.assertEqual(args,'')
  def test_group_readable_credential_is_refused_before_network(self):
