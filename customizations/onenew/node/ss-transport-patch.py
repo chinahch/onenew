@@ -1,5 +1,5 @@
 """Enable SS WS/TLS in the existing embedded Xray and machine lifecycle."""
-import argparse, shutil
+import argparse, shutil, hashlib, json
 from pathlib import Path
 def apply(source):
     def edit(path, old, new):
@@ -20,6 +20,12 @@ def apply(source):
     s=s.replace('(n.Protocol != "vless" && n.Protocol != "vmess")','(n.Protocol != "vless" && n.Protocol != "vmess" && n.Protocol != "shadowsocks")')
     p.write_text(s,encoding='utf-8',newline='\n')
     shutil.copyfile(Path(__file__).parent/'ss_ws_tls_test.go', source/'internal/kernel/xray/onenew_ss_ws_tls_test.go')
+    manifest=source/'build-source.json'
+    data=json.loads(manifest.read_text(encoding='utf-8'))
+    data['features']=sorted(set(data['features'])|{'onenew-ss-ws-tls-v1'})
+    here=Path(__file__).parent
+    data['onenew_ss_transport_sha256']={name:hashlib.sha256((here/name).read_bytes()).hexdigest() for name in ['ss-transport-patch.py','ss_ws_tls_test.go']}
+    manifest.write_text(json.dumps(data,indent=2)+'\n',encoding='utf-8',newline='\n')
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--source',type=Path,required=True)
     apply(p.parse_args().source)
