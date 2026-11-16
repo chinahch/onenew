@@ -95,6 +95,8 @@ export function patchBundle(source,runtime){
   source=replaceOnce(source,'{path:"plugins/:pluginCode/*",','{path:"plugins/subscription_guard/logs",element:Q.jsx(OnenewAdmin.SubscriptionLogsPage,{react:H,get:IL})},{path:"plugins/:pluginCode/*",');
   source=replaceOnce(source,'shadowsocks:{schema:h4t(t),component:p4t}',
     'shadowsocks:{schema:h4t(t).extend({onenew_transport_managed:uy().default(!1),tls:yy().default(0),network:cy().default("tcp"),network_settings:fy(hy()).nullable().optional(),tls_settings:fy(hy()).default({}),cert_config:e.optional().default({cert_mode:"none"})}),component:e=>Q.jsxs(Q.Fragment,{children:[Q.jsx(p4t,e),Q.jsx(OnenewAdmin.ShadowsocksTransport,{react:H,form:e.form})]})}');
+  source=replaceOnce(source,'app_url:cy().nullable().default(""),subscribe_url:','app_url:cy().nullable().default(""),user_frontend_urls:gy(cy()).default([]),subscribe_url:');
+  source=replaceOnce(source,'Q.jsx($y,{control:o.control,name:"force_https",','Q.jsx(OnenewAdmin.UserDomainsField,{react:H,form:o}),Q.jsx($y,{control:o.control,name:"force_https",');
   return runtime+'\n'+source;
 }
 
