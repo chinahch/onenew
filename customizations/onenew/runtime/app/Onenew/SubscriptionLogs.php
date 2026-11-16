@@ -24,7 +24,7 @@ final class SubscriptionLogs
                 DB::raw('ROW_NUMBER() OVER (PARTITION BY ip,substr(created_at,1,10) ORDER BY created_at DESC,id DESC) as daily_rank'));
         $q=DB::query()->fromSub($daily,'daily')->where('daily_rank',1)->select('id','user_id','ip','user_agent','created_at','pull_count');
         if(!empty($p['search']))$q->where(fn($q)=>$q->where('ip','like','%'.$p['search'].'%')->orWhere('user_agent','like','%'.$p['search'].'%'));
-        $result=$q->orderByDesc('id')->paginate(20);$locator=app(IpRegion::class);
+        $result=$q->orderByDesc('created_at')->orderByDesc('id')->paginate(20);$locator=app(IpRegion::class);
         $result->getCollection()->transform(function($row)use($locator){$details=$locator->cachedDetails($row->ip);$row->ip_region=$details['region'];$row->ip_isp=$details['isp'];return $row;});
         return response()->json($result)->header('Cache-Control','no-store');
     }
