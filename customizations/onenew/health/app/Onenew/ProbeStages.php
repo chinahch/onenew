@@ -16,17 +16,27 @@ final class ProbeStages
             $variants['landing_'.$row->id] = \App\Onenew\LandingLibrary\Library::payload($row)['variants'][$kernel === 'xray' ? 'xray-caddy' : 'singbox'] ?? null;
         }
         $landings = [];
-        foreach ($outs as $out) {
+        foreach ($outs as $index=>$out) {
             $id = $out['tag'] ?? '';
-            if (!is_string($id) || !preg_match('/^[A-Za-z0-9_-]{1,80}$/D', $id) || isset($landings[$id])) throw new ProbeUnavailable('configuration_unavailable');
-            // Compiled outbounds preserve protocol, credentials and TLS settings.
+            $badId = !is_string($id) || !preg_match('/^[A-Za-z0-9_-]{1,80}$/D', $id) || isset($landings[$id]);
+            if ($badId) $id = 'legacy_invalid_'.$index;
+            $landingKernel = $kernel;
             if (array_key_exists($id, $variants)) {
-                if (!is_array($variants[$id])) throw new ProbeUnavailable('configuration_unavailable');
                 $out = $variants[$id];
+            } else {
+                $settings = $out['settings'] ?? [];
+                if (isset($settings['vnext']) || isset($settings['servers'])) $landingKernel = 'xray';
+                elseif (isset($settings['server']) || isset($settings['server_port'])) $landingKernel = 'singbox';
             }
-            try { $normalized = ExitProbePayload::build($kernel === 'xray' ? 'xray-caddy' : 'singbox', $out)['outbound']; }
-            catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { throw new ProbeUnavailable('configuration_unavailable'); }
-            $landings[$id] = ['id'=>$id, 'name'=>mb_strcut(preg_replace('/[\x00-\x1f\x7f]/', '', $names[$id] ?? $id), 0, 200, 'UTF-8'), 'outbound'=>$normalized];
+            $landing = ['id'=>$id, 'name'=>mb_strcut(preg_replace('/[\x00-\x1f\x7f]/', '', $names[$id] ?? $id), 0, 200, 'UTF-8'), 'kernel_type'=>$landingKernel];
+            try {
+                if ($badId || !is_array($out)) throw new ProbeUnavailable('configuration_unavailable');
+                $landing['outbound'] = ExitProbePayload::build($landingKernel === 'xray' ? 'xray-caddy' : 'singbox', $out)['outbound'];
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException | ProbeUnavailable $e) {
+                $landing['error_code'] = 'configuration_unavailable';
+                $landing['outbound'] = new \stdClass();
+            }
+            $landings[$id] = $landing;
         }
         foreach (\App\Services\ServerService::getRoutes($node->route_ids ?? []) as $route) {
             if ($route->action === 'proxy' && !isset($landings[$route->action_value ?? ''])) throw new ProbeUnavailable('configuration_unavailable');
@@ -64,7 +74,7 @@ final class ProbeStages
     {
         $state = $result['state'] ?? ''; $code = $result['error_code'] ?? '';
         abort_unless(in_array($state, ['succeeded','failed','expired','unsupported'], true) &&
-            in_array($code, ['', 'proxy_failed','target_failed','timeout','configuration_unavailable','unsupported','expired','connector_only'], true) &&
+            in_array($code, ['', 'transport_failed', 'proxy_failed','target_failed','timeout','configuration_unavailable','unsupported','expired','connector_only'], true) &&
             (($state === 'succeeded' && $code === '') || ($state === 'failed' && $code !== '') || ($state === 'expired' && $code === 'expired') || ($state === 'unsupported' && $code === 'unsupported')), 422, 'Invalid stage result');
         return ['state'=>$state, 'error_code'=>$code];
     }

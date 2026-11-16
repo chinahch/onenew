@@ -144,3 +144,10 @@ test('stages distinguish landing faults and legacy unknown without exposing erro
  for(const [health_state,label] of Object.entries({landing_fault:'落地故障',partial_landing_fault:'部分落地故障',unknown:'检测异常'}))assert.equal(healthLabel({proxy_health:{state:'succeeded',health_state,finished_at}},now).label,label);
  assert.equal(healthLabel({proxy_health:{state:'succeeded',finished_at}},now).label,'检测异常');
 });
+
+test('ambiguous transport failures stay detection abnormal with safe detail',()=>{
+ const finished_at=new Date().toISOString();
+ const view=healthLabel({proxy_health:{state:'failed',health_state:'unknown',error_code:'transport_failed',finished_at}});
+ assert.equal(view.label,'检测异常');
+ assert.match(view.detail,/连接失败，无法确定入口\/目标/);
+});

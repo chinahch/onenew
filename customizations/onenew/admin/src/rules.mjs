@@ -247,7 +247,7 @@ export function healthLabel(node,now=Date.now()){
   if(!Number.isFinite(t)||age<0||age>=600000||!['succeeded','failed'].includes(h?.state))return {label:'待检测',tone:'pending',detail:'尚无十分钟内的真实代理检测结果'};
   const labels={online:'连通在线',node_fault:'节点故障',landing_fault:'落地故障',partial_landing_fault:'部分落地故障',unknown:'检测异常'};
   const health=h.health_state||'unknown';
-  const errors={proxy_failed:'代理连接失败',target_failed:'检测目标异常',timeout:'检测超时',configuration_unavailable:'配置不可用',unsupported:'不支持检测',expired:'已过期'};
+  const errors={transport_failed:'连接失败，无法确定入口/目标',proxy_failed:'代理连接失败',target_failed:'检测目标异常',timeout:'检测超时',configuration_unavailable:'配置不可用',unsupported:'不支持检测',expired:'已过期'};
   const sources={public_roundtrip:'公开入口完整路径检测',cdn_roundtrip:'CDN入口完整路径检测',local_listener_roundtrip:h.state==='succeeded'?'本地监听自测通过，未验证公网回程':'本地监听自测失败，未验证公网回程'};
   const source=sources[h.stages?.entry?.source]||'入口自测来源未确认';
   const detail=(h.stages?.landings||[]).map(l=>`${l.name}：${l.state==='succeeded'?'正常':errors[l.error_code]||'检测异常'}`).join('；');

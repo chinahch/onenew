@@ -14,6 +14,7 @@ def apply(source):
  anchor='return runTask(ctx, t, func(ctx context.Context, p Payload)'
  assert text.count(anchor)==1
  text=text.replace(anchor,'return runStaged(ctx, t, func(ctx context.Context, p Payload)')
+ text=text.replace('return "proxy_failed", 0', 'return requestError(ctx, p, e), 0')
  p.write_text(text,encoding='utf-8',newline='\n')
  overlay=Path(__file__).parent/'staged-health-overlay'
  for f in overlay.rglob('*.go'):

@@ -27,7 +27,7 @@ class ProbeController extends Controller
         $data = $request->validate([
             'lease' => 'required|string|min:1|max:100',
             'state' => ['required', Rule::in(['succeeded', 'failed', 'expired', 'unsupported'])],
-            'error_code' => ['nullable', 'string', Rule::in(['', 'proxy_failed', 'target_failed', 'timeout', 'configuration_unavailable', 'unsupported', 'expired', 'connector_only'])],
+            'error_code' => ['nullable', 'string', Rule::in(['', 'transport_failed', 'proxy_failed', 'target_failed', 'timeout', 'configuration_unavailable', 'unsupported', 'expired', 'connector_only'])],
             'latency_ms' => 'nullable|integer|min:0|max:15000',
             'ping_ms' => 'nullable|numeric|min:0|max:15000',
             'ping_error_code' => ['nullable', 'string', Rule::in(['', 'icmp_timeout', 'icmp_unavailable', 'icmp_resolve_failed'])],

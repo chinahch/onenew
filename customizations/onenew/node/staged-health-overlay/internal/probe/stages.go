@@ -13,6 +13,8 @@ type HealthStages struct {
 	Landings    []Landing `json:"landings"`
 }
 type Landing struct {
+	Kernel   string               `json:"kernel_type,omitempty"`
+	Error    string               `json:"error_code,omitempty"`
 	ID       string               `json:"id"`
 	Name     string               `json:"name"`
 	Outbound panel.OutboundConfig `json:"outbound"`
@@ -51,10 +53,16 @@ func runStaged(ctx context.Context, t Task, request func(context.Context, Payloa
 	}
 	seen := map[string]bool{}
 	for _, l := range h.Landings {
+		if (l.Kernel != "" && l.Kernel != "xray" && l.Kernel != "singbox") || (l.Error != "" && l.Error != "configuration_unavailable") {
+			return bad
+		}
 		if l.ID == "" || len(l.ID) > 100 || len(l.Name) > 800 || seen[l.ID] || l.Outbound.ProxyTag != "" {
 			return bad
 		}
 		seen[l.ID] = true
+		if l.Error != "" {
+			continue
+		}
 		switch l.Outbound.Protocol {
 		case "socks", "shadowsocks", "vless", "vmess", "trojan", "hysteria2", "tuic", "anytls":
 		default:
@@ -74,13 +82,18 @@ func runStaged(ctx context.Context, t Task, request func(context.Context, Payloa
 		p := t.Payload
 		p.HealthStages = nil
 		p.Outbound = l.Outbound
+		if l.Kernel != "" {
+			p.Kernel = l.Kernel
+		}
 		p.Target = Target
 		p.PingHost = ""
 		lt := t
 		lt.Payload = p
 		lt.Timeout = 10000
 		lr := Result{State: "failed", Error: "timeout"}
-		if job.Err() == nil {
+		if l.Error != "" {
+			lr.Error = l.Error
+		} else if job.Err() == nil {
 			lr = runTask(job, lt, request, ping)
 		} else if time.Now().After(t.Expires) {
 			lr.State = "expired"

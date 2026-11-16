@@ -100,6 +100,24 @@ class ProbeHealthTest extends TestCase
         $this->assertSame('secret', $task['payload']['health_stages']['landings'][0]['outbound']['settings']['password']);
     }
 
+    public function test_mixed_legacy_landing_kernels_and_invalid_config_preserve_entry_probe(): void
+    {
+        [$machine, $node] = $this->fixture();
+        $node->custom_outbounds = [
+            ['tag'=>'sing_exit', 'protocol'=>'socks', 'settings'=>['server'=>'one.example','server_port'=>1080]],
+            ['tag'=>'xray_exit', 'protocol'=>'socks', 'settings'=>['servers'=>[['address'=>'two.example','port'=>1080]]]],
+            ['tag'=>'broken_exit', 'protocol'=>'unsupported_protocol', 'settings'=>[]],
+        ];
+        $node->save();
+        $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk()->json('tasks.0');
+        $this->assertSame('singbox', $task['payload']['kernel_type']);
+        $landings = $task['payload']['health_stages']['landings'];
+        $this->assertSame(['singbox','xray','singbox'], array_column($landings, 'kernel_type'));
+        $this->assertSame('two.example', $landings[1]['outbound']['settings']['servers'][0]['address']);
+        $this->assertSame('configuration_unavailable', $landings[2]['error_code']);
+        $this->assertSame('running', app(ProbeService::class)->status($node)['state']);
+    }
+
     public function test_reality_nat_fallback_is_explicitly_local_in_staged_contract(): void
     {
         [$machine, $node, $user] = $this->fixture();
@@ -461,7 +479,7 @@ class ProbeHealthTest extends TestCase
         $builder = app(ProbeOutboundBuilder::class);
         $out = $builder->build($node, $user)['outbound']['settings'];
         $this->assertSame('ip.sb', $out['server']);
-        $this->assertSame(12345, $out['server_port']);
+        $this->assertSame(443, $out['server_port']);
         $this->assertSame($user->uuid, $out['uuid']);
         $this->assertSame('/edge', $out['transport']['path']);
         $this->assertSame('101.69.181.108', $node->host);

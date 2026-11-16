@@ -65,13 +65,24 @@ func TestStagedRealLandingAuthenticationBothKernels(t *testing.T) {
 				return o
 			}
 			good := makeOutbound("00000000-0000-4000-8000-000000000001")
+			otherKernel := "xray"
+			if kernel == "xray" {
+				otherKernel = "singbox"
+			}
+			cross := panel.OutboundConfig{Tag: "cross", Protocol: "vless"}
+			if otherKernel == "xray" {
+				cross.Settings = map[string]any{"vnext": []any{map[string]any{"address": "127.0.0.1", "port": port, "users": []any{map[string]any{"id": "00000000-0000-4000-8000-000000000001", "encryption": "none"}}}}}
+			} else {
+				cross.Settings = map[string]any{"server": "127.0.0.1", "server_port": port, "uuid": "00000000-0000-4000-8000-000000000001"}
+			}
+
 			bad := makeOutbound("00000000-0000-4000-8000-000000000002")
-			task := Task{ID: "fixture", Lease: "lease", Expires: time.Now().Add(time.Minute), Timeout: 500, Payload: Payload{Kernel: kernel, Target: Target, Outbound: good, HealthStages: &HealthStages{Version: 1, Landings: []Landing{{ID: "good", Outbound: good}, {ID: "bad", Outbound: bad}}}}}
+			task := Task{ID: "fixture", Lease: "lease", Expires: time.Now().Add(time.Minute), Timeout: 500, Payload: Payload{Kernel: kernel, Target: Target, Outbound: good, HealthStages: &HealthStages{Version: 1, Landings: []Landing{{ID: "good", Outbound: good}, {ID: "bad", Outbound: bad}, {ID: "cross", Kernel: otherKernel, Outbound: cross}, {ID: "invalid", Kernel: otherKernel, Error: "configuration_unavailable"}}}}}
 			r := runStaged(context.Background(), task, func(ctx context.Context, p Payload) (string, int64) {
 				p.Target = target.URL
 				return execute(ctx, p, &tls.Config{RootCAs: roots})
 			}, func(context.Context, string) (*float64, string) { return nil, "" })
-			if r.State != "succeeded" || r.Stages.Landings[0].State != "succeeded" || r.Stages.Landings[1].State == "succeeded" {
+			if r.State != "succeeded" || r.Stages.Landings[0].State != "succeeded" || r.Stages.Landings[1].State == "succeeded" || r.Stages.Landings[2].State != "succeeded" || r.Stages.Landings[3].Error != "configuration_unavailable" {
 				t.Fatalf("%+v", r.Stages)
 			}
 		})
