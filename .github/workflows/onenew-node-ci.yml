@@ -42,6 +42,7 @@ jobs:
           python3 onenew/customizations/onenew/node/bandwidth-patch.py --source prepared
           python3 onenew/customizations/onenew/node/argo-patch.py --source prepared
           python3 onenew/customizations/onenew/node/health-patch.py --source prepared
+          python3 onenew/customizations/onenew/node/ss-transport-patch.py --source prepared
       - name: Verify panel health scheduling
         run: |
           grep -Fq 'public const INTERVAL = 60;' onenew/customizations/onenew/health/app/Onenew/ProbeService.php
