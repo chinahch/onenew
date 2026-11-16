@@ -40,7 +40,7 @@ not a guarantee that an arbitrarily large machine completes every listener in fi
 minutes. Unsupported/no-account nodes consume their own interval, without starving
 other nodes. No task creation endpoint accepts an arbitrary URL, command, account,
 outbound or node id from a client. The only target is
-`http://cp.cloudflare.com/generate_204`.
+`https://www.cloudflare.com/cdn-cgi/trace`.
 
 Redis stores only the latest node status (24-hour TTL), a bounded per-machine active
 id, and short-lived tasks. Task payloads are encrypted with APP_KEY. Only a SHA256
@@ -136,7 +136,7 @@ feature-test or native-kernel success is claimed here.
 
 ## CDN ingress checks
 
-TLS WebSocket nodes (VMess/VLESS/Trojan) and VLESS XHTTP h2 nodes using an IP dial address and an identical DNS SNI/transport Host are probed through the operator-selected CDN edge `ip.sb:443`. Credentials, TLS checks, WS Host/path and the proxied Cloudflare 204 request are preserved. Subscription fields are not changed. The result source is `node machine · CDN ip.sb:443`: it verifies the substitute CDN ingress and proxy path, not availability of the original preferred/forwarding IP. Plain WS, REALITY, domain dial addresses and mismatching SNI/Host do not use this mapping. Configuration changes invalidate cached status automatically.
+TLS WebSocket nodes (VMess/VLESS/Trojan) and VLESS XHTTP h2 nodes using an IP dial address and an identical DNS SNI/transport Host are probed through the operator-selected CDN edge `ip.sb:443`. Credentials, TLS checks, WS Host/path and the proxied Cloudflare HTTPS Trace request are preserved. Subscription fields are not changed. The result source is `node machine · CDN ip.sb:443`: it verifies the substitute CDN ingress and proxy path, not availability of the original preferred/forwarding IP. Plain WS, REALITY, domain dial addresses and mismatching SNI/Host do not use this mapping. Configuration changes invalidate cached status automatically.
 
 ## Shadowsocks WS and TLS
 
@@ -144,4 +144,8 @@ Node v0.1.9 adds native Xray Shadowsocks WebSocket inbound support. The SS edito
 
 The panel stores transport fields, generates v2ray-plugin subscription options, and requires Xray for the native listener. Existing machine-managed SS listeners switch when their new WS configuration is discovered. Certificates use the existing advanced configuration: content/file/ACME for direct TLS, or intentional none mode for Argo plaintext origins. A failed configured certificate never silently becomes plaintext.
 
-Health checks use Xray native SS/WS/TLS outbounds with the actual generated user password. Matching IP/SNI/Host TLS WS nodes use the same operator-selected ip.sb:443 CDN edge as VMess/VLESS/Trojan. The Cloudflare 204 test target is unchanged.
+Health checks use Xray native SS/WS/TLS outbounds with the actual generated user password. Matching IP/SNI/Host TLS WS nodes use the same operator-selected ip.sb:443 CDN edge as VMess/VLESS/Trojan. The health target is Cloudflare HTTPS Trace. Success requires HTTP 200 and valid IP/colo fields; HTTPS certificate checks remain enabled.
+
+## HTTPS health contract (node v0.1.10)
+
+All new health tasks request `https://www.cloudflare.com/cdn-cgi/trace` through the real proxy. Responses must be HTTP 200, at most 4096 bytes, with a valid IPv4/IPv6 `ip=` and a three-letter `colo=`. HTML, redirects, non-200 responses, malformed traces and oversized responses fail. No HTTP fallback is performed. Node v0.1.10 can accept the old fixed HTTP 204 task only for rolling upgrades from an old panel; this is not a fallback for a failed HTTPS request. The updated panel emits HTTPS only. Nodes on older binaries must upgrade before they can execute the new task.
