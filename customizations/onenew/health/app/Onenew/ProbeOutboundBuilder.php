@@ -10,7 +10,7 @@ use App\Utils\Helper;
 /** Build a client through the same public entry used by subscribers. */
 class ProbeOutboundBuilder extends SingBox
 {
-    public const TARGET = 'http://cp.cloudflare.com/generate_204';
+    public const TARGET = 'https://www.cloudflare.com/cdn-cgi/trace';
 
     public function __construct()
     {

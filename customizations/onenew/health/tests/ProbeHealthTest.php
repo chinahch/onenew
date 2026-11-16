@@ -45,7 +45,7 @@ class ProbeHealthTest extends TestCase
         $task = $response->json('tasks.0');
         $this->assertCount(1, $response->json('tasks'));
         $this->assertSame(10000, $task['timeout_ms']);
-        $this->assertSame('http://cp.cloudflare.com/generate_204', $task['payload']['target']);
+        $this->assertSame('https://www.cloudflare.com/cdn-cgi/trace', $task['payload']['target']);
         $this->assertSame('public.example', $task['payload']['outbound']['settings']['server']);
         $this->assertSame(443, $task['payload']['outbound']['settings']['server_port']);
         $this->assertSame($user->uuid, $task['payload']['outbound']['settings']['uuid']);
