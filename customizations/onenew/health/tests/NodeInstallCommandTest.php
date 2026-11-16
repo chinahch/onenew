@@ -9,7 +9,7 @@ final class NodeInstallCommandTest extends TestCase
     public function test_own_installer_and_shell_safe_machine_arguments(): void
     {
         $command = NodeInstallCommand::make('https://panel.example.test/', "fixture'\$token", 7);
-        self::assertStringContainsString('https://raw.githubusercontent.com/chinahch/onenew/node-v0.1.9/customizations/onenew/node/install.sh', $command);
+        self::assertStringContainsString('https://raw.githubusercontent.com/chinahch/onenew/node-v0.1.10/customizations/onenew/node/install.sh', $command);
         self::assertStringNotContainsString('cedar2025', $command);
         self::assertStringContainsString('--machine-id 7', $command);
         self::assertStringContainsString('--token-stdin', $command);
@@ -27,7 +27,7 @@ final class NodeInstallCommandTest extends TestCase
     public function test_upgrade_command_uses_current_installer_and_embeds_token_without_prompt(): void
     {
         $command = NodeInstallCommand::upgrade('https://panel.example.test/', 15, "fixture'private-token");
-        self::assertStringContainsString('/node-v0.1.9/customizations/onenew/node/install.sh', $command);
+        self::assertStringContainsString('/node-v0.1.10/customizations/onenew/node/install.sh', $command);
         self::assertStringNotContainsString('/master/customizations/onenew/node/install.sh', $command);
         self::assertStringContainsString('--upgrade', $command);
         self::assertStringContainsString('--token-stdin', $command);
