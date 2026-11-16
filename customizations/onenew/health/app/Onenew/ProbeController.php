@@ -35,7 +35,7 @@ class ProbeController extends Controller
             'stages' => 'sometimes|array:version,entry,landings',
             'stages.version' => 'required_with:stages|integer|in:1',
             'stages.entry' => 'required_with:stages|array:state,error_code,source',
-            'stages.entry.source' => 'required_with:stages|string|in:public_roundtrip',
+            'stages.entry.source' => 'required_with:stages|string|in:public_roundtrip,local_listener_roundtrip,cdn_roundtrip',
             'stages.entry.state' => 'required_with:stages|string',
             'stages.entry.error_code' => 'nullable|string|max:40',
             'stages.landings' => 'present_with:stages|array|max:8',

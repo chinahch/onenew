@@ -4,7 +4,7 @@ namespace App\Onenew;
 /** Bounded stage contract. Never persists native diagnostics or echoed names. */
 final class ProbeStages
 {
-    public static function payload(\App\Models\Server $node, string $kernel): array
+    public static function payload(\App\Models\Server $node, string $kernel, array $public = []): array
     {
         $outs = array_values(array_filter($node->custom_outbounds ?? [], fn ($out) => !in_array($out['protocol'] ?? '', ['direct','block','dns','freedom','blackhole'], true)));
         if (count($outs) > 8) throw new ProbeUnavailable('configuration_unavailable');
@@ -31,13 +31,16 @@ final class ProbeStages
         foreach (\App\Services\ServerService::getRoutes($node->route_ids ?? []) as $route) {
             if ($route->action === 'proxy' && !isset($landings[$route->action_value ?? ''])) throw new ProbeUnavailable('configuration_unavailable');
         }
-        return ['version'=>1, 'landings'=>array_values($landings)];
+        $host = data_get($public, 'outbound.settings.server') ?? data_get($public, 'outbound.settings.vnext.0.address');
+        $source = in_array($host, ['127.0.0.1','::1','localhost'], true) ? 'local_listener_roundtrip' :
+            ((new ProbeOutboundBuilder())->cdnProbeHost($node) !== null ? 'cdn_roundtrip' : 'public_roundtrip');
+        return ['version'=>1, 'entry_source'=>$source, 'landings'=>array_values($landings)];
     }
 
-    public static function accept(array $expected, ?array $stages, string $state, string $error): array
+    public static function accept(array $expected, ?array $stages, string $state, string $error, string $source = 'public_roundtrip'): array
     {
         if ($stages === null) return ['health_state'=>'unknown', 'stage_error'=>'upgrade_required'];
-        abort_unless(($stages['version'] ?? null) === 1 && ($stages['entry']['source'] ?? null) === 'public_roundtrip', 422, 'Invalid probe stages');
+        abort_unless(($stages['version'] ?? null) === 1 && in_array($source, ['public_roundtrip','local_listener_roundtrip','cdn_roundtrip'], true) && ($stages['entry']['source'] ?? null) === $source, 422, 'Invalid probe stages');
         $entry = self::result($stages['entry']);
         abort_unless($entry['state'] === $state && $entry['error_code'] === $error, 422, 'Inconsistent entry result');
         $results = $stages['landings'] ?? null;
@@ -54,7 +57,7 @@ final class ProbeStages
         $health = 'unknown';
         if (!$abnormal && $state === 'succeeded') $health = $faults === 0 ? 'online' : ($success === 0 ? 'landing_fault' : 'partial_landing_fault');
         elseif (!$abnormal && $success === count($expected) && $error === 'proxy_failed') $health = 'node_fault';
-        return ['health_state'=>$health, 'stages'=>['version'=>1, 'entry'=>$entry+['source'=>'public_roundtrip'], 'landings'=>$landings]];
+        return ['health_state'=>$health, 'stages'=>['version'=>1, 'entry'=>$entry+['source'=>$source], 'landings'=>$landings]];
     }
 
     private static function result(array $result): array

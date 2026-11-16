@@ -6,6 +6,7 @@ export interface Probe {health_state?:string;stage_error?:string;stages?:{landin
 export function probeLabel(probe?:Probe|null){
  if(!probe)return '尚未检测'
  if(probe.error_code==='machine_unavailable')return '服务器未连接'
+ if(probe.error_code==='configuration_unavailable')return '配置不可用'
  if(['succeeded','failed'].includes(probe.state))return ({online:'连通正常',node_fault:'节点故障',landing_fault:'落地故障',partial_landing_fault:'部分落地故障'} as Record<string,string>)[probe.health_state||'']||'检测异常'
  return ({queued:'排队中',running:'检测中',failed:'请求失败',unsupported:'不支持检测',expired:'检测超时',pending:'待检测'} as Record<string,string>)[probe.state]||'未知状态'
 }

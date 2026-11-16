@@ -241,11 +241,15 @@ export function planRules({link,core,tag,services,customDomains='',mode='replace
 export function healthLabel(node,now=Date.now()){
   const h=node?.proxy_health,t=Date.parse(h?.finished_at||h?.created_at||''),age=now-t;
   if(Number.isFinite(t)&&age>=0&&age<600000&&h?.state==='running')return {label:'检测中',tone:'pending',detail:'服务器正在执行真实代理自测'};
+  if(h?.state==='unsupported')return {label:'不支持检测',tone:'pending',detail:'当前节点或落地协议不支持自动检测'};
+  if(h?.error_code==='configuration_unavailable')return {label:'配置不可用',tone:'pending',detail:'未能构建完整检测配置，尚未归因故障'};
   if(h?.state==='expired')return {label:'检测超时',tone:'pending',detail:'上次自测任务已过期，等待服务器重新领取检测任务'};
   if(!Number.isFinite(t)||age<0||age>=600000||!['succeeded','failed'].includes(h?.state))return {label:'待检测',tone:'pending',detail:'尚无十分钟内的真实代理检测结果'};
   const labels={online:'连通在线',node_fault:'节点故障',landing_fault:'落地故障',partial_landing_fault:'部分落地故障',unknown:'检测异常'};
   const health=h.health_state||'unknown';
   const errors={proxy_failed:'代理连接失败',target_failed:'检测目标异常',timeout:'检测超时',configuration_unavailable:'配置不可用',unsupported:'不支持检测',expired:'已过期'};
+  const sources={public_roundtrip:'公开入口完整路径检测',cdn_roundtrip:'CDN入口完整路径检测',local_listener_roundtrip:h.state==='succeeded'?'本地监听自测通过，未验证公网回程':'本地监听自测失败，未验证公网回程'};
+  const source=sources[h.stages?.entry?.source]||'入口自测来源未确认';
   const detail=(h.stages?.landings||[]).map(l=>`${l.name}：${l.state==='succeeded'?'正常':errors[l.error_code]||'检测异常'}`).join('；');
-  return {label:labels[health]||'检测异常',tone:health==='online'?'success':health==='unknown'?'pending':'failed',detail:`公开入口完整路径检测；${h.stage_error==='upgrade_required'?'请升级节点以支持分阶段检测':detail||errors[h.error_code]||'未配置落地'}${health==='unknown'?'；证据不足，未归因节点或落地':''}`};
+  return {label:labels[health]||'检测异常',tone:health==='online'?'success':health==='unknown'?'pending':'failed',detail:`${source}；${h.stage_error==='upgrade_required'?'请升级节点以支持分阶段检测':detail||errors[h.error_code]||'未配置落地'}${health==='unknown'?'；证据不足，未归因节点或落地':''}`};
 }

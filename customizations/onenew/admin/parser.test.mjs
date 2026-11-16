@@ -72,8 +72,10 @@ test('node status uses real proxy result freshness, never heartbeat',()=>{
   const now=Date.parse('2026-11-14T12:00:00Z');
   assert.equal(healthLabel({proxy_health:{state:'succeeded',health_state:'online',finished_at:'2026-11-14T11:59:00Z'}},now).label,'连通在线');
   assert.equal(healthLabel({proxy_health:{state:'failed',health_state:'node_fault',finished_at:'2026-11-14T11:59:00Z'}},now).label,'节点故障');
-  for(const h of [{state:'succeeded',finished_at:'2026-11-14T11:50:00Z'},{state:'succeeded',finished_at:'2026-11-14T12:05:00Z'},{state:'running'},{state:'unsupported'}]) assert.equal(healthLabel({proxy_health:h,last_check_at:now},now).label,'待检测');
+  for(const h of [{state:'succeeded',finished_at:'2026-11-14T11:50:00Z'},{state:'succeeded',finished_at:'2026-11-14T12:05:00Z'},{state:'running'}]) assert.equal(healthLabel({proxy_health:h,last_check_at:now},now).label,'待检测');
   assert.equal(healthLabel({last_check_at:now},now).label,'待检测');
+  assert.equal(healthLabel({proxy_health:{state:'unsupported'}},now).label,'不支持检测');
+  assert.equal(healthLabel({proxy_health:{state:'pending',error_code:'configuration_unavailable'}},now).label,'配置不可用');
 });
 test('Shadowsocks and VMess produce native envelopes for both kernels',()=>{
   const ss='ss://'+Buffer.from('aes-128-gcm:example-password').toString('base64url')+'@exit.example:443';

@@ -133,8 +133,11 @@ namespace {
             check(data_get($out, 'settings.vnext.0.users.0.id') === $uuid, $name . ': wrong user');
             check(isset($out['stream_settings']), $name . ': stream_settings missing');
         } else {
-            check(data_get($out, 'settings.server') === 'public.example', $name . ': wrong probe ingress');
-            check(data_get($out, 'settings.server_port') === 443, $name . ': wrong probe port');
+            $localReality = in_array($type, ['vless', 'trojan'], true)
+                && (int) ($settings['tls'] ?? 0) === 2
+                && ($settings['network'] ?? 'tcp') === 'tcp';
+            check(data_get($out, 'settings.server') === ($localReality ? '127.0.0.1' : 'public.example'), $name . ': wrong probe ingress');
+            check(data_get($out, 'settings.server_port') === ($localReality ? 12345 : 443), $name . ': wrong probe port');
         }
         if ($type === 'shadowsocks') {
             check(data_get($out, 'settings.password') === \App\Utils\Helper::getServerKey(1700000000, 16) . ':' . \App\Utils\Helper::uuidToBase64($uuid, 16), 'SS2022 native password mismatch');

@@ -27,4 +27,7 @@ foreach (['missing','duplicate','extra','mismatch','free_error','inconsistent'] 
     try { ProbeStages::accept($expected,$s,'succeeded',''); throw new LogicException('Invalid stages accepted'); }
     catch(RuntimeException $e) { check($e->getCode()===422); }
 }
+$local=stages('', ['', '']); $local['entry']['source']='local_listener_roundtrip';
+check(ProbeStages::accept($expected,$local,'succeeded','','local_listener_roundtrip')['health_state']==='online');
+try { ProbeStages::accept($expected,$local,'succeeded','','public_roundtrip'); throw new LogicException('False public provenance accepted'); } catch(RuntimeException $e) { check($e->getCode()===422); }
 echo "Stage classification, provenance, completeness and error allowlist checks passed\n";

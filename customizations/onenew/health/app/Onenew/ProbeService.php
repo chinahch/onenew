@@ -71,7 +71,7 @@ class ProbeService
                 }
                 try {
                     $payload = $this->builder->build($node, $user);
-                    $payload['health_stages'] = ProbeStages::payload($node, $payload['kernel_type']);
+                    $payload['health_stages'] = ProbeStages::payload($node, $payload['kernel_type'], $payload);
                 } catch (ProbeUnavailable $e) {
                     $this->finish($task, $e->getMessage() === 'unsupported' ? 'unsupported' : 'pending', $e->getMessage());
                     return [];
@@ -84,6 +84,7 @@ class ProbeService
                 }
                 $lease = bin2hex(random_bytes(32));
                 $task['state'] = 'running';
+                $task['entry_source'] = $payload['health_stages']['entry_source'];
                 $task['expected_landings'] = array_map(fn ($landing) => ['id'=>$landing['id'], 'name'=>$landing['name']], $payload['health_stages']['landings']);
                 $task['user_id'] = (int) $user->id;
                 $task['user_revision'] = hash('sha256', $user->uuid);
@@ -146,7 +147,7 @@ class ProbeService
                 }
             }
             $code = $result['error_code'] ?? '';
-            $task = array_replace($task, ProbeStages::accept($task['expected_landings'] ?? [], $result['stages'] ?? null, $result['state'], $code));
+            $task = array_replace($task, ProbeStages::accept($task['expected_landings'] ?? [], $result['stages'] ?? null, $result['state'], $code, $task['entry_source'] ?? 'public_roundtrip'));
             $state = $result['state'];
             // An unsupported/configuration result proves no proxy roundtrip happened.
             if (in_array($code, ['unsupported', 'configuration_unavailable', 'connector_only'], true)) {

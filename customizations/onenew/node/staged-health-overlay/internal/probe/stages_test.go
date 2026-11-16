@@ -77,3 +77,22 @@ func TestStagedRealLandingAuthenticationBothKernels(t *testing.T) {
 		})
 	}
 }
+
+func TestStagesSourceAllowlistAndCancellation(t *testing.T) {
+	for _, source := range []string{"public_roundtrip", "local_listener_roundtrip", "cdn_roundtrip", "forged"} {
+		task := Task{ID: "fixture", Lease: "lease", Expires: time.Now().Add(time.Minute), Payload: Payload{Kernel: "xray", Target: Target, HealthStages: &HealthStages{Version: 1, EntrySource: source, Landings: []Landing{{ID: "a", Outbound: panel.OutboundConfig{Protocol: "socks"}}}}}}
+		ctx, cancel := context.WithCancel(context.Background())
+		calls := 0
+		r := runStaged(ctx, task, func(context.Context, Payload) (string, int64) { calls++; cancel(); return "timeout", 0 }, func(context.Context, string) (*float64, string) { return nil, "" })
+		cancel()
+		if source == "forged" {
+			if calls != 0 || r.Error != "configuration_unavailable" {
+				t.Fatal("forged source accepted")
+			}
+			continue
+		}
+		if calls != 1 || r.Stages.Entry.Source != source || r.Stages.Landings[0].Error != "timeout" {
+			t.Fatalf("source %s calls %d result %+v", source, calls, r.Stages)
+		}
+	}
+}

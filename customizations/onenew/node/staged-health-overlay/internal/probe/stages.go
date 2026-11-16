@@ -8,8 +8,9 @@ import (
 
 // HealthStages carries bounded, independently executed saved landing snapshots.
 type HealthStages struct {
-	Version  int       `json:"version"`
-	Landings []Landing `json:"landings"`
+	Version     int       `json:"version"`
+	EntrySource string    `json:"entry_source,omitempty"`
+	Landings    []Landing `json:"landings"`
 }
 type Landing struct {
 	ID       string               `json:"id"`
@@ -41,6 +42,13 @@ func runStaged(ctx context.Context, t Task, request func(context.Context, Payloa
 	if h.Version != 1 || len(h.Landings) > 8 || t.Payload.Target != Target {
 		return bad
 	}
+	source := h.EntrySource
+	if source == "" {
+		source = "public_roundtrip"
+	}
+	if source != "public_roundtrip" && source != "local_listener_roundtrip" && source != "cdn_roundtrip" {
+		return bad
+	}
 	seen := map[string]bool{}
 	for _, l := range h.Landings {
 		if l.ID == "" || len(l.ID) > 100 || len(l.Name) > 800 || seen[l.ID] || l.Outbound.ProxyTag != "" {
@@ -61,7 +69,7 @@ func runStaged(ctx context.Context, t Task, request func(context.Context, Payloa
 	job, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 	r := runTask(job, t, request, ping)
-	r.Stages = &Stages{Version: 1, Entry: Stage{State: r.State, Error: r.Error, Source: "public_roundtrip"}, Landings: make([]LandingResult, 0, len(h.Landings))}
+	r.Stages = &Stages{Version: 1, Entry: Stage{State: r.State, Error: r.Error, Source: source}, Landings: make([]LandingResult, 0, len(h.Landings))}
 	for _, l := range h.Landings {
 		p := t.Payload
 		p.HealthStages = nil
