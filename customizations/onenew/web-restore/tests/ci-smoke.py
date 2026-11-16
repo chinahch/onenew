@@ -60,3 +60,29 @@ assert request('/api/onenew/user/me')['user']['email']=='ci-onenew@example.test'
 check=r'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); if(admin_setting("web_restore_ci_marker")!==null)exit(1);'
 subprocess.run(['docker','compose','exec','-T','-u','www','onenew','php','-r',check],check=True,stdout=subprocess.DEVNULL)
 print('Real browser-upload protocol, wrong-password rejection, database switch and application restart passed')
+
+# Interrupt the coordinator after finalization. It must stop restarted writers,
+# restore the old snapshot and discard imported admin_settings from Redis.
+marker=r'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); admin_setting(["web_restore_ci_marker"=>"rollback-kept"]);'
+subprocess.run(['docker','compose','exec','-T','-u','www','onenew','php','-r',marker],check=True,stdout=subprocess.DEVNULL)
+id,verified=upload(password);assert verified['state']=='ready'
+confirm=request('/api/onenew/admin/restore/'+id+'/confirm',{'confirmed':True})
+watcher=r"""
+$id=$argv[1];$path='/www/.docker/.data/onenew-web-restores/'.$id.'/status.json';$found=false;
+for($i=0;$i<1200;$i++){clearstatcache();$s=json_decode(file_get_contents($path),true);if(($s['state']??'')==='restarting'){$found=true;break;}if(in_array($s['state']??'',['success','failed'],true))exit(2);usleep(100000);}if(!$found)exit(3);
+exec('supervisorctl -c /etc/supervisor/conf.d/supervisord.conf stop onenew-restore',$out,$code);if($code!==0)exit(4);
+require '/www/vendor/autoload.php';$app=require '/www/bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+Illuminate\Support\Facades\Cache::store('redis')->put('admin_settings',['web_restore_ci_marker'=>'poison-imported-cache'],600);
+exec('supervisorctl -c /etc/supervisor/conf.d/supervisord.conf start onenew-restore',$out,$code);exit($code);
+"""
+subprocess.run(['docker','compose','exec','-T','onenew','php','-r',watcher,id],check=True,timeout=150,stdout=subprocess.DEVNULL)
+result=wait('/api/onenew/restore/progress',['success','failed'],{'id':id,'token':confirm['progress_token']},token=False,limit=180)
+assert result['state']=='failed',result
+check=r'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); if(admin_setting("web_restore_ci_marker")!=="rollback-kept")exit(1);'
+subprocess.run(['docker','compose','exec','-T','-u','www','onenew','php','-r',check],check=True,stdout=subprocess.DEVNULL)
+auth=request('/api/v1/passport/auth/login',{'email':'ci-onenew@example.test','password':'ci-onenew-disposable-2048'},token=False)['data']['auth_data'];print('::add-mask::'+auth)
+history=request('/api/onenew/admin/restore')['history'];assert history
+rollback_ticket=request('/api/onenew/admin/restore/'+id+'/rollback-ticket',{})['ticket']
+rollback=request('/api/onenew/restore/download',raw=urllib.parse.urlencode({'ticket':rollback_ticket}).encode(),content_type='application/x-www-form-urlencoded',token=False)
+assert rollback.startswith(b'ONENEW1\n')
+print('Interrupted coordinator recovery, writer restart and imported Redis settings cleanup passed')

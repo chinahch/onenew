@@ -120,6 +120,6 @@ final class Recovery
     {
         $meta=self::json($dir.'/rollback.json');$stage=$dir.'/rollback';
         self::replaceDatabase($stage.'/data/database/'.$meta['database_relative'],self::databasePath($source,$meta['database_relative']));
-        self::replaceResources($source,$stage);self::environment($source.'/.env',file_get_contents($stage.'/.env'));@unlink($dir.'/switching');
+        self::replaceResources($source,$stage);self::environment($source.'/.env',file_get_contents($stage.'/.env'));if(is_file($dir.'/switching')&&!unlink($dir.'/switching'))throw new \RuntimeException('Cannot finish rollback');
     }
 }

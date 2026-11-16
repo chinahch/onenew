@@ -29,7 +29,7 @@ try{
         }finally{flock($f,LOCK_UN);fclose($f);}
     }elseif($mode==='clean-request'){
         foreach(['processing.json'] as $file)if(is_file($dir.'/'.$file)||is_link($dir.'/'.$file))unlink($dir.'/'.$file);exit(0);
-    }elseif($mode==='cache-reset-complete'){@unlink($dir.'/cache-reset-required');exit(0);
+    }elseif($mode==='cache-reset-complete'){if(is_file($dir.'/cache-reset-required')&&!unlink($dir.'/cache-reset-required'))exit(1);exit(0);
     }elseif($mode==='complete'){
         Recovery::state($dir,['state'=>'success','error'=>'','rollback_available'=>true]);if(!unlink($dir.'/switching'))throw new RuntimeException('Cannot commit restore');
         foreach(['stage','rollback'] as $folder){try{if(is_dir($dir.'/'.$folder))Recovery::clear($dir.'/'.$folder);}catch(Throwable){}}
@@ -50,7 +50,7 @@ try{
             if(!in_array($env['REDIS_HOST']??'127.0.0.1',['127.0.0.1','localhost','/data/redis.sock'],true)||!empty($env['REDIS_URL']))throw new RuntimeException('Unsupported Redis recovery');
             $redis=new Redis();$host=$env['REDIS_HOST']??'127.0.0.1';$redis->connect($host==='/data/redis.sock'?$host:'127.0.0.1',$host==='/data/redis.sock'?0:(int)($env['REDIS_PORT']??6379),5);
             $password=$env['REDIS_PASSWORD']??null;if(!in_array($password,[null,'','null','(null)'],true))$redis->auth($password);
-            foreach(array_unique([(int)($env['REDIS_DB']??0),(int)($env['REDIS_CACHE_DB']??1)]) as $db){$redis->select($db);$redis->flushDB();}$redis->save();$redis->close();unset($password);@unlink($dir.'/cache-reset-required');
+            foreach(array_unique([(int)($env['REDIS_DB']??0),(int)($env['REDIS_CACHE_DB']??1)]) as $db){$redis->select($db);$redis->flushDB();}$redis->save();$redis->close();unset($password);if(!unlink($dir.'/cache-reset-required'))throw new RuntimeException('Cannot finish cache reset');
         }
         Recovery::state($dir,['state'=>'failed','error'=>'恢复未完成，已回滚到恢复前的数据。','rollback_available'=>is_file($dir.'/rollback.onm'),'summary'=>array_merge($state['summary']??[],['admin_path'=>$state['original_admin_path']??'/'])]);
     }else{
