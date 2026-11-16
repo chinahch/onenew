@@ -6,6 +6,7 @@ import (
  "encoding/pem"
  "testing"
  "github.com/cedar2025/xboard-node/internal/config"
+ "github.com/cedar2025/xboard-node/internal/kernel/singbox"
  "github.com/cedar2025/xboard-node/internal/model"
 )
 
@@ -42,6 +43,15 @@ func TestOnenewShadowsocksWSTLSActualRoundtrip(t *testing.T) {
    "streamSettings":clientStream}}})
  defer client.Close()
  lumaProbeSocks(t,port)
+ if !encrypted {
+  sipPort:=lumaFreePort(t)
+  closeSIP,err:=singbox.StartProbe(sipPort,model.OutboundConfig{Tag:"sip003-test",Protocol:"shadowsocks",
+   Settings:map[string]any{"server":"127.0.0.1","server_port":n.ServerPort,"method":"aes-128-gcm","password":uuid,
+    "plugin":"v2ray-plugin","plugin_opts":"mode=websocket;mux=0;host=localhost;path=/ss-ws"}})
+  if err!=nil {t.Fatal(err)}
+  defer closeSIP()
+  lumaProbeSocks(t,sipPort)
+ }
  })
  }
 }
