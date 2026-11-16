@@ -22,7 +22,11 @@ def wait(path,terminal,data=None,token=True,limit=150):
 
 auth=request('/api/v1/passport/auth/login',{'email':'ci-onenew@example.test','password':'ci-onenew-disposable-2048'},token=False)['data']['auth_data']
 print('::add-mask::'+auth)
-info=request('/api/onenew/admin/restore');assert info['supported'],info
+info=request('/api/onenew/admin/restore')
+if not info['supported']:
+    diagnostic=r'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); clearstatcache(); echo json_encode(["heartbeat_age"=>is_file("/run/onenew-restore-agent.heartbeat")?time()-filemtime("/run/onenew-restore-agent.heartbeat"):null,"migration_supported"=>app(App\Onenew\Migration\MigrationService::class)->info()["supported"],"redis_local"=>in_array(config("database.redis.default.host"),["127.0.0.1","localhost"],true),"cache_local"=>in_array(config("database.redis.cache.host"),["127.0.0.1","localhost"],true),"redis_url_set"=>(bool)config("database.redis.default.url")]);'
+    subprocess.run(['docker','compose','exec','-T','-u','www','onenew','php','-r',diagnostic],check=True)
+assert info['supported'],info
 password='ci-web-restore-fixture-password'
 export=request('/api/onenew/admin/migration/exports',{'password':password,'password_confirmation':password})
 ready=wait('/api/onenew/admin/migration/exports/'+export['id'],['ready','failed']);assert ready['state']=='ready'

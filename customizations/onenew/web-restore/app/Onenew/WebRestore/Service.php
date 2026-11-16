@@ -11,7 +11,7 @@ final class Service
     public function __construct(private MigrationService $migration){}
     public function source():string{return $this->migration->source();}
     public function directory(string $id):string{return Recovery::dir($this->source(),$id);}
-    public function supported():bool{return $this->migration->info()['supported']&&(app()->environment('testing')||(@filemtime('/run/onenew-restore-agent.heartbeat')>time()-30&&in_array(config('database.redis.default.host'),['127.0.0.1','localhost'],true)));}
+    public function supported():bool{clearstatcache(true,'/run/onenew-restore-agent.heartbeat');return $this->migration->info()['supported']&&(app()->environment('testing')||(@filemtime('/run/onenew-restore-agent.heartbeat')>time()-30&&in_array(config('database.redis.default.host'),['127.0.0.1','localhost'],true)&&in_array(config('database.redis.cache.host'),['127.0.0.1','localhost'],true)&&!config('database.redis.default.url')&&!config('database.redis.cache.url')));}
     public function owned(string $id):array
     {
         abort_unless(Recovery::validId($id),404);$dir=$this->directory($id);abort_unless(is_file($dir.'/status.json'),404);$s=Recovery::json($dir.'/status.json');

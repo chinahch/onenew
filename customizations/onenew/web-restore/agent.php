@@ -19,15 +19,23 @@ function healthy():bool{
  for($i=0;$i<30;$i++){@touch('/run/onenew-restore-agent.heartbeat');$http_response_header=[];@file_get_contents('http://127.0.0.1:7001/api/onenew/admin/restore',false,$context);if(preg_match('~^HTTP/\S+ 403\b~',$http_response_header[0]??''))return true;sleep(2);}return false;
 }
 
+function resetOfflineRedis():void{
+    // Only the bundled container's fixed cache files. No uploaded paths are used.
+    foreach(['/data/dump.rdb','/data/appendonly.aof'] as $file){if(is_link($file))throw new RuntimeException('Linked Redis persistence');if(is_file($file)&&!unlink($file))throw new RuntimeException('Cannot reset Redis persistence');}
+    $dir='/data/appendonlydir';if(is_link($dir))throw new RuntimeException('Linked Redis persistence');
+    if(is_dir($dir)){foreach(new DirectoryIterator($dir) as $entry){if($entry->isDot())continue;if(!$entry->isFile()||$entry->isLink()||!str_starts_with($entry->getFilename(),'appendonly.aof'))throw new RuntimeException('Unexpected Redis persistence');if(!unlink($entry->getPathname()))throw new RuntimeException('Cannot reset Redis persistence');}rmdir($dir);}
+}
 $recoverOnly=($argv[1]??'')==='--recover';
 if(!$recoverOnly){$lock=fopen('/run/onenew-restore-agent.lock','c+');if(!$lock||!flock($lock,LOCK_EX|LOCK_NB))exit(1);}
 $groups=['onenew-web','onenew-queue','onenew-ws','onenew-scheduler'];
 // A container interruption during a switch always restores the pre-change snapshot before web startup.
-foreach(glob(Recovery::root($source).'/*/switching')?:[] as $flag){$id=basename(dirname($flag));if(!Recovery::validId($id))continue;
+$pending=array_unique(array_merge(glob(Recovery::root($source).'/*/switching')?:[],glob(Recovery::root($source).'/*/cache-reset-required')?:[]));
+$recovered=[];foreach($pending as $flag){$id=basename(dirname($flag));if(!Recovery::validId($id)||isset($recovered[$id]))continue;$recovered[$id]=true;
     $resume=[];
     if(!$recoverOnly){foreach($groups as $group){supervisor('status',$group,$before);if(preg_match('/\b(RUNNING|STARTING|BACKOFF)\b/',$before))$resume[]=$group;}try{stopWriters($groups);}catch(Throwable){fwrite(STDERR,"Cannot stop writers for startup rollback.\n");exit(1);}}
-    if(task('rollback',$id)!==0){fwrite(STDERR,"Web restore startup rollback failed; startup stopped.\n");exit(1);}clearRequest(dirname($flag));if(!$recoverOnly)foreach(array_reverse($resume) as $group)supervisor('start',$group);
+    if(task($recoverOnly?'rollback-offline':'rollback',$id)!==0){fwrite(STDERR,"Web restore startup rollback failed; startup stopped.\n");exit(1);}if($recoverOnly){try{resetOfflineRedis();task('cache-reset-complete',$id);}catch(Throwable){fwrite(STDERR,"Cannot reset bundled Redis after rollback.\n");exit(1);}}clearRequest(dirname($flag));if(!$recoverOnly)foreach(array_reverse($resume) as $group)supervisor('start',$group);
 }
+foreach(glob(Recovery::root($source).'/*/processing.json')?:[] as $pendingFile){$id=basename(dirname($pendingFile));if(Recovery::validId($id)&&!isset($recovered[$id])){task('reject',$id);clearRequest(dirname($pendingFile));}}
 if($recoverOnly)exit(0);
 $lastPrune=0;
 while(true){
@@ -41,7 +49,7 @@ while(true){
             $body=json_decode($request['body'],true,16,JSON_THROW_ON_ERROR);
             if(($body['id']??'')!==$id||!in_array($body['action']??'',['verify','apply'],true)||($body['expires_at']??0)<time())throw new RuntimeException('Expired request');
             if(task('claim',$id)!==0)throw new RuntimeException('Invalid input');
-            if($body['action']==='verify'){task('verify',$id);clearRequest($dir);continue;}
+            if($body['action']==='verify'){if(task('verify',$id)!==0)task('reject',$id);clearRequest($dir);continue;}
             // Stop writers through a root-only local Supervisor socket. No Docker socket or arbitrary commands.
             $stopped=true;foreach($groups as $group){supervisor('status',$group,$before);if(preg_match('/\b(RUNNING|STARTING|BACKOFF)\b/',$before))$restart[]=$group;}
             stopWriters($groups);

@@ -44,8 +44,9 @@ function reportTime(value,timezone){
  if(!value||!Number.isFinite(Date.parse(value)))return '—';
  try{return new Date(value).toLocaleString('zh-CN',{timeZone:timezone,hour12:false})}catch{return '—'}
 }
+export function trafficPage(value,pages){if(!/^\d+$/.test(String(value)))return null;const n=Number(value);return Number.isSafeInteger(n)?Math.min(Math.max(1,pages),Math.max(1,n)):null}
 export function TrafficDetails({react:React,get,post,format,userId,selection,onBack}){
- const h=React.createElement,[tab,setTab]=React.useState('nodes'),[page,setPage]=React.useState(1),[result,setResult]=React.useState(null),[busy,setBusy]=React.useState(true),[error,setError]=React.useState(''),[retry,setRetry]=React.useState(0),[setting,setSetting]=React.useState(false),[auditError,setAuditError]=React.useState(''),tabRefs=React.useRef([]);
+ const h=React.createElement,[tab,setTab]=React.useState('nodes'),[page,setPage]=React.useState(1),[result,setResult]=React.useState(null),[busy,setBusy]=React.useState(true),[error,setError]=React.useState(''),[retry,setRetry]=React.useState(0),[setting,setSetting]=React.useState(false),[auditError,setAuditError]=React.useState(''),[jump,setJump]=React.useState('1'),tabRefs=React.useRef([]);
  const requestKey=`${userId}:${selection.recordAt}:${tab}:${page}`,data=result?.key===requestKey?result.data:null;
  React.useEffect(()=>{
   let active=true;setBusy(true);setError('');
@@ -58,6 +59,7 @@ export function TrafficDetails({react:React,get,post,format,userId,selection,onB
  function keydown(event,index){let next;if(event.key==='ArrowRight'||event.key==='ArrowLeft')next=1-index;else if(event.key==='Home')next=0;else if(event.key==='End')next=1;else return;event.preventDefault();choose(next?'domains':'nodes',true)}
  const cells=(values,header=false)=>values.map((value,index)=>h(header?'th':'td',{key:index,className:header?'h-10 px-2 text-left text-xs text-muted-foreground':'px-2 py-2 text-sm',style:index?{whiteSpace:'nowrap'}:{overflowWrap:'anywhere'}},value));
  const head=tab==='nodes'?['节点','原始上传','原始下载','倍率','计费总计']:['访问域名','报告时间','节点','命中次数'];
+ React.useEffect(()=>setJump(String(page)),[page]);
  const rows=Array.isArray(data?.data)?data.data:[],count=Number(data?.total||0),perPage=Number(data?.per_page||20),pages=Math.max(1,Math.ceil(count/perPage));
  const body=rows.map((row,index)=>{
   const node=(row.node_name||`节点 #${row.server_id}`)+(row.node_deleted?'（已删除）':'');
@@ -85,6 +87,12 @@ export function TrafficDetails({react:React,get,post,format,userId,selection,onB
     tab==='nodes'&&h('p',{className:'text-xs text-muted-foreground'},'本日计费总量 ',trafficValue(data.native_totals?.total,format),' · 已归属节点 ',trafficValue(data.totals?.total,format),' · 未归属 ',trafficValue(data.unattributed?.total,format)),
     coverage&&(tab==='nodes'?coverage.state!=='complete':coverage.state!=='available')&&h('p',{role:'status',className:'rounded-md border p-2 text-xs text-muted-foreground'},coverageNotice(coverage,tab)),
     rows.length?h('div',{className:'rounded-md border',style:{maxHeight:320,overflow:'auto'}},h('table',{className:'w-full text-sm',style:{width:'100%'}},h('thead',null,h('tr',{className:'border-b'},...cells(head,true))),h('tbody',null,...body))):h('p',{className:'py-6 text-center text-sm text-muted-foreground'},tab==='domains'?'暂无域名记录':'暂无逐节点流量记录'),
-    h('div',{className:'flex items-center justify-between text-xs text-muted-foreground'},h('span',null,`${count} 条 · 第 ${page} / ${pages} 页`),h('div',{className:'flex items-center gap-2'},h('button',{type:'button',className:'rounded-md border px-2 py-1',disabled:page<=1,onClick:()=>setPage(page-1),'aria-label':'上一页明细'},'上一页'),h('button',{type:'button',className:'rounded-md border px-2 py-1',disabled:page>=pages,onClick:()=>setPage(page+1),'aria-label':'下一页明细'},'下一页'))),
+    h('div',{className:'flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground'},h('span',null,`${count} 条 · 第 ${page} / ${pages} 页`),h('div',{className:'flex flex-wrap items-center gap-2'},
+    h('button',{type:'button',className:'rounded-md border px-2 py-1',disabled:page<=1,onClick:()=>setPage(1),'aria-label':'首页明细'},'首页'),
+    h('button',{type:'button',className:'rounded-md border px-2 py-1',disabled:page<=1,onClick:()=>setPage(page-1),'aria-label':'上一页明细'},'上一页'),
+    h('label',{className:'flex items-center gap-2'},'第',h('input',{type:'number',min:1,max:pages,value:jump,'aria-label':'跳转页码',className:'w-16 rounded-md border bg-background px-2 py-1 text-center',onChange:e=>setJump(e.target.value),onKeyDown:e=>{if(e.key==='Enter'){const target=trafficPage(jump,pages);if(target!==null)setPage(target)}}}),'页'),
+    h('button',{type:'button',className:'rounded-md border px-2 py-1',onClick:()=>{const target=trafficPage(jump,pages);if(target!==null)setPage(target)}},'跳转'),
+    h('button',{type:'button',className:'rounded-md border px-2 py-1',disabled:page>=pages,onClick:()=>setPage(page+1),'aria-label':'下一页明细'},'下一页'),
+    h('button',{type:'button',className:'rounded-md border px-2 py-1',disabled:page>=pages,onClick:()=>setPage(pages),'aria-label':'末页明细'},'末页'))),
     tab==='domains'&&h('p',{className:'text-xs text-muted-foreground'},'仅显示节点实际报告的域名与次数，不包含完整 URL 或访问内容。'))));
 }

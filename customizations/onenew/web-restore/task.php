@@ -5,7 +5,7 @@ require __DIR__.'/../migration/core/MigrationBundle.php';
 use App\Onenew\WebRestore\Recovery;
 use App\Onenew\Migration\MigrationBundle;
 $mode=$argv[1]??'';$id=$argv[2]??'';$source='/www';
-if(!in_array($mode,['verify','apply','finalize','rollback','prune','claim','clean-request','reject','complete'],true))exit(2);
+if(!in_array($mode,['verify','apply','finalize','rollback','rollback-offline','prune','claim','clean-request','reject','complete','cache-reset-complete'],true))exit(2);
 if($mode==='prune'){
     foreach(glob(Recovery::root($source).'/*/status.json')?:[] as $path){try{Recovery::dir($source,basename(dirname($path)));$s=Recovery::json($path);if($s['expires_at']<time()&&!is_file(dirname($path).'/switching'))Recovery::clear(dirname($path));}catch(Throwable){}}
     exit(0);
@@ -13,7 +13,7 @@ if($mode==='prune'){
 try{$dir=Recovery::dir($source,$id);$state=Recovery::json($dir.'/status.json');}catch(Throwable){exit(2);}
 // A child can outlive its coordinator; serialize every data-writing task across agent restarts.
 $execution=null;
-if(in_array($mode,['verify','apply','finalize','rollback','complete'],true)){
+if(in_array($mode,['verify','apply','finalize','rollback','rollback-offline','complete'],true)){
     $lockPath=$source.'/.docker/.data/onenew-web-restore-execution.lock';if(is_link($lockPath))exit(2);$execution=fopen($lockPath,'c+');if(!$execution||!flock($execution,LOCK_EX))exit(2);chmod($lockPath,0600);
 }
 function clearCompiled():void{foreach(['/www/bootstrap/cache/config.php','/www/bootstrap/cache/routes-v7.php','/www/bootstrap/cache/events.php'] as $file){if(is_link($file))throw new RuntimeException('Linked cache');if(is_file($file)&&!unlink($file))throw new RuntimeException('Cannot clear compiled cache');}}
@@ -29,15 +29,29 @@ try{
         }finally{flock($f,LOCK_UN);fclose($f);}
     }elseif($mode==='clean-request'){
         foreach(['processing.json'] as $file)if(is_file($dir.'/'.$file)||is_link($dir.'/'.$file))unlink($dir.'/'.$file);exit(0);
+    }elseif($mode==='cache-reset-complete'){@unlink($dir.'/cache-reset-required');exit(0);
     }elseif($mode==='complete'){
         Recovery::state($dir,['state'=>'success','error'=>'','rollback_available'=>true]);if(!unlink($dir.'/switching'))throw new RuntimeException('Cannot commit restore');
         foreach(['stage','rollback'] as $folder){try{if(is_dir($dir.'/'.$folder))Recovery::clear($dir.'/'.$folder);}catch(Throwable){}}
         foreach(['password.enc','package.onm'] as $file)@unlink($dir.'/'.$file);exit(0);
     }elseif($mode==='reject'){
-        Recovery::state($dir,['state'=>'failed','error'=>'恢复请求无法执行，现有数据未被替换。']);@unlink($dir.'/request.json');exit(0);
-    }elseif($mode==='rollback'){
+        if(!in_array($state['state'],['success','failed'],true))Recovery::state($dir,['state'=>'failed','error'=>'恢复请求未能完成，现有数据未被替换。','rollback_available'=>is_file($dir.'/rollback.onm')]);
+        if(!is_file($dir.'/switching')&&!is_file($dir.'/cache-reset-required')){
+            foreach(['stage','rollback'] as $folder)if(is_dir($dir.'/'.$folder))Recovery::clear($dir.'/'.$folder);
+            foreach(['password.enc','package.onm'] as $file)@unlink($dir.'/'.$file);
+        }
+        @unlink($dir.'/request.json');exit(0);
+    }elseif(in_array($mode,['rollback','rollback-offline'],true)){
+        Recovery::write($dir.'/cache-reset-required','1');
         if(is_dir($dir.'/stage'))Recovery::clear($dir.'/stage');
         if(is_file($dir.'/switching'))Recovery::rollback($source,$dir);clearCompiled();
+        if($mode==='rollback'){
+            require '/www/vendor/autoload.php';$env=Dotenv\Dotenv::parse(file_get_contents($source.'/.env'));
+            if(!in_array($env['REDIS_HOST']??'127.0.0.1',['127.0.0.1','localhost'],true)||!empty($env['REDIS_URL']))throw new RuntimeException('Unsupported Redis recovery');
+            $redis=new Redis();$redis->connect('127.0.0.1',(int)($env['REDIS_PORT']??6379),5);
+            $password=$env['REDIS_PASSWORD']??null;if(!in_array($password,[null,'','null','(null)'],true))$redis->auth($password);
+            foreach(array_unique([(int)($env['REDIS_DB']??0),(int)($env['REDIS_CACHE_DB']??1)]) as $db){$redis->select($db);$redis->flushDB();}$redis->save();$redis->close();unset($password);@unlink($dir.'/cache-reset-required');
+        }
         Recovery::state($dir,['state'=>'failed','error'=>'恢复未完成，已回滚到恢复前的数据。','rollback_available'=>is_file($dir.'/rollback.onm'),'summary'=>array_merge($state['summary']??[],['admin_path'=>$state['original_admin_path']??'/'])]);
     }else{
         require '/www/vendor/autoload.php';$app=require '/www/bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
@@ -71,10 +85,10 @@ try{
             unset($password);
         }
     }
-    if(in_array($mode,['verify','rollback'],true)){
+    if(in_array($mode,['verify','rollback','rollback-offline'],true)){
         if(is_dir($dir.'/stage'))Recovery::clear($dir.'/stage');
-        if(in_array($mode,['rollback'],true))foreach(['password.enc','package.onm'] as $name)if(is_file($dir.'/'.$name))unlink($dir.'/'.$name);
-        if(in_array($mode,['rollback'],true)&&is_dir($dir.'/rollback'))Recovery::clear($dir.'/rollback');
+        if(in_array($mode,['rollback','rollback-offline'],true))foreach(['password.enc','package.onm'] as $name)if(is_file($dir.'/'.$name))unlink($dir.'/'.$name);
+        if(in_array($mode,['rollback','rollback-offline'],true)&&is_dir($dir.'/rollback'))Recovery::clear($dir.'/rollback');
     }
     exit(0);
 }catch(Throwable $e){
