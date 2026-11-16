@@ -26,4 +26,8 @@ function applyOnenewShadowsocksTransport(string $root): void
             "        \$array['udp'] = true;\n        if (data_get(\$protocol_settings, 'plugin')",
             "        \$array['udp'] = data_get(\$protocol_settings, 'plugin') !== 'v2ray-plugin';\n        if (data_get(\$protocol_settings, 'plugin')");
     }
+
+    replaceOnce($root.'/app/Protocols/Clash.php',
+        "if (!str_contains(\$pair, '=')) {\n                        return [];",
+        "if (!str_contains(\$pair, '=')) {\n                        return [trim(\$pair) => 'true'];");
 }
