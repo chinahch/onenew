@@ -165,6 +165,20 @@ fi
         self.assertEqual(list(self.installed.glob('.onenew-rollback.*')), [])
         self.assertEqual(list(self.root.glob('etc/caddy.upgrade-backup.*')), [])
 
+    def test_openrc_unknown_cli_service_is_accepted_when_openrc_and_health_are_ok(self):
+        self._prepare_openrc()
+        with tarfile.open(self.package, 'r:gz') as archive:
+            entries = [(item.name, archive.extractfile(item).read()) for item in archive.getmembers()]
+        with tarfile.open(self.package, 'w:gz') as archive:
+            for name, data in entries:
+                if name == 'caddyctl': data = data.replace(b' active ok', b' unknown ok')
+                item = tarfile.TarInfo(name); item.mode=0o755; item.size=len(data)
+                archive.addfile(item, io.BytesIO(data))
+        self.sums.write_text(hashlib.sha256(self.package.read_bytes()).hexdigest()+'  '+self.package.name+'\n')
+        result=self.upgrade()
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('candidate',(self.installed/'caddy').read_text())
+
     def test_openrc_refuses_foreign_service_before_mutation(self):
         self._prepare_openrc(valid=False)
         result = self.upgrade()
