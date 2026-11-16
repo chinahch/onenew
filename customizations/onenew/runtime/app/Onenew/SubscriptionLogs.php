@@ -19,9 +19,10 @@ final class SubscriptionLogs
         $p=$r->validate(['user_id'=>'sometimes|integer|min:1|exists:v2_user,id','page'=>'sometimes|integer|min:1','search'=>'sometimes|nullable|string|max:254']);
         if(empty($p['user_id'])||!Schema::hasTable('v2_subscribe_log'))return response()->json(['data'=>[],'total'=>0,'current_page'=>1,'last_page'=>1])->header('Cache-Control','no-store');
         $daily=DB::table('v2_subscribe_log')->where('user_id',$p['user_id'])
-            ->select(DB::raw('MAX(id) as latest_id'),DB::raw('COUNT(*) as pull_count'))->groupBy('ip',DB::raw('substr(created_at,1,10)'));
-        $q=DB::table('v2_subscribe_log as logs')->joinSub($daily,'daily','daily.latest_id','=','logs.id')
-            ->select('logs.id','logs.user_id','logs.ip','logs.user_agent','logs.created_at','daily.pull_count');
+            ->select('id','user_id','ip','user_agent','created_at',
+                DB::raw('COUNT(*) OVER (PARTITION BY ip,substr(created_at,1,10)) as pull_count'),
+                DB::raw('ROW_NUMBER() OVER (PARTITION BY ip,substr(created_at,1,10) ORDER BY created_at DESC,id DESC) as daily_rank'));
+        $q=DB::query()->fromSub($daily,'daily')->where('daily_rank',1)->select('id','user_id','ip','user_agent','created_at','pull_count');
         if(!empty($p['search']))$q->where(fn($q)=>$q->where('ip','like','%'.$p['search'].'%')->orWhere('user_agent','like','%'.$p['search'].'%'));
         $result=$q->orderByDesc('id')->paginate(20);$locator=app(IpRegion::class);
         $result->getCollection()->transform(function($row)use($locator){$details=$locator->cachedDetails($row->ip);$row->ip_region=$details['region'];$row->ip_isp=$details['isp'];return $row;});

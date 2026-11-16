@@ -74,6 +74,9 @@ final class Recovery
     }
     public static function snapshot(string $source,string $relative,string $dir,string $password,string $revision):void
     {
+        $required=filesize($source.'/.env')+filesize(self::databasePath($source,$relative));
+        foreach(['plugins','storage/theme'] as $resource)if(is_dir($source.'/'.$resource))foreach(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($source.'/'.$resource,\FilesystemIterator::SKIP_DOTS)) as $file){if($file->isLink()||!$file->isFile())throw new \RuntimeException('Unsupported rollback resource');$required+=$file->getSize();}
+        if($required>2147483648||disk_free_space($dir)<$required*2+67108864)throw new \RuntimeException('Insufficient rollback space');
         $stage=$dir.'/rollback';if(file_exists($stage))throw new \RuntimeException('Rollback already exists');mkdir($stage,0700);
         self::copyTree($source.'/.env',$stage.'/.env');$database=self::databasePath($source,$relative);mkdir(dirname($stage.'/data/database/'.$relative),0700,true);
         $pdo=new \PDO('sqlite:'.$database);$pdo->setAttribute(\PDO::ATTR_ERRMODE,\PDO::ERRMODE_EXCEPTION);$pdo->exec('PRAGMA busy_timeout=30000');$pdo->exec('VACUUM INTO '.$pdo->quote($stage.'/data/database/'.$relative));$pdo=null;

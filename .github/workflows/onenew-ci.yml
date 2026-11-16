@@ -87,6 +87,8 @@ jobs:
           if grep -Ei 'xboard' /tmp/onenew-processes; then exit 1; fi
       - name: Export encrypted migration and restore into a fresh instance
         run: ONENEW_MIGRATION_CI=isolated-only bash customizations/onenew/migration/tests/ci-smoke.sh
+      - name: Exercise browser upload validation and live restore
+        run: ONENEW_WEB_RESTORE_CI=isolated-only python3 customizations/onenew/web-restore/tests/ci-smoke.py
       - name: Snapshot and restore isolated instance
         run: |
           sh customizations/onenew/backup.sh /tmp/onenew-ci-backup.tar.gz

@@ -24,16 +24,21 @@ final class Service
     public function latest():?array
     {
         $root=Recovery::root($this->source());if(!is_dir($root)||is_link($root))return null;$latest=null;
-        foreach(glob($root.'/*/status.json')?:[] as $path){try{$s=Recovery::json($path);if($s['owner']===(int)Auth::guard('sanctum')->id()&&$s['expires_at']>time()&&(!$latest||$s['created_at']>$latest['created_at']))$latest=$s;}catch(\Throwable){}}
+        foreach(glob($root.'/*/status.json')?:[] as $path){try{Recovery::dir($this->source(),basename(dirname($path)));$s=Recovery::json($path);if($s['owner']===(int)Auth::guard('sanctum')->id()&&$s['expires_at']>time()&&(!$latest||$s['created_at']>$latest['created_at']))$latest=$s;}catch(\Throwable){}}
         return $latest?$this->publicState($latest):null;
+    }
+    public function history():array
+    {
+        $rows=[];foreach(glob(Recovery::root($this->source()).'/*/status.json')?:[] as $path){try{Recovery::dir($this->source(),basename(dirname($path)));$s=Recovery::json($path);if($s['expires_at']>time()&&!empty($s['rollback_available'])&&in_array($s['state'],['success','failed'],true))$rows[]=$this->publicState($s);}catch(\Throwable){}}
+        usort($rows,fn($a,$b)=>$b['created_at']<=>$a['created_at']);return array_slice($rows,0,5);
     }
     public function create(string $filename,int $bytes):array
     {
         abort_unless($this->supported(),422,'当前部署的网页恢复进程未就绪，请升级官方 Docker 部署');
         $root=Recovery::root($this->source());if(is_link($root))abort(422);if(!is_dir($root))mkdir($root,0700,true);
-        $live=0;foreach(glob($root.'/*/status.json')?:[] as $path){try{$s=Recovery::json($path);if($s['expires_at']>time()&&!in_array($s['state'],['success','failed'],true))$live++;}catch(\Throwable){}}
+        $live=0;foreach(glob($root.'/*/status.json')?:[] as $path){try{Recovery::dir($this->source(),basename(dirname($path)));$s=Recovery::json($path);if($s['expires_at']>time()&&!in_array($s['state'],['success','failed'],true))$live++;}catch(\Throwable){}}
         abort_if($live>=5,409,'已有多个恢复任务，请先完成或取消');
-        $id=(string)Str::uuid();$dir=$this->directory($id);mkdir($dir,0700);$state=['id'=>$id,'owner'=>(int)Auth::guard('sanctum')->id(),'filename'=>basename($filename),'bytes'=>$bytes,'received'=>0,'state'=>'uploading','created_at'=>time(),'updated_at'=>time(),'expires_at'=>time()+86400,'error'=>''];
+        $id=(string)Str::uuid();$dir=$this->directory($id);mkdir($dir,0700);$state=['id'=>$id,'owner'=>(int)Auth::guard('sanctum')->id(),'filename'=>basename($filename),'bytes'=>$bytes,'received'=>0,'state'=>'uploading','created_at'=>time(),'updated_at'=>time(),'expires_at'=>time()+86400,'error'=>'','original_admin_path'=>'/'.admin_setting('secure_path',admin_setting('frontend_admin_path',hash('crc32b',config('app.key'))))];
         Recovery::write($dir.'/status.json',json_encode($state,JSON_THROW_ON_ERROR));return $this->publicState($state);
     }
     public function locked(string $id,callable $callback):mixed

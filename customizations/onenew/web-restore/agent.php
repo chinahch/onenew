@@ -11,6 +11,14 @@ function runFixed(array $command,int $timeout=1800,?string &$output=null):int{
 function task(string $mode,string $id=''):int{return runFixed(['/sbin/su-exec','www','php',__DIR__.'/task.php',$mode,$id]);}
 function supervisor(string $verb,string $group,?string &$output=null):int{return runFixed(['supervisorctl','-c','/etc/supervisor/conf.d/supervisord.conf',$verb,$group.':*'],120,$output);}
 function clearRequest(string $dir):void{task('clean-request',basename($dir));}
+function stopWriters(array $groups):void{
+ foreach($groups as $group){supervisor('stop',$group);supervisor('status',$group,$status);if(!preg_match('/\b(STOPPED|EXITED|FATAL)\b/',$status)||preg_match('/\b(RUNNING|STARTING|STOPPING|BACKOFF)\b/',$status))throw new RuntimeException('Cannot stop writers');}
+}
+function healthy():bool{
+ $context=stream_context_create(['http'=>['timeout'=>2,'ignore_errors'=>true,'header'=>"Accept: application/json\r\n"]]);
+ for($i=0;$i<30;$i++){@touch('/run/onenew-restore-agent.heartbeat');$http_response_header=[];@file_get_contents('http://127.0.0.1:7001/api/onenew/admin/restore',false,$context);if(preg_match('~^HTTP/\S+ 403\b~',$http_response_header[0]??''))return true;sleep(2);}return false;
+}
+
 $recoverOnly=($argv[1]??'')==='--recover';
 if(!$recoverOnly){$lock=fopen('/run/onenew-restore-agent.lock','c+');if(!$lock||!flock($lock,LOCK_EX|LOCK_NB))exit(1);}
 // A container interruption during a switch always restores the pre-change snapshot before web startup.
@@ -32,12 +40,12 @@ while(true){
             if(task('claim',$id)!==0)throw new RuntimeException('Invalid input');
             if($body['action']==='verify'){task('verify',$id);clearRequest($dir);continue;}
             // Stop writers through a root-only local Supervisor socket. No Docker socket or arbitrary commands.
-            $stopped=true;foreach($groups as $group){
-                supervisor('status',$group,$before);if(preg_match('/\b(RUNNING|STARTING|BACKOFF)\b/',$before))$restart[]=$group;
-                supervisor('stop',$group);supervisor('status',$group,$after);
-                if(!preg_match('/\b(STOPPED|EXITED|FATAL)\b/',$after)||preg_match('/\b(RUNNING|STARTING|STOPPING|BACKOFF)\b/',$after))throw new RuntimeException('Cannot stop writers');
-            }
+            $stopped=true;foreach($groups as $group){supervisor('status',$group,$before);if(preg_match('/\b(RUNNING|STARTING|BACKOFF)\b/',$before))$restart[]=$group;}
+            stopWriters($groups);
             if(task('apply',$id)!==0||task('finalize',$id)!==0)throw new RuntimeException('Apply failed');
+            foreach(array_reverse($restart) as $group)supervisor('start',$group);$stopped=false;
+            if(!healthy()){stopWriters($groups);$stopped=true;throw new RuntimeException('Restored application unhealthy');}
+            if(task('complete',$id)!==0){stopWriters($groups);$stopped=true;throw new RuntimeException('Cannot commit restore');}
         }catch(Throwable){
             if(is_file($dir.'/switching')){
                 if(task('rollback',$id)!==0){fwrite(STDERR,"Web restore rollback failed; services remain stopped.\n");$stopped=false;}
