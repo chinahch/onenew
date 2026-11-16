@@ -8,9 +8,6 @@ def apply(source):
         p.write_text(s.replace(old,new),encoding='utf-8',newline='\n')
     edit('internal/kernel/xray/config.go','return buildShadowsocks(base, nc, users)',
         'ss := buildShadowsocks(base, nc, users)\n\t\tapplyStreamSettings(ss, nc, tc)\n\t\treturn ss')
-    edit('internal/machine/machine.go',
-        'if cfgSnapshot.KernelType=="xray" || cfgSnapshot.KernelType=="singbox"',
-        'if cfgSnapshot.Protocol=="shadowsocks" && cfgSnapshot.Network=="ws" { cfgSnapshot.KernelType="xray" }\n\t\tif cfgSnapshot.KernelType=="xray" || cfgSnapshot.KernelType=="singbox"')
     edit('internal/machine/machine.go','o.startNode(ctx, n) // no-op if already running',
         'if n.Type=="shadowsocks" {\n o.mu.Lock();h:=o.nodes[n.ID];needsSwitch:=h!=nil && h.service!=nil && h.service.ProbeKernelType()!="xray";o.mu.Unlock()\n if needsSwitch {if snapshot,err:=o.client.ForNode(n.ID).GetConfig();err==nil && snapshot!=nil && snapshot.Network=="ws" {o.stopNode(n.ID)}}\n }\n o.startNode(ctx, n) // no-op if already running')
     p=source/'internal/service/onenew_ss_kernel.go'
