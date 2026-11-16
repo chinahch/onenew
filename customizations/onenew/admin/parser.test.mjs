@@ -70,10 +70,12 @@ test('preserve refuses complex route overlap and shared tag collisions',()=>{
 });
 test('node status uses real proxy result freshness, never heartbeat',()=>{
   const now=Date.parse('2026-11-14T12:00:00Z');
-  assert.equal(healthLabel({proxy_health:{state:'succeeded',finished_at:'2026-11-14T11:59:00Z'}},now).label,'连通在线');
-  assert.equal(healthLabel({proxy_health:{state:'failed',finished_at:'2026-11-14T11:59:00Z'}},now).label,'故障');
-  for(const h of [{state:'succeeded',finished_at:'2026-11-14T11:50:00Z'},{state:'succeeded',finished_at:'2026-11-14T12:05:00Z'},{state:'running'},{state:'unsupported'}]) assert.equal(healthLabel({proxy_health:h,last_check_at:now},now).label,'待检测');
+  assert.equal(healthLabel({proxy_health:{state:'succeeded',health_state:'online',finished_at:'2026-11-14T11:59:00Z'}},now).label,'连通在线');
+  assert.equal(healthLabel({proxy_health:{state:'failed',health_state:'node_fault',finished_at:'2026-11-14T11:59:00Z'}},now).label,'节点故障');
+  for(const h of [{state:'succeeded',finished_at:'2026-11-14T11:50:00Z'},{state:'succeeded',finished_at:'2026-11-14T12:05:00Z'},{state:'running'}]) assert.equal(healthLabel({proxy_health:h,last_check_at:now},now).label,'待检测');
   assert.equal(healthLabel({last_check_at:now},now).label,'待检测');
+  assert.equal(healthLabel({proxy_health:{state:'unsupported'}},now).label,'不支持检测');
+  assert.equal(healthLabel({proxy_health:{state:'pending',error_code:'configuration_unavailable'}},now).label,'配置不可用');
 });
 test('Shadowsocks and VMess produce native envelopes for both kernels',()=>{
   const ss='ss://'+Buffer.from('aes-128-gcm:example-password').toString('base64url')+'@exit.example:443';
@@ -135,4 +137,23 @@ test('health distinguishes an active or expired task from a generic pending stat
  const now=Date.parse('2026-11-14T12:00:00Z');
  assert.equal(healthLabel({proxy_health:{state:'running',created_at:'2026-11-14T11:59:00Z'}},now).label,'检测中');
  assert.equal(healthLabel({proxy_health:{state:'expired',created_at:'2026-11-14T11:55:00Z'}},now).label,'检测超时');
+});
+
+test('stages distinguish landing faults and legacy unknown without exposing error objects',()=>{
+ const now=Date.now(),finished_at=new Date(now).toISOString();
+ for(const [health_state,label] of Object.entries({landing_fault:'落地故障',partial_landing_fault:'部分落地故障',unknown:'检测异常'}))assert.equal(healthLabel({proxy_health:{state:'succeeded',health_state,finished_at}},now).label,label);
+ assert.equal(healthLabel({proxy_health:{state:'succeeded',finished_at}},now).label,'检测异常');
+});
+
+test('ambiguous transport failures stay detection abnormal with safe detail',()=>{
+ const finished_at=new Date().toISOString();
+ const view=healthLabel({proxy_health:{state:'failed',health_state:'unknown',error_code:'transport_failed',finished_at}});
+ assert.equal(view.label,'检测异常');
+ assert.match(view.detail,/连接失败，无法确定入口\/目标/);
+});
+
+test('proven landing fault retains incomplete entry disclosure',()=>{
+ const finished_at=new Date().toISOString();
+ const view=healthLabel({proxy_health:{state:'failed',health_state:'landing_fault',error_code:'transport_failed',finished_at,stages:{entry:{state:'failed',source:'public_roundtrip'},landings:[{name:'落地一',state:'failed',error_code:'proxy_failed'}]}}});
+ assert.equal(view.label,'落地故障');assert.match(view.detail,/节点完整链路未验证/);
 });

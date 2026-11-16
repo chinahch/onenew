@@ -43,7 +43,7 @@ class ExitProbeController extends Controller
         abort_if(strlen($request->getContent()) > 2048, 413);
         $data = $request->validate(['lease' => 'required|string|min:1|max:100',
             'state' => ['required', Rule::in(['succeeded', 'failed', 'expired'])],
-            'error_code' => ['nullable', Rule::in(['', 'proxy_failed', 'target_failed', 'timeout', 'configuration_unavailable', 'unsupported', 'expired'])],
+            'error_code' => ['nullable', Rule::in(['', 'transport_failed', 'proxy_failed', 'target_failed', 'timeout', 'configuration_unavailable', 'unsupported', 'expired'])],
             'exit_ip' => 'nullable|ip', 'country' => 'nullable|regex:/^[A-Z]{2}$/D', 'diagnostics' => 'prohibited']);
         $success = $data['state'] === 'succeeded';
         abort_if(($success && (empty($data['exit_ip']) || empty($data['country']) || !empty($data['error_code']))) ||

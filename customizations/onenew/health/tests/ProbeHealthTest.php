@@ -6,6 +6,7 @@ use App\Models\Server;
 use App\Models\ServerMachine;
 use App\Models\ServerRoute;
 use App\Models\User;
+use App\Services\ServerService;
 use App\Onenew\ProbeOutboundBuilder;
 use App\Onenew\ProbeService;
 use App\Onenew\ProbeStore;
@@ -30,6 +31,104 @@ class ProbeHealthTest extends TestCase
         Cache::store('array')->flush();
     }
 
+    public function test_stage_schema_is_bound_to_lease_and_legacy_success_stays_unknown(): void
+    {
+        [$machine, $node] = $this->fixture();
+        $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->json('tasks.0');
+        $this->assertSame(['version'=>1, 'entry_source'=>'public_roundtrip', 'landings'=>[]], $task['payload']['health_stages']);
+        $body = ['machine_id'=>$machine->id, 'lease'=>$task['lease'], 'state'=>'succeeded', 'error_code'=>'',
+            'stages'=>['version'=>1, 'entry'=>['state'=>'succeeded','error_code'=>'','source'=>'public_roundtrip'], 'landings'=>[]]];
+        $url = '/api/v3/server/probes/'.$task['id'].'/result';
+        $bad = $body; $bad['stages']['landings'][] = ['id'=>'injected', 'state'=>'succeeded', 'error_code'=>''];
+        $this->withToken($machine->token)->postJson($url, $bad)->assertUnprocessable();
+        $bad = $body; $bad['stages']['entry']['source']='local_listener_roundtrip';
+        $this->withToken($machine->token)->postJson($url, $bad)->assertUnprocessable();
+        $this->withToken($machine->token)->postJson($url, $body)->assertOk();
+        $this->assertSame('online', app(ProbeService::class)->status($node)['health_state']);
+        $this->travel(61)->seconds();
+        $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->json('tasks.0');
+        $this->withToken($machine->token)->postJson('/api/v3/server/probes/'.$task['id'].'/result', [
+            'machine_id'=>$machine->id, 'lease'=>$task['lease'], 'state'=>'succeeded', 'error_code'=>'',
+        ])->assertOk();
+        $health = app(ProbeService::class)->status($node);
+        $this->assertSame('unknown', $health['health_state']);
+        $this->assertSame('upgrade_required', $health['stage_error']);
+    }
+
+    public function test_saved_landing_payload_uses_library_name_and_matching_kernel_variant(): void
+    {
+        [$machine, $node] = $this->fixture();
+        $out = ['tag'=>'draft', 'protocol'=>'socks', 'settings'=>['server'=>'exit.example', 'server_port'=>1080, 'username'=>'fixture', 'password'=>'secret']];
+        $id = \Illuminate\Support\Facades\DB::table('onenew_landings')->insertGetId([
+            'name'=>str_repeat('落地', 60), 'enabled'=>true, 'sort'=>0, 'version'=>1,
+            'link_ciphertext'=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode(['link'=>'socks://exit.example:1080', 'variants'=>['singbox'=>$out]], JSON_THROW_ON_ERROR)),
+        ]);
+        ServerService::updateMetrics($node, ['kernel_type'=>'singbox', 'onenew_runtime'=>true]);
+        $node->onenew_landing_bindings = [['landing_id'=>$id, 'global'=>true, 'domains'=>[]]];
+        $node->save();
+        $this->assertSame('landing_'.$id, $node->fresh()->custom_outbounds[0]['tag']);
+        $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->json('tasks.0');
+        $landing = $task['payload']['health_stages']['landings'][0];
+        $this->assertSame('landing_'.$id, $landing['id']);
+        $this->assertSame('exit.example', $landing['outbound']['settings']['server']);
+        $this->assertSame('secret', $landing['outbound']['settings']['password']);
+        $this->assertTrue(mb_check_encoding($landing['name'], 'UTF-8'));
+        $this->assertLessThanOrEqual(200, strlen($landing['name']));
+        $this->assertStringNotContainsString('secret', json_encode(app(ProbeStore::class)->latest($node->id)));
+        $this->withToken($machine->token)->postJson('/api/v3/server/probes/'.$task['id'].'/result', [
+            'machine_id'=>$machine->id, 'lease'=>$task['lease'], 'state'=>'succeeded', 'error_code'=>'',
+            'stages'=>['version'=>1,'entry'=>['state'=>'succeeded','error_code'=>'','source'=>'public_roundtrip'],
+                'landings'=>[['id'=>$landing['id'],'state'=>'failed','error_code'=>'proxy_failed']]],
+        ])->assertOk();
+        $health = app(ProbeService::class)->status($node);
+        $this->assertSame('landing_fault', $health['health_state']);
+        $this->assertSame($landing['name'], $health['stages']['landings'][0]['name']);
+    }
+
+    public function test_legacy_saved_proxy_is_probed_and_builtin_outbounds_are_skipped(): void
+    {
+        [$machine, $node] = $this->fixture();
+        $node->custom_outbounds = [
+            ['tag'=>'direct', 'protocol'=>'direct', 'settings'=>[]],
+            ['tag'=>'legacy_exit', 'protocol'=>'socks', 'settings'=>['server'=>'exit.example','server_port'=>1080,'username'=>'fixture','password'=>'secret']],
+            ['tag'=>'block', 'protocol'=>'block', 'settings'=>[]],
+        ];
+        $node->save();
+        $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->json('tasks.0');
+        $this->assertCount(1, $task['payload']['health_stages']['landings']);
+        $this->assertSame('legacy_exit', $task['payload']['health_stages']['landings'][0]['id']);
+        $this->assertSame('secret', $task['payload']['health_stages']['landings'][0]['outbound']['settings']['password']);
+    }
+
+    public function test_mixed_legacy_landing_kernels_and_invalid_config_preserve_entry_probe(): void
+    {
+        [$machine, $node] = $this->fixture();
+        $node->custom_outbounds = [
+            ['tag'=>'sing_exit', 'protocol'=>'socks', 'settings'=>['server'=>'one.example','server_port'=>1080]],
+            ['tag'=>'xray_exit', 'protocol'=>'socks', 'settings'=>['servers'=>[['address'=>'two.example','port'=>1080]]]],
+            ['tag'=>'broken_exit', 'protocol'=>'unsupported_protocol', 'settings'=>[]],
+        ];
+        $node->save();
+        $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk()->json('tasks.0');
+        $this->assertSame('singbox', $task['payload']['kernel_type']);
+        $landings = $task['payload']['health_stages']['landings'];
+        $this->assertSame(['singbox','xray','singbox'], array_column($landings, 'kernel_type'));
+        $this->assertSame('two.example', $landings[1]['outbound']['settings']['servers'][0]['address']);
+        $this->assertSame('configuration_unavailable', $landings[2]['error_code']);
+        $this->assertSame('running', app(ProbeService::class)->status($node)['state']);
+    }
+
+    public function test_reality_nat_fallback_is_explicitly_local_in_staged_contract(): void
+    {
+        [$machine, $node, $user] = $this->fixture();
+        $node->type = 'vless';
+        $node->protocol_settings = ['network'=>'tcp', 'tls'=>2, 'reality_settings'=>['server_name'=>'reality.example','public_key'=>'public-key','short_id'=>'ab']];
+        $payload = app(ProbeOutboundBuilder::class)->build($node, $user);
+        $this->assertSame('127.0.0.1', $payload['outbound']['settings']['server']);
+        $stages = \App\Onenew\ProbeStages::payload($node, $payload['kernel_type'], $payload);
+        $this->assertSame('local_listener_roundtrip', $stages['entry_source']);
+    }
+
     public function test_bearer_machine_authentication_rejects_wrong_and_disabled_tokens(): void
     {
         [$machine] = $this->fixture();
@@ -44,7 +143,7 @@ class ProbeHealthTest extends TestCase
         $response = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk();
         $task = $response->json('tasks.0');
         $this->assertCount(1, $response->json('tasks'));
-        $this->assertSame(10000, $task['timeout_ms']);
+        $this->assertSame(90000, $task['timeout_ms']);
         $this->assertSame('https://www.cloudflare.com/cdn-cgi/trace', $task['payload']['target']);
         $this->assertSame('public.example', $task['payload']['outbound']['settings']['server']);
         $this->assertSame(443, $task['payload']['outbound']['settings']['server_port']);
@@ -91,7 +190,7 @@ class ProbeHealthTest extends TestCase
         $this->withToken($machine->token)->postJson($url, $result)->assertConflict();
         $health = app(ProbeService::class)->status($node);
         $this->assertSame('succeeded', $health['state']);
-        $this->assertSame(['state', 'finished_at', 'created_at', 'error_code', 'source', 'latency_ms', 'ping_ms'], array_keys($health));
+        $this->assertSame(['state', 'finished_at', 'created_at', 'error_code', 'source', 'latency_ms', 'ping_ms', 'health_state', 'stage_error', 'stages'], array_keys($health));
         $this->travel(601)->seconds();
         $this->assertSame('expired', app(ProbeService::class)->status($node)['state']);
     }
@@ -455,7 +554,7 @@ class ProbeHealthTest extends TestCase
     {
         $route = ServerRoute::create(['remarks' => 'Probe route', 'match' => ['original.example'],
             'action' => 'proxy', 'action_value' => 'landing-one']);
-        $node->update(['route_ids' => [$route->id]]);
+        $node->update(['route_ids' => [$route->id], 'custom_outbounds'=>[['tag'=>'landing-one', 'protocol'=>'socks', 'settings'=>['server'=>'exit.example','server_port'=>1080]]]]);
         return $route;
     }
 }

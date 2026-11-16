@@ -71,6 +71,7 @@ class ProbeService
                 }
                 try {
                     $payload = $this->builder->build($node, $user);
+                    $payload['health_stages'] = ProbeStages::payload($node, $payload['kernel_type'], $payload);
                 } catch (ProbeUnavailable $e) {
                     $this->finish($task, $e->getMessage() === 'unsupported' ? 'unsupported' : 'pending', $e->getMessage());
                     return [];
@@ -83,6 +84,8 @@ class ProbeService
                 }
                 $lease = bin2hex(random_bytes(32));
                 $task['state'] = 'running';
+                $task['entry_source'] = $payload['health_stages']['entry_source'];
+                $task['expected_landings'] = array_map(fn ($landing) => ['id'=>$landing['id'], 'name'=>$landing['name']], $payload['health_stages']['landings']);
                 $task['user_id'] = (int) $user->id;
                 $task['user_revision'] = hash('sha256', $user->uuid);
                 $task['lease_hash'] = hash('sha256', $lease);
@@ -90,7 +93,7 @@ class ProbeService
                 $this->store->save($task);
                 return [[
                     'id' => $task['id'], 'lease' => $lease, 'expires_at' => $this->iso($task['expires_at']),
-                    'timeout_ms' => 10000, 'payload' => $payload,
+                    'timeout_ms' => 90000, 'payload' => $payload,
                 ]];
             }
             return [];
@@ -144,6 +147,7 @@ class ProbeService
                 }
             }
             $code = $result['error_code'] ?? '';
+            $task = array_replace($task, ProbeStages::accept($task['expected_landings'] ?? [], $result['stages'] ?? null, $result['state'], $code, $task['entry_source'] ?? 'public_roundtrip'));
             $state = $result['state'];
             // An unsupported/configuration result proves no proxy roundtrip happened.
             if (in_array($code, ['unsupported', 'configuration_unavailable', 'connector_only'], true)) {
@@ -177,6 +181,8 @@ class ProbeService
             'state' => $state, 'finished_at' => $this->iso($task['finished_at']), 'created_at' => $this->iso($task['created_at']),
             'error_code' => $code, 'source' => $source,
             'latency_ms' => $task['latency_ms'] ?? null, 'ping_ms' => $task['ping_ms'] ?? null,
+            'health_state' => in_array($state, ['succeeded','failed'], true) ? ($task['health_state'] ?? 'unknown') : 'unknown',
+            'stage_error' => $task['stage_error'] ?? '', 'stages' => $task['stages'] ?? null,
         ];
     }
 
@@ -218,9 +224,9 @@ class ProbeService
     private function revision(Server $node): string
     {
         $fields = ['onenew_identity', 'machine_id', 'enabled', 'type', 'host', 'port', 'server_port', 'parent_id',
-            'node_speed_limit_mbps', 'protocol_settings', 'group_ids', 'custom_outbounds', 'custom_routes', 'route_ids', 'cert_config'];
+            'node_speed_limit_mbps', 'onenew_landing_bindings', 'protocol_settings', 'group_ids', 'custom_outbounds', 'custom_routes', 'route_ids', 'cert_config'];
         // Invalidate cached unsupported results when the client builder changes.
-        $values = ['probe_schema_version' => 8];
+        $values = ['probe_schema_version' => 9];
         foreach ($fields as $field) {
             $value = $node->getAttribute($field);
             // The native port column is VARCHAR without a model scalar cast:

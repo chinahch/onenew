@@ -3,12 +3,12 @@ import argparse, gzip, hashlib, io, json, os, subprocess, tarfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = 'onenew-v0.1.10'
+VERSION = 'onenew-v0.1.11'
 UPSTREAM = '0a29338e1f102a462363ce3527417029f89bab28'
 
 def validate_source(source):
     manifest = json.loads((source / 'build-source.json').read_text(encoding='utf-8'))
-    required = {'landing-v1', 'proxy-probes-v1', 'certificate-lifecycle-v1', 'onenew-domain-metadata-v1', 'onenew-hot-apply-v1', 'onenew-exit-probe-v1', 'onenew-panel-egress-v1', 'onenew-node-bandwidth-v1', 'onenew-argo-offload-v1', 'onenew-health-cloudflare-v1', 'onenew-health-https-v1', 'onenew-ss-ws-tls-v1'}
+    required = {'landing-v1', 'proxy-probes-v1', 'certificate-lifecycle-v1', 'onenew-domain-metadata-v1', 'onenew-hot-apply-v1', 'onenew-exit-probe-v1', 'onenew-panel-egress-v1', 'onenew-node-bandwidth-v1', 'onenew-argo-offload-v1', 'onenew-health-cloudflare-v1', 'onenew-health-https-v1', 'onenew-ss-ws-tls-v1', 'onenew-staged-health-v1'}
     if manifest.get('upstream_commit') != UPSTREAM or not required.issubset(manifest.get('features', [])):
         raise ValueError('Requires pinned dual-kernel source and all Onenew overlays')
     return manifest
@@ -22,7 +22,7 @@ def brand(source):
         'https://github.com/cedar2025/xboard-node': 'https://github.com/chinahch/onenew',
     }
     for old, new in changes.items():
-        if old not in text:
+        if old not in text and new not in text:
             raise ValueError('CLI branding anchor changed: ' + old)
         text = text.replace(old, new)
     cli.write_text(text, encoding='utf-8', newline='\n')

@@ -27,11 +27,22 @@ class ProbeController extends Controller
         $data = $request->validate([
             'lease' => 'required|string|min:1|max:100',
             'state' => ['required', Rule::in(['succeeded', 'failed', 'expired', 'unsupported'])],
-            'error_code' => ['nullable', 'string', Rule::in(['', 'proxy_failed', 'target_failed', 'timeout', 'configuration_unavailable', 'unsupported', 'expired', 'connector_only'])],
+            'error_code' => ['nullable', 'string', Rule::in(['', 'transport_failed', 'proxy_failed', 'target_failed', 'timeout', 'configuration_unavailable', 'unsupported', 'expired', 'connector_only'])],
             'latency_ms' => 'nullable|integer|min:0|max:15000',
             'ping_ms' => 'nullable|numeric|min:0|max:15000',
             'ping_error_code' => ['nullable', 'string', Rule::in(['', 'icmp_timeout', 'icmp_unavailable', 'icmp_resolve_failed'])],
             'diagnostics' => 'prohibited',
+            'stages' => 'sometimes|array:version,entry,landings',
+            'stages.version' => 'required_with:stages|integer|in:1',
+            'stages.entry' => 'required_with:stages|array:state,error_code,source',
+            'stages.entry.source' => 'required_with:stages|string|in:public_roundtrip,local_listener_roundtrip,cdn_roundtrip',
+            'stages.entry.state' => 'required_with:stages|string',
+            'stages.entry.error_code' => 'nullable|string|max:40',
+            'stages.landings' => 'present_with:stages|array|max:8',
+            'stages.landings.*' => 'array:id,state,error_code',
+            'stages.landings.*.id' => 'required|string|max:100',
+            'stages.landings.*.state' => 'required|string|max:20',
+            'stages.landings.*.error_code' => 'nullable|string|max:40',
         ]);
         $error = $data['error_code'] ?? '';
         abort_if(($data['state'] === 'succeeded' && $error !== '') ||

@@ -9,7 +9,7 @@ export function fetchExitProbe(get,id){
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))throw new Error('测试编号无效');
   return get(`${root}/${id}`,{baseURL:'/'});
 }
-const errors={expired:'测试已超时，请重新测试',proxy_failed:'无法经落地完成请求',target_failed:'出口识别服务响应无效',timeout:'落地请求超时',configuration_unavailable:'当前内核无法加载该配置',unsupported:'当前内核不支持此落地',machine_unavailable:'节点归属服务器已变更或不可用'};
+const errors={expired:'测试已超时，请重新测试',transport_failed:'连接失败，无法确定入口/目标',proxy_failed:'无法经落地完成请求',target_failed:'出口识别服务响应无效',timeout:'落地请求超时',configuration_unavailable:'当前内核无法加载该配置',unsupported:'当前内核不支持此落地',machine_unavailable:'节点归属服务器已变更或不可用'};
 export function LandingProbe({react:React,nodeId,machineId,core,outbound,post,get}){
   const h=React.createElement,[task,setTask]=React.useState(null),[busy,setBusy]=React.useState(false),[error,setError]=React.useState(''),generation=React.useRef(0);
   const draft=JSON.stringify({nodeId,machineId,core,outbound});
