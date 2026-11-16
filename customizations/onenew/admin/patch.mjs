@@ -93,6 +93,8 @@ export function patchBundle(source,runtime){
   source=replaceOnce(source,'{path:"subscribe-template",element:Q.jsx(WQe,{})}',
     '{path:"energy",element:Q.jsx(OnenewAdmin.EnergyRequests,{react:H,get:IL,post:RL})},{path:"migration",element:Q.jsx(OnenewAdmin.MigrationPage,{react:H,get:IL,post:RL})},{path:"subscribe-template",element:Q.jsx(WQe,{})}');
   source=replaceOnce(source,'{path:"plugins/:pluginCode/*",','{path:"plugins/subscription_guard/logs",element:Q.jsx(OnenewAdmin.SubscriptionLogsPage,{react:H,get:IL})},{path:"plugins/:pluginCode/*",');
+  source=replaceOnce(source,'shadowsocks:{schema:h4t(t),component:p4t}',
+    'shadowsocks:{schema:h4t(t).extend({tls:yy().default(0),network:cy().default("tcp"),network_settings:fy(hy()).nullable().optional(),tls_settings:fy(hy()).default({}),cert_config:e.optional().default({cert_mode:"none"})}),component:e=>Q.jsxs(Q.Fragment,{children:[Q.jsx(p4t,e),Q.jsx(OnenewAdmin.ShadowsocksTransport,{react:H,form:e.form})]})}');
   return runtime+'\n'+source;
 }
 
