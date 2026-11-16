@@ -102,19 +102,26 @@ class ProbeOutboundBuilder extends SingBox
         ];
     }
 
-    /** Detect the IP + matching SNI/WS Host pattern used by CDN fronted nodes. Use the operator-selected CDN edge. */
+    /** Operator-requested alternate edge for matching CDN transport configurations. */
     public function cdnProbeHost(Server $node): ?string
     {
         $s = $node->protocol_settings ?? [];
-        if (!in_array($node->type, ['vless', 'vmess', 'trojan'], true)
-            || data_get($s, 'network') !== 'ws' || (int) data_get($s, 'tls', 0) !== 1
+        $network = data_get($s, 'network');
+        $ws = $network === 'ws' && in_array($node->type, ['vless', 'vmess', 'trojan'], true);
+        $alpn = data_get($s, 'network_settings.alpn', []);
+        $alpn = is_string($alpn) ? array_map('trim', explode(',', $alpn)) : (is_array($alpn) ? $alpn : []);
+        $xhttp = $node->type === 'vless' && in_array($network, ['xhttp', 'splithttp'], true)
+            && in_array('h2', $alpn, true);
+        if ((!$ws && !$xhttp) || (int) data_get($s, 'tls', 0) !== 1
             || !filter_var(trim((string) $node->host, '[]'), FILTER_VALIDATE_IP)) {
             return null;
         }
         $sni = strtolower(trim((string) data_get($s, 'tls_settings.server_name', '')));
         $headers = array_change_key_case((array) data_get($s, 'network_settings.headers', []), CASE_LOWER);
-        $wsHost = strtolower(trim((string) ($headers['host'] ?? data_get($s, 'network_settings.host', ''))));
-        if ($sni === '' || $sni !== $wsHost || !str_contains($sni, '.')
+        $transportHost = $xhttp ? data_get($s, 'network_settings.host', '')
+            : ($headers['host'] ?? data_get($s, 'network_settings.host', ''));
+        $transportHost = strtolower(trim((string) $transportHost));
+        if ($sni === '' || $sni !== $transportHost || !str_contains($sni, '.')
             || filter_var($sni, FILTER_VALIDATE_IP)
             || !filter_var($sni, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
             return null;
