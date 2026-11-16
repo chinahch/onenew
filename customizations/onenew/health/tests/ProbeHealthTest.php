@@ -400,6 +400,40 @@ class ProbeHealthTest extends TestCase
         $this->assertNull($builder->cdnProbeHost($node));
     }
 
+    public function test_cdn_xhttp_h2_and_all_three_ws_protocols_preserve_native_handshake(): void
+    {
+        [, $node, $user] = $this->fixture();
+        $node->host = '101.69.181.108';
+        $builder = app(ProbeOutboundBuilder::class);
+        foreach (['vmess', 'vless', 'trojan'] as $type) {
+            $node->type = $type;
+            $node->protocol_settings = ['network'=>'ws', 'tls'=>1,
+                'tls_settings'=>['server_name'=>'cdn.example'],
+                'network_settings'=>['path'=>'/ws', 'headers'=>['Host'=>'cdn.example']]];
+            $out = $builder->build($node, $user)['outbound']['settings'];
+            $this->assertSame('ip.sb', $out['server'], $type);
+            $this->assertSame(443, $out['server_port'], $type);
+            $this->assertSame('cdn.example', $out['tls']['server_name'], $type);
+            $this->assertSame('/ws', $out['transport']['path'], $type);
+        }
+        $node->type = 'vless';
+        $node->protocol_settings = ['network'=>'xhttp', 'tls'=>1,
+            'tls_settings'=>['server_name'=>'cdn.example'],
+            'network_settings'=>['host'=>'cdn.example', 'path'=>'/xhttp', 'mode'=>'packet-up', 'alpn'=>'h2',
+                'extra'=>['headers'=>[], 'xPaddingBytes'=>'100-1000', 'noSSEHeader'=>false]]];
+        $payload = $builder->build($node, $user);
+        $this->assertSame('xray', $payload['kernel_type']);
+        $out = $payload['outbound'];
+        $this->assertSame('ip.sb', $out['settings']['vnext'][0]['address']);
+        $this->assertSame(443, $out['settings']['vnext'][0]['port']);
+        $this->assertSame('cdn.example', $out['stream_settings']['tlsSettings']['serverName']);
+        $this->assertSame(['h2'], $out['stream_settings']['tlsSettings']['alpn']);
+        $this->assertSame('packet-up', $out['stream_settings']['xhttpSettings']['mode']);
+        $this->assertSame('/xhttp', $out['stream_settings']['xhttpSettings']['path']);
+        $this->assertSame('100-1000', $out['stream_settings']['xhttpSettings']['extra']['xPaddingBytes']);
+        $this->assertSame('101.69.181.108', $node->host);
+    }
+
     private function fixture(): array
     {
         $machine = ServerMachine::create(['name' => 'probe-machine', 'token' => 'machine-secret-' . bin2hex(random_bytes(6)), 'is_active' => true]);
