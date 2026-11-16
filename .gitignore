@@ -36,3 +36,6 @@ compose.split.yaml
 /customizations/onenew/**/dist/
 /data/
 /backups/
+
+__pycache__/
+*.pyc

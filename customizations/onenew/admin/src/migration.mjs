@@ -3,7 +3,7 @@ const getApi=(get,url)=>get(url,{baseURL:'/'});
 const postApi=(post,url,data)=>post(url,data,{baseURL:'/'});
 export function restoreCommand(revision,filename){
  if(!/^[a-f0-9]{40}$/.test(revision)||!/^onenew-migration-[a-f0-9-]{36}\.onm$/.test(filename))throw new Error('迁移版本或文件名无效');
- return `bash <(curl -fsSL 'https://raw.githubusercontent.com/chinahch/onenew/${revision}/customizations/onenew/migration/restore.sh') --revision '${revision}' --package '/root/${filename}' --target '/opt/onenew'`;
+ return `bash <(curl -fsSL 'https://get.timi.baby/panel/restore' || printf '\\nexit 1\\n') --revision '${revision}' --package '/root/${filename}' --target '/opt/onenew'`;
 }
 export const stopOldServerCommand = `cd /opt/onenew && env -u COMPOSE_PROJECT_NAME -u COMPOSE_FILE docker compose --env-file /dev/null -f /opt/onenew/compose.yaml down --remove-orphans`;
 export const cleanOldServerCommand = `# 仅在旧服务器执行；先确认新站登录、订阅及节点正常，并保存迁移包。
@@ -45,7 +45,7 @@ export function MigrationPage({react:React,get,post}){
  const filename=task?`onenew-migration-${task.id}.onm`:'';
  const command=info?.supported&&task?restoreCommand(task.revision||info.revision,filename):'';
  return h('section',{className:'onenew-migration onenew-landing','aria-label':'一键迁移'},
-  h('h2',null,'一键迁移'),h('p',{className:'onenew-help'},'生成加密迁移包，在新服务器执行一条恢复命令。保留账号、订阅链接、节点凭据、插件及站点设置。'),
+  h('h2',null,'一键迁移'),h('p',{className:'onenew-help'},'源码仓库私有化后，新面板服务器需先将仅可读取源码的 GitHub 凭据保存到 /root/.config/onenew/github.token，权限600。不要使用节点 Token；此凭据不包含在迁移包内。'),h('p',{className:'onenew-help'},'生成加密迁移包，在新服务器执行一条恢复命令。保留账号、订阅链接、节点凭据、插件及站点设置。'),
   error&&h('p',{role:'alert',className:'onenew-error'},error),!info&&!error&&h('p',null,'正在检查部署…'),
   info&&!info.supported&&h('p',{className:'onenew-notice'},info.reason),
   info?.supported&&h(React.Fragment,null,

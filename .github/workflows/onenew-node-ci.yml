@@ -62,6 +62,7 @@ jobs:
           python3 onenew/customizations/onenew/node/test_exit_probe_patch.py
           python3 onenew/customizations/onenew/node/test_egress_patch.py
           python3 onenew/customizations/onenew/node/test_upgrade.py
+          python3 onenew/customizations/onenew/node/test_publish_distribution.py
           # Reject CRLF before packaging: Bash treated trailing CR as a command
           # and "set -Eeuo pipefail" as an invalid option on Linux.
           python3 - <<'PY'
@@ -90,6 +91,12 @@ jobs:
           dist/amd64/caddyctl config init --mode machine --panel-url https://panel.example.test --token fixture-disposable-token --machine-id 7 --kernel singbox --health-port 65530 --version onenew-v0.1.10 --output /tmp/onenew-fixture/config.yml --credentials-out /tmp/onenew-fixture/credentials.env --meta /tmp/onenew-fixture/install-meta.json --install-root /etc/caddy
           test -s /tmp/onenew-fixture/config.yml
           test -s /tmp/onenew-fixture/credentials.env
+      - name: Package corresponding native source and build instructions
+        if: matrix.arch == 'amd64'
+        run: |
+          cp onenew/customizations/onenew/node/BUILDING.md prepared/ONENEW-BUILDING.md
+          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --exclude=.git -czf dist/onenew-node-source.tar.gz -C prepared .
+          (cd dist && sha256sum onenew-node-source.tar.gz > SHA256SUMS-source)
       - uses: actions/upload-artifact@v4
         with:
           name: onenew-native-${{ matrix.arch }}
@@ -99,11 +106,14 @@ jobs:
             dist/build-info-*.json
   publish:
     needs: native
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
+      - uses: actions/checkout@v4
+        with:
+          path: onenew
       - uses: actions/download-artifact@v4
         with:
           pattern: onenew-native-*
@@ -111,13 +121,21 @@ jobs:
           path: dist
       - name: Publish immutable versioned native packages
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.ONENEW_RELEASE_TOKEN }}
+          GH_REPO: chinahch/onenew-releases
         run: |
           set -euo pipefail
-          # Do not replace a previously published package or move its source tag.
+          [ -n "$GH_TOKEN" ] || { echo 'Set ONENEW_RELEASE_TOKEN with Contents write access to chinahch/onenew-releases'; exit 1; }
           if gh release view node-v0.1.10 >/dev/null 2>&1; then
-            echo 'node-v0.1.10 already published; keeping the existing release unchanged.'
-            exit 0
+            # Never replace binary assets. Source publication is additive only.
+            assets=$(gh release view node-v0.1.10 --json assets --jq '.assets[].name')
+            for file in onenew-node-source.tar.gz SHA256SUMS-source; do
+              if ! printf '%s\n' "$assets" | grep -Fxq "$file"; then gh release upload node-v0.1.10 "dist/$file"; fi
+            done
+            mkdir verify-source
+            gh release download node-v0.1.10 --dir verify-source --pattern onenew-node-source.tar.gz --pattern SHA256SUMS-source
+            (cd verify-source && sha256sum -c SHA256SUMS-source)
+          else
+            gh release create node-v0.1.10 dist/*.tar.gz dist/SHA256SUMS-* dist/build-info-*.json --target main --title 'Onenew native node v0.1.10' --prerelease --notes 'Native binary packages and corresponding source, with SHA256 checksums. Service and process name remain caddy. Panel source is not included.'
           fi
-          gh release create node-v0.1.10 dist/*.tar.gz dist/SHA256SUMS-* dist/build-info-*.json --target "$GITHUB_SHA" --title 'Onenew native node v0.1.10' --prerelease --notes 'Uses HTTPS Cloudflare Trace for health checks with verified TLS, HTTP 200 and validated IP/colo response fields. Upgrade node binaries together with the panel. Adds native Shadowsocks WS/TLS transport, automatic Xray selection and real proxy roundtrip verification. Fixes Cloudflare health target validation and NAT REALITY/TCP self probes. Upgrade nodes to this version when the panel uses the Cloudflare target. Native binary packages with tested systemd and OpenRC in-place upgrades and temporary rollback cleanup; the panel health interval is 60 seconds after panel deployment. Restores Argo and reverse-proxy plaintext WS origins with TLS subscriptions and certificate mode none. Self-probes use the fixed https://www.cloudflare.com/cdn-cgi/trace target shared with the panel and preserve actual local listener security. Configured certificate failures remain blocked; REALITY and remote exit probes remain unchanged. Includes previous node bandwidth and hot-apply fixes. SHA256 files included. amd64 smoke tested; arm64 cross-built, low-memory ARM64 runtime not validated. Existing caddy/php-fpm installations are preserved by the installer and need an explicit migration.'
+          python3 onenew/customizations/onenew/node/publish_distribution.py --root onenew

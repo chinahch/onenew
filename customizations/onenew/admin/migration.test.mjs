@@ -12,7 +12,7 @@ test('migration password stays in POST body and invalid confirmations never enqu
 });
 test('restore command pins source revision and has no password',()=>{
  const command=restoreCommand('a'.repeat(40),'onenew-migration-11111111-2222-4333-8444-555555555555.onm');
- assert.ok(command.includes('/'+'a'.repeat(40)+'/customizations/onenew/migration/restore.sh'));
+ assert.ok(command.includes('https://get.timi.baby/panel/restore'));assert.ok(command.includes("--revision '"+'a'.repeat(40)+"'"));assert.ok(!command.includes('github.com'));
  assert.ok(command.includes('--target \'/opt/onenew\''));assert.ok(!command.includes('--password'));
  assert.throws(()=>restoreCommand('master','../evil'));assert.throws(()=>restoreCommand('a'.repeat(40),'file; rm.onm'));
 });
