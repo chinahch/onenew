@@ -30,8 +30,9 @@ final class ShadowsocksTransportTest extends TestCase
         $this->assertSame('cdn.example', $config['tls_settings']['server_name']);
         $user = new User(['uuid'=>'00000000-0000-4000-8000-000000000001']);
         $payload = app(ProbeOutboundBuilder::class)->build($node, $user);
-        $this->assertSame('ip.sb', $payload['outbound']['settings']['server']);
-        $this->assertSame('v2ray-plugin', $payload['outbound']['settings']['plugin']);
+        $this->assertSame('ip.sb', $payload['outbound']['settings']['servers'][0]['address']);
+        $this->assertSame('xray', $payload['kernel_type']);
+        $this->assertSame('tls', $payload['outbound']['stream_settings']['security']);
         $uri = \App\Protocols\General::buildShadowsocks($user->uuid,
             ['name'=>'ss','host'=>$node->host,'port'=>443,'protocol_settings'=>$s]);
         $this->assertStringContainsString('v2ray-plugin', rawurldecode($uri));
