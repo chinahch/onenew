@@ -151,3 +151,9 @@ test('ambiguous transport failures stay detection abnormal with safe detail',()=
  assert.equal(view.label,'检测异常');
  assert.match(view.detail,/连接失败，无法确定入口\/目标/);
 });
+
+test('proven landing fault retains incomplete entry disclosure',()=>{
+ const finished_at=new Date().toISOString();
+ const view=healthLabel({proxy_health:{state:'failed',health_state:'landing_fault',error_code:'transport_failed',finished_at,stages:{entry:{state:'failed',source:'public_roundtrip'},landings:[{name:'落地一',state:'failed',error_code:'proxy_failed'}]}}});
+ assert.equal(view.label,'落地故障');assert.match(view.detail,/节点完整链路未验证/);
+});

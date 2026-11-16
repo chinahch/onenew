@@ -251,5 +251,5 @@ export function healthLabel(node,now=Date.now()){
   const sources={public_roundtrip:'公开入口完整路径检测',cdn_roundtrip:'CDN入口完整路径检测',local_listener_roundtrip:h.state==='succeeded'?'本地监听自测通过，未验证公网回程':'本地监听自测失败，未验证公网回程'};
   const source=sources[h.stages?.entry?.source]||'入口自测来源未确认';
   const detail=(h.stages?.landings||[]).map(l=>`${l.name}：${l.state==='succeeded'?'正常':errors[l.error_code]||'检测异常'}`).join('；');
-  return {label:labels[health]||'检测异常',tone:health==='online'?'success':health==='unknown'?'pending':'failed',detail:`${source}；${h.stage_error==='upgrade_required'?'请升级节点以支持分阶段检测':detail||errors[h.error_code]||'未配置落地'}${health==='unknown'?'；证据不足，未归因节点或落地':''}`};
+  return {label:labels[health]||'检测异常',tone:health==='online'?'success':health==='unknown'?'pending':'failed',detail:`${source}；${h.stage_error==='upgrade_required'?'请升级节点以支持分阶段检测':detail||errors[h.error_code]||'未配置落地'}${h.stages?.entry?.state&&h.stages.entry.state!=='succeeded'?'；节点完整链路未验证':''}${health==='unknown'?'；证据不足，未归因节点或落地':''}`};
 }

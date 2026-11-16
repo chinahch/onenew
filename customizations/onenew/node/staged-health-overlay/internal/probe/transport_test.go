@@ -42,6 +42,11 @@ func TestAmbiguousErrorsNeedIndependentEndpointEvidence(t *testing.T) {
 	if requestError(context.Background(), p, errors.New("opaque transport failure")) != "proxy_failed" {
 		t.Fatal("refused endpoint not detected")
 	}
+	p.Outbound.StreamSettings = map[string]any{"network": "quic"}
+	if requestError(context.Background(), p, errors.New("opaque")) != "transport_failed" {
+		t.Fatal("QUIC probed as TCP")
+	}
+	p.Outbound.StreamSettings = nil
 	p.Outbound.Protocol = "tuic"
 	if requestError(context.Background(), p, errors.New("opaque transport failure")) != "transport_failed" {
 		t.Fatal("UDP probed as TCP")

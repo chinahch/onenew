@@ -31,6 +31,19 @@ func requestError(ctx context.Context, p Payload, err error) string {
 		return "transport_failed"
 	}
 	settings := p.Outbound.Settings
+	network, _ := p.Outbound.StreamSettings["network"].(string)
+	if transport, ok := settings["transport"].(map[string]any); ok {
+		network, _ = transport["type"].(string)
+	}
+	if transport, ok := settings["network"].(string); ok && transport == "udp" {
+		network = "udp"
+	}
+	switch network {
+	case "", "tcp", "raw", "ws", "grpc", "http", "httpupgrade", "xhttp", "splithttp":
+	default:
+		return "transport_failed"
+	}
+
 	hostName, _ := settings["server"].(string)
 	port := settings["server_port"]
 	if hostName == "" {

@@ -65,8 +65,9 @@ final class ProbeStages
             $abnormal = $abnormal || ($result['state'] !== 'succeeded' && $result['error_code'] !== 'proxy_failed');
         }
         $health = 'unknown';
-        if (!$abnormal && $state === 'succeeded') $health = $faults === 0 ? 'online' : ($success === 0 ? 'landing_fault' : 'partial_landing_fault');
-        elseif (!$abnormal && $success === count($expected) && $error === 'proxy_failed') $health = 'node_fault';
+        if ($error === 'proxy_failed') $health = 'node_fault';
+        elseif ($faults > 0) $health = $faults === count($expected) ? 'landing_fault' : 'partial_landing_fault';
+        elseif (!$abnormal && $state === 'succeeded') $health = 'online';
         return ['health_state'=>$health, 'stages'=>['version'=>1, 'entry'=>$entry+['source'=>$source], 'landings'=>$landings]];
     }
 

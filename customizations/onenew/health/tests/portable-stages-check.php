@@ -9,7 +9,7 @@ function stages($entryCode, $codes) {
         'landings'=>array_map(fn($code,$i)=>['id'=>'landing_'.($i+1),'state'=>$code===''?'succeeded':'failed','error_code'=>$code], $codes, array_keys($codes))];
 }
 foreach ([['',['',''],'online'],['',['proxy_failed',''],'partial_landing_fault'],['',['proxy_failed','proxy_failed'],'landing_fault'],
-    ['proxy_failed',['',''],'node_fault'],['transport_failed',['',''],'unknown'],['',['transport_failed',''],'unknown'],['transport_failed',['transport_failed','transport_failed'],'unknown'],['timeout',['',''],'unknown'],['target_failed',['',''],'unknown'],['proxy_failed',['proxy_failed','proxy_failed'],'unknown'],['',['target_failed',''],'unknown']] as [$error,$codes,$health]) {
+    ['proxy_failed',['',''],'node_fault'],['transport_failed',['',''],'unknown'],['',['transport_failed',''],'unknown'],['transport_failed',['transport_failed','transport_failed'],'unknown'],['timeout',['',''],'unknown'],['target_failed',['',''],'unknown'],['proxy_failed',['proxy_failed','proxy_failed'],'node_fault'],['transport_failed',['proxy_failed','proxy_failed'],'landing_fault'],['timeout',['proxy_failed','proxy_failed'],'landing_fault'],['transport_failed',['proxy_failed','target_failed'],'partial_landing_fault'],['timeout',['proxy_failed',''],'partial_landing_fault'],['',['target_failed',''],'unknown']] as [$error,$codes,$health]) {
     $r=ProbeStages::accept($expected,stages($error,$codes),$error===''?'succeeded':'failed',$error);
     check($r['health_state']===$health);
     check($r['stages']['landings'][0]['name']==='Saved name');
