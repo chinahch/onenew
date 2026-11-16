@@ -5,7 +5,7 @@ namespace App\Onenew;
 
 final class NodeInstallCommand
 {
-    private const INSTALLER = 'https://raw.githubusercontent.com/chinahch/onenew/b90229f0496e34328684910180e7e339e4629ea2/customizations/onenew/node/install.sh';
+    private const BASE = 'https://get.timi.baby';
 
     public static function make(string $panel, string $token, int $machineId): string
     {
@@ -23,21 +23,17 @@ final class NodeInstallCommand
         if ($token === '') {
             throw new \InvalidArgumentException('服务器 Token 不能为空。');
         }
-        // Download must succeed before execution; token travels over stdin.
-        $template = <<<'SH'
-(
-f=$(mktemp) || exit; trap 'rm -f "$f"' EXIT
-r=; if [ "$(id -u)" != 0 ]; then sudo -v </dev/tty || exit; r="sudo -n"; fi
-curl -fsSL __INSTALLER__ -o "$f" && printf '%s\n' __TOKEN__ | $r bash "$f" --token-stdin __UPGRADE__--mode machine --panel __PANEL__ --machine-id __MACHINE__
-)
-SH;
-        return strtr($template, [
-            '__INSTALLER__' => escapeshellarg(self::INSTALLER),
-            '__TOKEN__' => escapeshellarg($token),
-            '__UPGRADE__' => $upgrade ? '--upgrade ' : '',
-            '__PANEL__' => escapeshellarg(rtrim($panel, '/')),
-            '__MACHINE__' => (string) $machineId,
-        ]);
+        // The short entry atomically downloads and hashes the complete installer,
+        // handles sudo using the terminal, and keeps the machine token on stdin.
+        $entry = self::BASE . ($upgrade ? '/upgrade' : '/install');
+        return "printf '%s\\n' " . self::quote($token)
+            . " | bash <(curl -fsSL " . self::quote($entry) . " || printf '\\nexit 1\\n')"
+            . " --token-stdin --panel " . self::quote(rtrim($panel, '/')) . " --machine-id " . $machineId;
+    }
+
+    private static function quote(string $value): string
+    {
+        return "'" . str_replace("'", "'\\''", $value) . "'";
     }
 
     private static function validatePanel(string $panel, int $machineId): void

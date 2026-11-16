@@ -31,6 +31,8 @@ jobs:
         run: docker compose build
       - name: Run PHP feature regressions with isolated SQLite and cache
         run: |
+          python3 customizations/onenew/health/tests/test_short_command.py
+          python3 customizations/onenew/migration/tests/source-download.py
           bash customizations/onenew/migration/tests/restore.sh
           bash customizations/onenew/migration/tests/version-pin.sh
           bash customizations/onenew/migration/tests/upgrade-restored.sh
