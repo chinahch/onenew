@@ -45,6 +45,18 @@ for tool in curl tar sha256sum install cp cmp mktemp awk grep chmod wc; do comma
 if command -v rc-service >/dev/null && command -v supervise-daemon >/dev/null; then MANAGER=openrc
 elif command -v systemctl >/dev/null; then MANAGER=systemd
 else fail 'systemd or OpenRC with supervise-daemon is required'; fi
+manager_running() {
+  if [ "$MANAGER" = systemd ]; then systemctl is-active --quiet caddy.service; else rc-service caddy status >/dev/null 2>&1; fi
+}
+# The OS manager is authoritative for service state. caddyctl may report
+# unknown on OpenRC; still require the exact machine binding and HEALTH=ok.
+machine_healthy() {
+  manager_running || return 1
+  /usr/local/bin/caddyctl instance list --output text 2>/dev/null |
+    awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" \
+      'NR > 1 && $2 == "machine" && $3 == panel && $4 == target && $6 == "ok" { found=1 } END { exit !found }'
+}
+
 if [ "$UPGRADE" -eq 1 ]; then
   # Upgrade only known Onenew services; do not change node configuration or certificates.
   for path in "$ROOT/config.yml" "$ROOT/credentials.env" /usr/local/bin/caddy /usr/local/bin/caddyctl; do
@@ -133,15 +145,6 @@ if [ "$UPGRADE" -eq 1 ]; then
   }
   manager_start() {
     if [ "$MANAGER" = systemd ]; then systemctl start caddy.service; else rc-service caddy start; fi
-  }
-  manager_running() {
-    if [ "$MANAGER" = systemd ]; then systemctl is-active --quiet caddy.service; else rc-service caddy status >/dev/null 2>&1; fi
-  }
-  # Check the exact requested machine and require the service to be active.
-  machine_healthy() {
-    manager_running && /usr/local/bin/caddyctl instance list --output text 2>/dev/null |
-      awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" \
-        'NR > 1 && $2 == "machine" && $3 == panel && $4 == target && $5 == "active" && $6 == "ok" { found=1 } END { exit !found }'
   }
   rollback_upgrade() {
     local reason="${1:-unexpected failure}"
@@ -245,9 +248,7 @@ UNIT
   # failing with HTTP 403. Verify the configured machine after installation.
   READY=0
   for attempt in {1..30}; do
-    if /usr/local/bin/caddyctl instance list --output text 2>/dev/null |
-      awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" \
-        'NR > 1 && $2 == "machine" && $3 == panel && $4 == target && $5 == "active" && $6 == "ok" { found=1 } END { exit !found }'; then
+    if machine_healthy; then
       READY=1; break
     fi
     sleep 2
@@ -279,9 +280,7 @@ UNIT
   rc-service caddy status || fail 'Node failed to start; inspect /var/log/caddy.err'
   READY=0
   for attempt in {1..30}; do
-    if /usr/local/bin/caddyctl instance list --output text 2>/dev/null |
-      awk -v panel="${PANEL%/}" -v target="machine_id=$MACHINE" \
-        'NR > 1 && $2 == "machine" && $3 == panel && $4 == target && $5 == "active" && $6 == "ok" { found=1 } END { exit !found }'; then
+    if machine_healthy; then
       READY=1; break
     fi
     sleep 2

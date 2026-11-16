@@ -5,7 +5,7 @@ namespace App\Onenew;
 
 final class NodeInstallCommand
 {
-    private const INSTALLER = 'https://raw.githubusercontent.com/chinahch/onenew/2db961ed277100f10afeee9d6ce0f070c1af3537/customizations/onenew/node/install.sh';
+    private const INSTALLER = 'https://raw.githubusercontent.com/chinahch/onenew/b90229f0496e34328684910180e7e339e4629ea2/customizations/onenew/node/install.sh';
 
     public static function make(string $panel, string $token, int $machineId): string
     {
