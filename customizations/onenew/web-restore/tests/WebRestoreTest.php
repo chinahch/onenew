@@ -31,4 +31,14 @@ final class WebRestoreTest extends TestCase
   $this->postJson('/api/onenew/restore/progress',['id'=>$id,'token'=>str_repeat('0',64)])->assertNotFound();
   $r=$this->postJson('/api/onenew/restore/progress',['id'=>$id,'token'=>$confirmed['progress_token']])->assertOk()->assertJsonPath('state','queued');self::assertStringNotContainsString('counts',$r->getContent());self::assertStringNotContainsString($password,$r->getContent());
  }
+ public function test_formatted_environment_keys_match_laravel_and_uploads_do_not_rate_limit_cloud_settings():void{
+  $key=(string)config('app.key');$environment="KEY_SOURCE='$key'\r\nexport APP_KEY=\"\${KEY_SOURCE}\" # inline\r\n";
+  self::assertSame($key,Recovery::key($environment));self::assertSame($key,\Dotenv\Dotenv::parse($environment)['APP_KEY']);
+  self::assertSame($key,Recovery::key(Recovery::environmentWithKey($environment,$key)));
+  Sanctum::actingAs($this->admin());$root='/api/onenew/admin/restore';
+  $id=$this->postJson($root,['filename'=>'fixture.onm','bytes'=>32])->assertOk()->json('id');
+  for($i=0;$i<25;$i++)$this->getJson($root.'/'.$id)->assertOk();
+  $this->getJson('/api/onenew/admin/cloud-backup')->assertOk();
+ }
+
 }

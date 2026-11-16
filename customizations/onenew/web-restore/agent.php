@@ -8,7 +8,7 @@ function runFixed(array $command,int $timeout=1800,?string &$output=null):int{
     while(true){@touch('/run/onenew-restore-agent.heartbeat');$output.=stream_get_contents($pipes[1],max(1,16384-strlen($output)));$s=proc_get_status($p);if(!$s['running']){$exit=$s['exitcode'];break;}if(time()-$start>$timeout){proc_terminate($p,9);break;}usleep(250000);}
     $output.=stream_get_contents($pipes[1],max(1,16384-strlen($output)));fclose($pipes[1]);proc_close($p);return $exit;
 }
-function task(string $mode,string $id=''):int{return runFixed(['/sbin/su-exec','www','php',__DIR__.'/task.php',$mode,$id]);}
+function task(string $mode,string $id='',?string &$output=null):int{return runFixed(['/sbin/su-exec','www','php',__DIR__.'/task.php',$mode,$id],1800,$output);}
 function supervisor(string $verb,string $group,?string &$output=null):int{return runFixed(['supervisorctl','-c','/etc/supervisor/conf.d/supervisord.conf',$verb,$group.':*'],120,$output);}
 function clearRequest(string $dir):void{task('clean-request',basename($dir));}
 function stopWriters(array $groups):void{
@@ -46,7 +46,7 @@ while(true){
         $dir=dirname($path);$id=basename($dir);$stopped=false;$restart=[];
         try{
             if(!Recovery::validId($id)||Recovery::dir($source,$id)!==$dir)continue;
-            $request=Recovery::json($path);$key=Recovery::key(file_get_contents($source.'/.env'));
+            $request=Recovery::json($path);if(task('read-key','',$key)!==0)throw new RuntimeException('Application key unavailable');
             if(!is_string($request['body']??null)||!hash_equals(hash_hmac('sha256',$request['body'],$key),$request['mac']??''))throw new RuntimeException('Invalid signature');
             $body=json_decode($request['body'],true,16,JSON_THROW_ON_ERROR);
             if(($body['id']??'')!==$id||!in_array($body['action']??'',['verify','apply'],true)||($body['expires_at']??0)<time())throw new RuntimeException('Expired request');
