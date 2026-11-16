@@ -36,7 +36,7 @@ final class ShadowsocksTransport
         }
         $s['onenew_transport_managed'] = true;
         $s['plugin'] = 'v2ray-plugin';
-        $s['plugin_opts'] = 'mode=websocket'.($tls ? ';tls' : '').';host='.$host.';path='.$path;
+        $s['plugin_opts'] = 'mode=websocket;mux=0'.($tls ? ';tls' : '').';host='.$host.';path='.$path;
         return $s;
     }
     public static function nodeConfig(array $config, Server $node): array
