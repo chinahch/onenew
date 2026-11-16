@@ -13,4 +13,11 @@ function applyOnenewShadowsocksTransport(string $root): void
     replaceOnce($root.'/app/Services/ServerService.php',
         "        return \$response;\n    }",
         "        return \\App\\Onenew\\ShadowsocksTransport::nodeConfig(\$response, \$node);\n    }");
+
+    $controller = $root.'/app/Http/Controllers/V2/Admin/Server/ManageController.php';
+    $text = file_get_contents($controller);
+    $old = 'if ($e instanceof \\Symfony\\Component\\HttpKernel\\Exception\\HttpExceptionInterface) throw $e;';
+    $new = 'if ($e instanceof \\Illuminate\\Validation\\ValidationException) throw $e; '.$old;
+    if (substr_count($text, $old) !== 2) throw new RuntimeException('SS validation controller anchor changed');
+    file_put_contents($controller, str_replace($old, $new, $text));
 }
