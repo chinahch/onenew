@@ -34,6 +34,9 @@ class ProbeOutboundBuilder extends SingBox
         if (!$node->host || !is_numeric($port) || (int) $port < 1 || (int) $port > 65535 || $node->parent_id) {
             throw new ProbeUnavailable('configuration_unavailable');
         }
+        if ($type === 'shadowsocks' && $network === 'ws') {
+            return $this->buildShadowsocksWs($node, $user);
+        }
         // Use Xray's native client schema when Sing-box cannot preserve the node.
         if (data_get($settings, 'encryption.enabled') || in_array($network, ['xhttp', 'splithttp'], true)) {
             return $this->buildXray($node, $user, (int) $port);
@@ -107,7 +110,7 @@ class ProbeOutboundBuilder extends SingBox
     {
         $s = $node->protocol_settings ?? [];
         $network = data_get($s, 'network');
-        $ws = $network === 'ws' && in_array($node->type, ['vless', 'vmess', 'trojan'], true);
+        $ws = $network === 'ws' && in_array($node->type, ['vless', 'vmess', 'trojan', 'shadowsocks'], true);
         $alpn = data_get($s, 'network_settings.alpn', []);
         $alpn = is_string($alpn) ? array_map('trim', explode(',', $alpn)) : (is_array($alpn) ? $alpn : []);
         $xhttp = $node->type === 'vless' && in_array($network, ['xhttp', 'splithttp'], true)
@@ -127,6 +130,22 @@ class ProbeOutboundBuilder extends SingBox
             return null;
         }
         return 'ip.sb';
+    }
+
+    private function buildShadowsocksWs(Server $node, User $user): array
+    {
+        $s = ShadowsocksTransport::normalize($node->protocol_settings);
+        $tls = (int)($s['tls'] ?? 0);
+        $ns = $s['network_settings'];
+        $headers = $ns['headers'] ?? (isset($ns['host']) ? ['Host'=>$ns['host']] : []);
+        $stream = ['network'=>'ws', 'security'=>$tls ? 'tls' : 'none',
+            'wsSettings'=>['path'=>$ns['path'] ?? '/', 'headers'=>$headers ?: new \stdClass()]];
+        if ($tls) $stream['tlsSettings'] = ['serverName'=>$s['tls_settings']['server_name']];
+        return ['kernel_type'=>'xray', 'target'=>self::TARGET, 'outbound'=>[
+            'tag'=>'onenew-probe', 'protocol'=>'shadowsocks',
+            'settings'=>['servers'=>[['address'=>$node->host, 'port'=>(int)$node->port,
+                'method'=>$s['cipher'], 'password'=>$node->generateServerPassword($user)]]],
+            'stream_settings'=>$stream]];
     }
 
     private function buildXray(Server $node, User $user, int $port): array

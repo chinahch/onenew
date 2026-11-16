@@ -61,6 +61,8 @@ copyOverlay($custom . '/exit-probe/app', $root . '/app');
 copyOverlay($custom . '/landing-library/app', $root . '/app');
 require $custom . '/landing-library/install.php';
 applyOnenewLandingLibrary($root);
+require $custom . '/ss-transport/install.php';
+applyOnenewShadowsocksTransport($root);
 replaceOnce($root . '/app/Services/ServerService.php',
     "            'kernel_status' => (bool) (\$metrics['kernel_status'] ?? false),",
     "            'kernel_status' => (bool) (\$metrics['kernel_status'] ?? false),\n"
