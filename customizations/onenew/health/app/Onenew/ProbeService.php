@@ -220,7 +220,7 @@ class ProbeService
         $fields = ['onenew_identity', 'machine_id', 'enabled', 'type', 'host', 'port', 'server_port', 'parent_id',
             'node_speed_limit_mbps', 'protocol_settings', 'group_ids', 'custom_outbounds', 'custom_routes', 'route_ids', 'cert_config'];
         // Invalidate cached unsupported results when the client builder changes.
-        $values = ['probe_schema_version' => 7];
+        $values = ['probe_schema_version' => 8];
         foreach ($fields as $field) {
             $value = $node->getAttribute($field);
             // The native port column is VARCHAR without a model scalar cast:
