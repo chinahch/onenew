@@ -7,7 +7,7 @@ use App\Onenew\Migration\MigrationBundle;
 $mode=$argv[1]??'';$id=$argv[2]??'';$source='/www';
 if(!in_array($mode,['verify','apply','finalize','rollback','rollback-offline','prune','claim','clean-request','reject','complete','cache-reset-complete'],true))exit(2);
 if($mode==='prune'){
-    foreach(glob(Recovery::root($source).'/*/status.json')?:[] as $path){try{Recovery::dir($source,basename(dirname($path)));$s=Recovery::json($path);if($s['expires_at']<time()&&!is_file(dirname($path).'/switching'))Recovery::clear(dirname($path));}catch(Throwable){}}
+    foreach(glob(Recovery::root($source).'/*/status.json')?:[] as $path){try{Recovery::dir($source,basename(dirname($path)));$s=Recovery::json($path);if($s['expires_at']<time()&&!is_file(dirname($path).'/switching')&&!is_file(dirname($path).'/cache-reset-required'))Recovery::clear(dirname($path));}catch(Throwable){}}
     exit(0);
 }
 try{$dir=Recovery::dir($source,$id);$state=Recovery::json($dir.'/status.json');}catch(Throwable){exit(2);}
@@ -47,8 +47,8 @@ try{
         if(is_file($dir.'/switching'))Recovery::rollback($source,$dir);clearCompiled();
         if($mode==='rollback'){
             require '/www/vendor/autoload.php';$env=Dotenv\Dotenv::parse(file_get_contents($source.'/.env'));
-            if(!in_array($env['REDIS_HOST']??'127.0.0.1',['127.0.0.1','localhost'],true)||!empty($env['REDIS_URL']))throw new RuntimeException('Unsupported Redis recovery');
-            $redis=new Redis();$redis->connect('127.0.0.1',(int)($env['REDIS_PORT']??6379),5);
+            if(!in_array($env['REDIS_HOST']??'127.0.0.1',['127.0.0.1','localhost','/data/redis.sock'],true)||!empty($env['REDIS_URL']))throw new RuntimeException('Unsupported Redis recovery');
+            $redis=new Redis();$host=$env['REDIS_HOST']??'127.0.0.1';$redis->connect($host==='/data/redis.sock'?$host:'127.0.0.1',$host==='/data/redis.sock'?0:(int)($env['REDIS_PORT']??6379),5);
             $password=$env['REDIS_PASSWORD']??null;if(!in_array($password,[null,'','null','(null)'],true))$redis->auth($password);
             foreach(array_unique([(int)($env['REDIS_DB']??0),(int)($env['REDIS_CACHE_DB']??1)]) as $db){$redis->select($db);$redis->flushDB();}$redis->save();$redis->close();unset($password);@unlink($dir.'/cache-reset-required');
         }
@@ -57,7 +57,7 @@ try{
         require '/www/vendor/autoload.php';$app=require '/www/bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
         $migration=app(App\Onenew\Migration\MigrationService::class);
         if($mode==='finalize'){
-            foreach(['default','cache'] as $connection){if(config('database.redis.'.$connection)&&!in_array(config('database.redis.'.$connection.'.host'),['127.0.0.1','localhost'],true))throw new RuntimeException('External shared Redis is not supported');}
+            foreach(['default','cache'] as $connection){if(config('database.redis.'.$connection)&&!in_array(config('database.redis.'.$connection.'.host'),['127.0.0.1','localhost','/data/redis.sock'],true))throw new RuntimeException('External shared Redis is not supported');}
             if(Illuminate\Support\Facades\Artisan::call('migrate',['--force'=>true])!==0)throw new RuntimeException('Migration failed');
             if(Illuminate\Support\Facades\Artisan::call('onenew:migration-assets')!==0)throw new RuntimeException('Asset publishing failed');
             foreach(['default','cache'] as $connection)if(config('database.redis.'.$connection))Illuminate\Support\Facades\Redis::connection($connection)->flushdb();
