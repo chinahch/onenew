@@ -21,6 +21,11 @@ class ProbeOutboundBuilder extends SingBox
 
     public function build(Server $node, User $user): array
     {
+        if ($cdnHost = $this->cdnProbeHost($node)) {
+            $node = clone $node;
+            $node->host = $cdnHost;
+            $node->port = 443;
+        }
         $settings = $node->protocol_settings ?? [];
         $type = $node->type;
         $network = data_get($settings, 'network') ?: 'tcp';
@@ -95,6 +100,26 @@ class ProbeOutboundBuilder extends SingBox
             'outbound' => ['tag' => 'onenew-probe', 'protocol' => $protocol, 'settings' => $out],
             'target' => self::TARGET,
         ];
+    }
+
+    /** Detect the IP + matching SNI/WS Host pattern used by CDN fronted nodes. Use the operator-selected CDN edge. */
+    public function cdnProbeHost(Server $node): ?string
+    {
+        $s = $node->protocol_settings ?? [];
+        if (!in_array($node->type, ['vless', 'vmess', 'trojan'], true)
+            || data_get($s, 'network') !== 'ws' || (int) data_get($s, 'tls', 0) !== 1
+            || !filter_var(trim((string) $node->host, '[]'), FILTER_VALIDATE_IP)) {
+            return null;
+        }
+        $sni = strtolower(trim((string) data_get($s, 'tls_settings.server_name', '')));
+        $headers = array_change_key_case((array) data_get($s, 'network_settings.headers', []), CASE_LOWER);
+        $wsHost = strtolower(trim((string) ($headers['host'] ?? data_get($s, 'network_settings.host', ''))));
+        if ($sni === '' || $sni !== $wsHost || !str_contains($sni, '.')
+            || filter_var($sni, FILTER_VALIDATE_IP)
+            || !filter_var($sni, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
+            return null;
+        }
+        return 'ip.sb';
     }
 
     private function buildXray(Server $node, User $user, int $port): array
