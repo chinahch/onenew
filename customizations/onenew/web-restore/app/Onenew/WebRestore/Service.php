@@ -73,7 +73,7 @@ final class Service
     {
         return $this->locked($id,function($dir,$s){abort_unless($s['state']==='ready',409,'请先完成验证');
             abort_unless(hash_equals($s['package_sha256'],hash_file('sha256',$dir.'/package.onm')),409,'备份文件已变更，请重新上传');
-            $token=bin2hex(random_bytes(32));$s=Recovery::state($dir,['state'=>'queued','progress_token_hash'=>hash('sha256',$token)]);$this->request($dir,$s,'apply');return ['id'=>$id,'progress_token'=>$token,'login_path'=>$s['summary']['admin_path']??'/'];
+            $token=bin2hex(random_bytes(32));$s=Recovery::state($dir,['state'=>'queued','progress_token_hash'=>hash('sha256',$token)]);$this->request($dir,$s,'apply');return ['id'=>$s['id'],'progress_token'=>$token,'login_path'=>$s['summary']['admin_path']??'/'];
         });
     }
     public function cancel(string $id):void

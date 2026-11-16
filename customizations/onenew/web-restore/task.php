@@ -11,6 +11,11 @@ if($mode==='prune'){
     exit(0);
 }
 try{$dir=Recovery::dir($source,$id);$state=Recovery::json($dir.'/status.json');}catch(Throwable){exit(2);}
+// A child can outlive its coordinator; serialize every data-writing task across agent restarts.
+$execution=null;
+if(in_array($mode,['verify','apply','finalize','rollback','complete'],true)){
+    $lockPath=$source.'/.docker/.data/onenew-web-restore-execution.lock';if(is_link($lockPath))exit(2);$execution=fopen($lockPath,'c+');if(!$execution||!flock($execution,LOCK_EX))exit(2);chmod($lockPath,0600);
+}
 function clearCompiled():void{foreach(['/www/bootstrap/cache/config.php','/www/bootstrap/cache/routes-v7.php','/www/bootstrap/cache/events.php'] as $file){if(is_link($file))throw new RuntimeException('Linked cache');if(is_file($file)&&!unlink($file))throw new RuntimeException('Cannot clear compiled cache');}}
 try{
     if($mode==='claim'){

@@ -21,12 +21,15 @@ function healthy():bool{
 
 $recoverOnly=($argv[1]??'')==='--recover';
 if(!$recoverOnly){$lock=fopen('/run/onenew-restore-agent.lock','c+');if(!$lock||!flock($lock,LOCK_EX|LOCK_NB))exit(1);}
+$groups=['onenew-web','onenew-queue','onenew-ws','onenew-scheduler'];
 // A container interruption during a switch always restores the pre-change snapshot before web startup.
 foreach(glob(Recovery::root($source).'/*/switching')?:[] as $flag){$id=basename(dirname($flag));if(!Recovery::validId($id))continue;
-    if(task('rollback',$id)!==0){fwrite(STDERR,"Web restore startup rollback failed; startup stopped.\n");exit(1);}clearRequest(dirname($flag));
+    $resume=[];
+    if(!$recoverOnly){foreach($groups as $group){supervisor('status',$group,$before);if(preg_match('/\b(RUNNING|STARTING|BACKOFF)\b/',$before))$resume[]=$group;}try{stopWriters($groups);}catch(Throwable){fwrite(STDERR,"Cannot stop writers for startup rollback.\n");exit(1);}}
+    if(task('rollback',$id)!==0){fwrite(STDERR,"Web restore startup rollback failed; startup stopped.\n");exit(1);}clearRequest(dirname($flag));if(!$recoverOnly)foreach(array_reverse($resume) as $group)supervisor('start',$group);
 }
 if($recoverOnly)exit(0);
-$groups=['onenew-web','onenew-queue','onenew-ws','onenew-scheduler'];$lastPrune=0;
+$lastPrune=0;
 while(true){
     @touch($heartbeat);
     foreach(glob(Recovery::root($source).'/*/request.json')?:[] as $path){
