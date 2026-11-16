@@ -30,4 +30,11 @@ function applyOnenewShadowsocksTransport(string $root): void
     replaceOnce($root.'/app/Protocols/Clash.php',
         "if (!str_contains(\$pair, '=')) {\n                        return [];",
         "if (!str_contains(\$pair, '=')) {\n                        return [trim(\$pair) => 'true'];");
+
+    replaceOnce($root.'/app/Protocols/ClashMeta.php',
+        "'mux' => isset(\$parsedOpts['mux']) ? true : null,",
+        "'mux' => isset(\$parsedOpts['mux']) ? !in_array(strtolower((string) \$parsedOpts['mux']), ['0', 'false', 'off'], true) : null,");
+    replaceOnce($root.'/app/Protocols/Clash.php',
+        "'tls' => isset(\$parsedOpts['tls']) && \$parsedOpts['tls'] == 'true',",
+        "'tls' => isset(\$parsedOpts['tls']) && \$parsedOpts['tls'] == 'true',\n                        'mux' => isset(\$parsedOpts['mux']) && !in_array(strtolower((string) \$parsedOpts['mux']), ['0', 'false', 'off'], true),");
 }
