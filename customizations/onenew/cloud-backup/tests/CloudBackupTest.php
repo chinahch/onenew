@@ -40,4 +40,18 @@ final class CloudBackupTest extends TestCase
         self::assertStringNotContainsString('encrypted_config',$r->getContent());self::assertStringNotContainsString('fixture-refresh-token',$r->getContent());
         self::assertStringNotContainsString('fixture-backup-password',serialize(new BackupJob($two)));
     }
+    public function test_manual_requests_reuse_active_run_and_old_worker_cannot_finish_reclaimed_run():void{
+        $this->postJson(self::ROOT.'/settings',$this->payload(),$this->auth())->assertOk();
+        $s=app(Service::class);$id=$s->enqueue('manual');self::assertSame($id,$s->enqueue('manual'));
+        $run=$s->claim($id);DB::table('onenew_cloud_backup_runs')->where('id',$id)->update(['lease_until'=>time()-1]);
+        $s->tick();$replacement=$s->claim($id);self::assertNotSame($run['lease_token'],$replacement['lease_token']);
+        $s->finish($id,$run['lease_token']);self::assertSame('generating',DB::table('onenew_cloud_backup_runs')->where('id',$id)->value('state'));
+        $s->patch($id,$replacement['lease_token'],['state'=>'uploading']);$s->tick();
+        self::assertSame('uploading',DB::table('onenew_cloud_backup_runs')->where('id',$id)->value('state'));
+    }
+    public function test_restored_settings_save_does_not_implicitly_reenable_schedule():void{
+        $c=app(Config::class);$c->save($this->payload());config(['onenew.backup_identity'=>str_repeat('b',32)]);
+        $c->save(['daily_time'=>'05:10']);self::assertFalse($c->view()['enabled']);
+    }
+
 }

@@ -1,3 +1,4 @@
+import {CloudBackup} from './cloud-backup.mjs';
 const root='/api/onenew/admin/migration';
 const getApi=(get,url)=>get(url,{baseURL:'/'});
 const postApi=(post,url,data)=>post(url,data,{baseURL:'/'});
@@ -46,6 +47,7 @@ export function MigrationPage({react:React,get,post}){
  const command=info?.supported&&task?restoreCommand(task.revision||info.revision,filename):'';
  return h('section',{className:'onenew-migration onenew-landing','aria-label':'一键迁移'},
   h('h2',null,'一键迁移'),h('p',{className:'onenew-help'},'源码仓库私有化后，新面板服务器需先将仅可读取源码的 GitHub 凭据保存到 /root/.config/onenew/github.token，权限600。不要使用节点 Token；此凭据不包含在迁移包内。'),h('p',{className:'onenew-help'},'生成加密迁移包，在新服务器执行一条恢复命令。保留账号、订阅链接、节点凭据、插件及站点设置。'),
+  h(CloudBackup,{react:React,get,post}),
   error&&h('p',{role:'alert',className:'onenew-error'},error),!info&&!error&&h('p',null,'正在检查部署…'),
   info&&!info.supported&&h('p',{className:'onenew-notice'},info.reason),
   info?.supported&&h(React.Fragment,null,

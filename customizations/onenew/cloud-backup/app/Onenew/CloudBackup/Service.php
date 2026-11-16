@@ -12,19 +12,22 @@ final class Service
     public function __construct(private Config $config){}
     public function enqueue(string $trigger,?int $slot=null):string
     {
-        $row=$this->config->row();$secret=$this->config->secrets($row);if(!$this->config->ready($secret))throw new BackupFailure('not_configured');
+        return DB::transaction(function()use($trigger,$slot){
+        $this->config->row();
+        $row=(array)DB::table('onenew_cloud_backup_config')->where('id',1)->lockForUpdate()->first();$secret=$this->config->secrets($row);if(!$this->config->ready($secret))throw new BackupFailure('not_configured');
         $identity=$this->config->identity();if($row['deployment_id']!==$identity)throw new BackupFailure('restored_paused');
         if($trigger==='manual'){$existing=DB::table('onenew_cloud_backup_runs')->where('deployment_id',$identity)->whereIn('state',self::ACTIVE)->first();if($existing)return $existing->id;}
         $secret['config_version']=(int)$row['version'];$id=(string)Str::uuid();$record=['id'=>$id,'deployment_id'=>$identity,'trigger'=>$trigger,'scheduled_for'=>$slot,'state'=>'queued','lease_until'=>now()->timestamp+900,'encrypted_config'=>Crypt::encryptString(json_encode($secret,JSON_THROW_ON_ERROR)),'filename'=>'onenew-migration-'.$id.'.onm','created_at'=>now()->timestamp];
         if(!DB::table('onenew_cloud_backup_runs')->insertOrIgnore($record))return DB::table('onenew_cloud_backup_runs')->where('scheduled_for',$slot)->value('id');
         DB::afterCommit(fn()=>BackupJob::dispatch($id));return $id;
+        });
     }
     public function tick():void
     {
         if(!Schema::hasTable('onenew_cloud_backup_config'))return;$identity=$this->config->identity();$now=now()->timestamp;
         $stale=DB::table('onenew_cloud_backup_runs')->where('deployment_id',$identity)->whereIn('state',self::ACTIVE)->where(function($q)use($now){$q->where('lease_until','<=',$now)->orWhere('created_at','<=',$now-86400);})->get();
         foreach($stale as $run){
-            $query=DB::table('onenew_cloud_backup_runs')->where('id',$run->id)->where('lease_token',$run->lease_token)->where('state',$run->state);
+            $query=DB::table('onenew_cloud_backup_runs')->where('id',$run->id)->where('lease_token',$run->lease_token)->where('state',$run->state)->where('lease_until',$run->lease_until);
             if($run->attempts<3&&$run->created_at>$now-86400){if($query->update(['state'=>'queued','lease_token'=>null,'lease_until'=>$now+900,'error_code'=>'timeout']))BackupJob::dispatch($run->id);}
             else if($query->update(['state'=>'failed','lease_token'=>null,'lease_until'=>null,'finished_at'=>$now,'error_code'=>'timeout','encrypted_config'=>null,'encrypted_session'=>null]))$this->cleanup($run->id);
         }
