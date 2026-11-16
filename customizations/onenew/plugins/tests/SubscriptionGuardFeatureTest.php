@@ -56,8 +56,19 @@ final class SubscriptionGuardFeatureTest extends TestCase
         Sanctum::actingAs($one);$this->getJson('/api/onenew/admin/subscription-logs/users')->assertForbidden();
         Sanctum::actingAs($this->account(['is_admin'=>true]));
         $this->getJson('/api/onenew/admin/subscription-logs')->assertOk()->assertJsonPath('total',0);
-        $this->getJson('/api/onenew/admin/subscription-logs?user_id='.$one->id)->assertOk()->assertJsonPath('total',1)->assertJsonPath('data.0.ip','192.0.2.10')->assertJsonPath('data.0.user_id',$one->id);
+        $this->getJson('/api/onenew/admin/subscription-logs?user_id='.$one->id)->assertOk()->assertJsonPath('total',1)->assertJsonPath('data.0.ip','192.0.2.10')->assertJsonPath('data.0.user_id',$one->id)->assertJsonPath('data.0.ip_region','未知');
         $this->getJson('/api/onenew/admin/subscription-logs/users?search='.urlencode($two->email))->assertOk()->assertJsonCount(1,'data')->assertJsonPath('data.0.id',$two->id);
+    }
+
+    public function test_historical_ipv4_and_ipv6_rows_receive_chinese_locations_without_external_http():void
+    {
+        $user=$this->account();$plugin=$this->guard();
+        $this->pull($plugin,$user,'120.229.45.2');$this->pull($plugin,$user,'2604:a840:3::a04d');
+        Sanctum::actingAs($this->account(['is_admin'=>true]));
+        $this->getJson('/api/onenew/admin/subscription-logs?user_id='.$user->id)->assertOk()->assertJsonPath('total',2)
+            ->assertJsonPath('data.0.ip_region','美国')->assertJsonPath('data.1.ip_region','中国 · 广东省 · 深圳市');
+        Http::assertNothingSent();
+        self::assertSame('',DB::table('v2_subscribe_log')->where('user_id',$user->id)->value('ip_region'));
     }
 
     private function guard(array $config=[]):Plugin

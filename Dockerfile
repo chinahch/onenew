@@ -25,6 +25,10 @@ FROM upstream AS runtime
 WORKDIR /www
 ARG ONENEW_REVISION=local
 COPY customizations/onenew /opt/onenew
+# Immutable local IPv4/IPv6 lookup data; no end-user IP is sent off-server.
+ADD --checksum=sha256:a12ad5aca1277d67e525efcda531a20cc0d654ff4f087150d45bc17fca4bc260 https://raw.githubusercontent.com/lionsoul2014/ip2region/200f4cc7a6452843ef515a889c72d295281e8da3/data/ip2region_v4.xdb /opt/onenew/geoip/ip2region_v4.xdb
+ADD --checksum=sha256:1f0be1ffbbc3e4eeef10f354e01355f22f57ec649a496a17fd602539f3d384c1 https://raw.githubusercontent.com/lionsoul2014/ip2region/200f4cc7a6452843ef515a889c72d295281e8da3/data/ip2region_v6.xdb /opt/onenew/geoip/ip2region_v6.xdb
+RUN chmod 0644 /opt/onenew/geoip/*.xdb
 COPY --from=admin-build /build/admin/dist/ /www/public/assets/admin/
 COPY --from=user-build /build/user/dist/ /www/public/onenew-user/
 RUN printf '%s\n' "$ONENEW_REVISION" > /opt/onenew/REVISION \

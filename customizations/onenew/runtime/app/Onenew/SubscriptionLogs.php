@@ -20,6 +20,8 @@ final class SubscriptionLogs
         if(empty($p['user_id'])||!Schema::hasTable('v2_subscribe_log'))return response()->json(['data'=>[],'total'=>0,'current_page'=>1,'last_page'=>1])->header('Cache-Control','no-store');
         $q=DB::table('v2_subscribe_log')->where('user_id',$p['user_id'])->select('id','user_id','ip','user_agent','created_at');
         if(!empty($p['search']))$q->where(fn($q)=>$q->where('ip','like','%'.$p['search'].'%')->orWhere('user_agent','like','%'.$p['search'].'%'));
-        return response()->json($q->orderByDesc('id')->paginate(20))->header('Cache-Control','no-store');
+        $result=$q->orderByDesc('id')->paginate(20);$locator=app(IpRegion::class);
+        $result->getCollection()->transform(function($row)use($locator){$row->ip_region=$locator->cached($row->ip);return $row;});
+        return response()->json($result)->header('Cache-Control','no-store');
     }
 }
