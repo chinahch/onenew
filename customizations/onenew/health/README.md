@@ -137,3 +137,11 @@ feature-test or native-kernel success is claimed here.
 ## CDN ingress checks
 
 TLS WebSocket nodes (VMess/VLESS/Trojan) and VLESS XHTTP h2 nodes using an IP dial address and an identical DNS SNI/transport Host are probed through the operator-selected CDN edge `ip.sb:443`. Credentials, TLS checks, WS Host/path and the proxied Cloudflare 204 request are preserved. Subscription fields are not changed. The result source is `node machine · CDN ip.sb:443`: it verifies the substitute CDN ingress and proxy path, not availability of the original preferred/forwarding IP. Plain WS, REALITY, domain dial addresses and mismatching SNI/Host do not use this mapping. Configuration changes invalidate cached status automatically.
+
+## Shadowsocks WS and TLS
+
+Node v0.1.9 adds native Xray Shadowsocks WebSocket inbound support. The SS editor exposes TCP/WS and a TLS switch; enabling TLS selects WS. Host and TLS SNI must match so SIP003 subscriptions preserve certificate identity. Supported WS ciphers are aes-128-gcm, aes-256-gcm, chacha20-ietf-poly1305 and the two SS2022 AES methods; unsupported combinations are rejected. Plain SS keeps its original defaults.
+
+The panel stores transport fields, generates v2ray-plugin subscription options, and requires Xray for the native listener. Existing machine-managed SS listeners switch when their new WS configuration is discovered. Certificates use the existing advanced configuration: content/file/ACME for direct TLS, or intentional none mode for Argo plaintext origins. A failed configured certificate never silently becomes plaintext.
+
+Health checks use Xray native SS/WS/TLS outbounds with the actual generated user password. Matching IP/SNI/Host TLS WS nodes use the same operator-selected ip.sb:443 CDN edge as VMess/VLESS/Trojan. The Cloudflare 204 test target is unchanged.
