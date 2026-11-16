@@ -35,6 +35,7 @@ class OnenewServiceProvider extends ServiceProvider
         require $root . '/external/routes.php';
         require $root . '/egress/routes.php';
         require $root . '/migration/routes.php';
+        require $root . '/web-restore/routes.php';
         require $root . '/energy/routes.php';
         require $root . '/runtime/routes.php';
     }

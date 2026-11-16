@@ -39,3 +39,7 @@
 .onenew-log-page .onenew-resource-table th:nth-child(2){width:28%}.onenew-log-page .onenew-resource-table th:nth-child(3){width:23%}.onenew-log-page .onenew-resource-table th:last-child{width:180px}
 .onenew-log-page .onenew-log-ip{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;overflow-wrap:anywhere}
 .onenew-log-page .onenew-log-region{color:hsl(var(--muted-foreground));overflow-wrap:break-word}
+
+.onenew-log-page .onenew-resource-table{min-width:1120px}.onenew-log-page .onenew-resource-table th:nth-child(2){width:25%}.onenew-log-page .onenew-resource-table th:nth-child(3){width:20%}.onenew-log-page .onenew-resource-table th:nth-child(4){width:15%}.onenew-log-page .onenew-log-isp{overflow-wrap:anywhere}
+
+.onenew-web-restore{display:grid;gap:16px;border:1px solid hsl(var(--border));border-radius:12px;padding:20px}.onenew-web-restore h3{margin:0;font-size:17px}.onenew-web-restore progress{width:min(420px,100%);height:12px}.onenew-web-restore input[type=file]{font-size:13px;max-width:100%}.onenew-web-restore .onenew-notice{display:grid;gap:12px}.onenew-web-restore .onenew-notice p{margin:0}

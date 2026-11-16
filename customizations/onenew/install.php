@@ -42,6 +42,7 @@ copyOverlay($custom . '/runtime/app', $root . '/app');
 require $custom . '/domains/install.php';
 applyOnenewUserDomains($root);
 copyOverlay($custom . '/migration/app', $root . '/app');
+copyOverlay($custom . '/web-restore/app', $root . '/app');
 copyOverlay($custom . '/cloud-backup/app', $root . '/app');
 require $custom . '/cloud-backup/install.php';
 applyOnenewCloudBackup($root);
@@ -166,6 +167,7 @@ $entry = file_get_contents($entrypoint);
 $entry = str_replace(['xboard:', 'xboard-ws-server'], ['onenew:', 'onenew-ws'], $entry);
 $entry = str_replace('chown redis:redis /data 2>/dev/null || true',
     'chown redis:www /data && chmod 0750 /data', $entry);
+$entry = str_replace("set -e\n", "set -e\nphp /opt/onenew/web-restore/agent.php --recover\n", $entry);
 $entry = str_replace('exec "$@"', 'php /opt/onenew/seed-plugins.php /www' . "\n" . 'exec "$@"', $entry);
 // Seeding precedes the startup migration/plugin check as well as the first install.
 $entry = str_replace('php /www/artisan onenew:update --no-interaction', 'php /opt/onenew/seed-plugins.php /www && php /www/artisan onenew:update --no-interaction', $entry);
@@ -177,6 +179,7 @@ foreach (['octane' => 'web', 'horizon' => 'queue', 'redis' => 'cache', 'ws-serve
     $text = str_replace('[program:' . $old . ']', '[program:onenew-' . $new . ']', $text);
 }
 $text .= "\n[program:onenew-scheduler]\ncommand=php /www/artisan schedule:work\nautostart=true\nautorestart=true\nuser=www\nredirect_stderr=true\nstdout_logfile=/dev/stdout\nstdout_logfile_maxbytes=0\nstopasgroup=true\nkillasgroup=true\npriority=600\n";
+$text .= "\n[unix_http_server]\nfile=/run/onenew-supervisor.sock\nchmod=0700\n[rpcinterface:supervisor]\nsupervisor.rpcinterface_factory=supervisor.rpcinterface:make_main_rpcinterface\n[supervisorctl]\nserverurl=unix:///run/onenew-supervisor.sock\n[program:onenew-restore]\ncommand=php /opt/onenew/web-restore/agent.php\nautostart=true\nautorestart=true\nuser=root\nredirect_stderr=true\nstdout_logfile=/dev/stdout\nstdout_logfile_maxbytes=0\nstopasgroup=true\nkillasgroup=true\npriority=700\n";
 file_put_contents($supervisor, $text);
 echo "Onenew overlay applied.\n";
 
