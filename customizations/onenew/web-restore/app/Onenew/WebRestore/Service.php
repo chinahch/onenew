@@ -19,6 +19,10 @@ final class Service
     }
     public function publicState(array $state):array
     {
+        if($state['state']==='ready'){
+            $current=[];foreach(['users'=>'v2_user','nodes'=>'v2_server','machines'=>'v2_server_machine','landings'=>'onenew_landings'] as $label=>$table)$current[$label]=\Illuminate\Support\Facades\Schema::hasTable($table)?\Illuminate\Support\Facades\DB::table($table)->count():null;
+            $state['summary']['current_counts']=$current;$state['summary']['current_revision']=$this->migration->revision();$state['summary']['compared_at']=time();
+        }
         return array_intersect_key($state,array_flip(['id','state','filename','bytes','received','summary','error','created_at','updated_at','expires_at','rollback_available']));
     }
     public function latest():?array
