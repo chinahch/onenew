@@ -67,14 +67,8 @@ class ProbeOutboundBuilder extends SingBox
             $settings['utls'] = array_replace(['enabled' => true, 'fingerprint' => 'chrome'], $settings['utls'] ?? []);
             $settings['utls']['enabled'] = true;
         }
-        // A machine behind NAT may not be able to hairpin through its own public
-        // address. REALITY/TCP can be exercised unchanged through its local
-        // listener: the handshake, account and outbound request still run.
-        $localReality = $network === 'tcp' && (int) $tls === 2
-            && in_array($type, ['vless', 'trojan'], true)
-            && (int) $node->server_port > 0 && (int) $node->server_port <= 65535;
-        $dialHost = $localReality ? '127.0.0.1' : $node->host;
-        $dialPort = $localReality ? (int) $node->server_port : (int) $port;
+        $dialHost = $node->host;
+        $dialPort = (int) $port;
         // Keep the subscription's TLS name and dial through its public ingress.
         $tlsKey = in_array($type, ['hysteria', 'tuic', 'anytls'], true) ? 'tls' : 'tls_settings';
         if (!data_get($settings, $tlsKey . '.server_name')) {
