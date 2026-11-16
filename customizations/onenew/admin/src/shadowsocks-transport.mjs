@@ -3,7 +3,7 @@ export function ShadowsocksTransport({react:React,form}){
  React.useEffect(()=>{const sub=form.watch(value=>setState({...value}));return()=>sub.unsubscribe()},[form]);
  const set=(key,value)=>form.setValue(key,value,{shouldDirty:true,shouldValidate:true});
  const ws=state.network==='ws',tls=Number(state.tls||0)===1;
- const setNetwork=value=>{set('network',value);if(value==='tcp')set('tls',0);if(value==='ws'&&!['aes-128-gcm','aes-256-gcm','chacha20-ietf-poly1305','2022-blake3-aes-128-gcm','2022-blake3-aes-256-gcm'].includes(state.cipher))set('cipher','aes-128-gcm')};
+ const setNetwork=value=>{set('network',value);if(value==='tcp'){set('tls',0);set('plugin','');set('plugin_opts','');set('onenew_transport_managed',false);}if(value==='ws'&&!['aes-128-gcm','aes-256-gcm','chacha20-ietf-poly1305','2022-blake3-aes-128-gcm','2022-blake3-aes-256-gcm'].includes(state.cipher))set('cipher','aes-128-gcm')};
  const field=(label,value,change)=>h('label',{className:'onenew-field'},h('span',null,label),h('input',{className:'h-10 w-full rounded-md border bg-background px-3 text-sm',value:value||'',onChange:e=>change(e.target.value)}));
  return h('section',{className:'space-y-4 rounded-lg border p-4','aria-label':'Shadowsocks 传输与 TLS'},
   h('label',{className:'onenew-field'},h('span',null,'传输协议'),h('select',{className:'h-10 w-full rounded-md border bg-background px-3 text-sm',value:ws?'ws':'tcp',onChange:e=>setNetwork(e.target.value)},h('option',{value:'tcp'},'TCP'),h('option',{value:'ws'},'WebSocket'))),
