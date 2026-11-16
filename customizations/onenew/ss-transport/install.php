@@ -20,4 +20,10 @@ function applyOnenewShadowsocksTransport(string $root): void
     $new = 'if ($e instanceof \\Illuminate\\Validation\\ValidationException) throw $e; '.$old;
     if (substr_count($text, $old) !== 2) throw new RuntimeException('SS validation controller anchor changed');
     file_put_contents($controller, str_replace($old, $new, $text));
+
+    foreach (['Clash.php', 'ClashMeta.php'] as $name) {
+        replaceOnce($root.'/app/Protocols/'.$name,
+            "        \$array['udp'] = true;\n        if (data_get(\$protocol_settings, 'plugin')",
+            "        \$array['udp'] = data_get(\$protocol_settings, 'plugin') !== 'v2ray-plugin';\n        if (data_get(\$protocol_settings, 'plugin')");
+    }
 }
