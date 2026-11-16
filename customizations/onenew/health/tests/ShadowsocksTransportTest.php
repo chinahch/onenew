@@ -22,6 +22,7 @@ final class ShadowsocksTransportTest extends TestCase
         $this->assertSame('ws', $s['network'] ?? null);
         $this->assertSame('v2ray-plugin', $s['plugin']);
         $this->assertStringContainsString('tls', $s['plugin_opts']);
+        $this->assertStringContainsString('mux=0', $s['plugin_opts']);
         $this->assertStringContainsString('host=cdn.example', $s['plugin_opts']);
         $this->assertStringContainsString('path=/ss', $s['plugin_opts']);
         $config = ServerService::buildNodeConfig($node);
@@ -37,13 +38,14 @@ final class ShadowsocksTransportTest extends TestCase
             ['name'=>'ss','host'=>$node->host,'port'=>443,'protocol_settings'=>$s]);
         $this->assertStringContainsString('v2ray-plugin', rawurldecode($uri));
         $server = ['name'=>'ss','host'=>$node->host,'port'=>443,'protocol_settings'=>$s];
-        foreach ([\App\\Protocols\\Clash::class, \App\\Protocols\\ClashMeta::class] as $format) {
+        foreach ([\App\Protocols\Clash::class, \App\Protocols\ClashMeta::class] as $format) {
             $out = $format::buildShadowsocks($user->uuid, $server);
             $this->assertTrue($out['plugin-opts']['tls'], $format);
             $this->assertSame('/ss', $out['plugin-opts']['path'], $format);
             $this->assertFalse($out['udp'], $format);
+            $this->assertFalse($out['plugin-opts']['mux'], $format);
         }
-        $singbox = new \ReflectionMethod(\App\\Protocols\\SingBox::class, 'buildShadowsocks');
+        $singbox = new \ReflectionMethod(\App\Protocols\SingBox::class, 'buildShadowsocks');
         $out = $singbox->invoke(app(ProbeOutboundBuilder::class), $user->uuid, $server);
         $this->assertSame('v2ray-plugin', $out['plugin']);
         $this->assertSame($s['plugin_opts'], $out['plugin_opts']);
