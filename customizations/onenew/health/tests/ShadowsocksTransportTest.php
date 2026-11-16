@@ -37,6 +37,21 @@ final class ShadowsocksTransportTest extends TestCase
             ['name'=>'ss','host'=>$node->host,'port'=>443,'protocol_settings'=>$s]);
         $this->assertStringContainsString('v2ray-plugin', rawurldecode($uri));
     }
+    public function test_switching_managed_ws_back_to_tcp_removes_generated_plugin(): void
+    {
+        $node = new Server(['type'=>'shadowsocks','protocol_settings'=>[
+            'cipher'=>'aes-128-gcm','network'=>'ws','tls'=>1,
+            'tls_settings'=>['server_name'=>'cdn.example'],
+            'network_settings'=>['path'=>'/ss','headers'=>['Host'=>'cdn.example']]]]);
+        $settings = $node->protocol_settings;
+        $this->assertTrue($settings['onenew_transport_managed']);
+        $settings['network'] = 'tcp';
+        $settings['tls'] = 0;
+        $node->protocol_settings = $settings;
+        $this->assertEmpty($node->protocol_settings['plugin']);
+        $this->assertEmpty($node->protocol_settings['plugin_opts']);
+    }
+
     public function test_plain_ss_keeps_native_cipher_and_has_no_implicit_plugin(): void
     {
         $node = new Server(['type'=>'shadowsocks','protocol_settings'=>['cipher'=>'aes-128-gcm']]);
