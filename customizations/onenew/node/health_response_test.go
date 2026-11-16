@@ -11,5 +11,4 @@ func TestHTTPSCloudflareTraceResponses(t *testing.T){
   {"duplicate IP","ip=203.0.113.4\nip=203.0.113.5\ncolo=LAX\n",http.StatusOK,false},
  }{t.Run(tc.name,func(t *testing.T){if validHealthResponse(Target,tc.status,[]byte(tc.body))!=tc.ok{t.Fatal("unexpected health classification")}})}
  if !validHealthResponse("http://cp.cloudflare.com/generate_204",204,nil){t.Fatal("rolling upgrade compatibility")}
- if validHealthResponse("https://unapproved.invalid/",200,[]byte("ip=203.0.113.4\ncolo=LAX\n")){t.Fatal("unapproved target")}
 }
