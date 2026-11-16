@@ -56,7 +56,7 @@ final class SubscriptionGuardFeatureTest extends TestCase
         Sanctum::actingAs($one);$this->getJson('/api/onenew/admin/subscription-logs/users')->assertForbidden();
         Sanctum::actingAs($this->account(['is_admin'=>true]));
         $this->getJson('/api/onenew/admin/subscription-logs')->assertOk()->assertJsonPath('total',0);
-        $this->getJson('/api/onenew/admin/subscription-logs?user_id='.$one->id)->assertOk()->assertJsonPath('total',1)->assertJsonPath('data.0.ip','192.0.2.10')->assertJsonPath('data.0.user_id',$one->id);
+        $this->getJson('/api/onenew/admin/subscription-logs?user_id='.$one->id)->assertOk()->assertJsonPath('total',1)->assertJsonPath('data.0.ip','192.0.2.10')->assertJsonPath('data.0.user_id',$one->id)->assertJsonPath('data.0.ip_region','内网 IP');
         $this->getJson('/api/onenew/admin/subscription-logs/users?search='.urlencode($two->email))->assertOk()->assertJsonCount(1,'data')->assertJsonPath('data.0.id',$two->id);
     }
 
