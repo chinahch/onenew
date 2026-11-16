@@ -156,8 +156,10 @@ class ProbeService
     public function status(Server $node): array
     {
         $task = $this->store->latest((int) $node->id);
+        $source = $this->builder->cdnProbeHost($node) !== null
+            ? 'node machine · CDN ip.sb:443' : 'node machine · automatic';
         $pending = ['state' => 'pending', 'finished_at' => null, 'created_at' => null,
-            'error_code' => '', 'source' => 'node machine · automatic', 'latency_ms' => null, 'ping_ms' => null];
+            'error_code' => '', 'source' => $source, 'latency_ms' => null, 'ping_ms' => null];
         if (!$this->nodeAvailable($node) || !$node->machine_id || !$node->machine?->is_active) {
             return array_replace($pending, ['error_code' => 'machine_unavailable']);
         }
@@ -173,7 +175,7 @@ class ProbeService
         }
         return [
             'state' => $state, 'finished_at' => $this->iso($task['finished_at']), 'created_at' => $this->iso($task['created_at']),
-            'error_code' => $code, 'source' => 'node machine · automatic',
+            'error_code' => $code, 'source' => $source,
             'latency_ms' => $task['latency_ms'] ?? null, 'ping_ms' => $task['ping_ms'] ?? null,
         ];
     }
@@ -218,7 +220,7 @@ class ProbeService
         $fields = ['onenew_identity', 'machine_id', 'enabled', 'type', 'host', 'port', 'server_port', 'parent_id',
             'node_speed_limit_mbps', 'protocol_settings', 'group_ids', 'custom_outbounds', 'custom_routes', 'route_ids', 'cert_config'];
         // Invalidate cached unsupported results when the client builder changes.
-        $values = ['probe_schema_version' => 6];
+        $values = ['probe_schema_version' => 7];
         foreach ($fields as $field) {
             $value = $node->getAttribute($field);
             // The native port column is VARCHAR without a model scalar cast:

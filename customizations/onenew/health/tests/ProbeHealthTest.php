@@ -312,7 +312,8 @@ class ProbeHealthTest extends TestCase
             'tls_settings' => ['server_name' => 'aethercloud-us.chinaone.ggff.net'],
             'network_settings' => ['path' => '/juhost28000', 'headers' => ['Host' => 'aethercloud-us.chinaone.ggff.net']]];
         $public = app(ProbeOutboundBuilder::class)->build($node, $user)['outbound']['settings'];
-        $this->assertSame('101.69.181.108', $public['server']);
+        $this->assertSame('ip.sb', $public['server']);
+        $this->assertSame('101.69.181.108', $node->host);
         $this->assertSame(443, $public['server_port']);
         $this->assertSame('aethercloud-us.chinaone.ggff.net', $public['tls']['server_name']);
         $this->assertSame('/juhost28000', $public['transport']['path']);
@@ -364,6 +365,73 @@ class ProbeHealthTest extends TestCase
         $this->assertSame('running', app(ProbeStore::class)->latest($node->id)['state']);
         $this->assertNull(app(ProbeStore::class)->latest($sibling->id));
         $this->assertNotSame($first['id'], $next['id']);
+    }
+
+    public function test_cdn_probe_uses_sni_443_and_keeps_subscription_and_credentials_unchanged(): void
+    {
+        [, $node, $user] = $this->fixture();
+        $node->type = 'vless';
+        $node->host = '101.69.181.108';
+        $node->port = '25001';
+        $settings = ['network'=>'ws', 'tls'=>1,
+            'tls_settings'=>['server_name'=>'AetherCloud.chinaone.ggff.net'],
+            'network_settings'=>['path'=>'/edge', 'headers'=>['Host'=>'AetherCloud.chinaone.ggff.net']]];
+        $node->protocol_settings = $settings;
+        $builder = app(ProbeOutboundBuilder::class);
+        $out = $builder->build($node, $user)['outbound']['settings'];
+        $this->assertSame('ip.sb', $out['server']);
+        $this->assertSame(443, $out['server_port']);
+        $this->assertSame($user->uuid, $out['uuid']);
+        $this->assertSame('/edge', $out['transport']['path']);
+        $this->assertSame('101.69.181.108', $node->host);
+        $this->assertSame('25001', $node->port);
+        $this->assertSame('node machine · CDN ip.sb:443', app(ProbeService::class)->status($node)['source']);
+
+        $settings['network_settings']['headers']['Host'] = 'different.example';
+        $node->protocol_settings = $settings;
+        $this->assertNull($builder->cdnProbeHost($node));
+        $this->assertSame('101.69.181.108', $builder->build($node, $user)['outbound']['settings']['server']);
+        $settings['network_settings']['headers']['Host'] = 'AetherCloud.chinaone.ggff.net';
+        $settings['tls'] = 0;
+        $node->protocol_settings = $settings;
+        $this->assertNull($builder->cdnProbeHost($node));
+        $settings['tls'] = 2;
+        $node->protocol_settings = $settings;
+        $this->assertNull($builder->cdnProbeHost($node));
+    }
+
+    public function test_cdn_xhttp_h2_and_all_three_ws_protocols_preserve_native_handshake(): void
+    {
+        [, $node, $user] = $this->fixture();
+        $node->host = '101.69.181.108';
+        $builder = app(ProbeOutboundBuilder::class);
+        foreach (['vmess', 'vless', 'trojan'] as $type) {
+            $node->type = $type;
+            $node->protocol_settings = ['network'=>'ws', 'tls'=>1,
+                'tls_settings'=>['server_name'=>'cdn.example'],
+                'network_settings'=>['path'=>'/ws', 'headers'=>['Host'=>'cdn.example']]];
+            $out = $builder->build($node, $user)['outbound']['settings'];
+            $this->assertSame('ip.sb', $out['server'], $type);
+            $this->assertSame(443, $out['server_port'], $type);
+            $this->assertSame('cdn.example', $out['tls']['server_name'], $type);
+            $this->assertSame('/ws', $out['transport']['path'], $type);
+        }
+        $node->type = 'vless';
+        $node->protocol_settings = ['network'=>'xhttp', 'tls'=>1,
+            'tls_settings'=>['server_name'=>'cdn.example'],
+            'network_settings'=>['host'=>'cdn.example', 'path'=>'/xhttp', 'mode'=>'packet-up', 'alpn'=>'h2',
+                'extra'=>['headers'=>[], 'xPaddingBytes'=>'100-1000', 'noSSEHeader'=>false]]];
+        $payload = $builder->build($node, $user);
+        $this->assertSame('xray', $payload['kernel_type']);
+        $out = $payload['outbound'];
+        $this->assertSame('ip.sb', $out['settings']['vnext'][0]['address']);
+        $this->assertSame(443, $out['settings']['vnext'][0]['port']);
+        $this->assertSame('cdn.example', $out['stream_settings']['tlsSettings']['serverName']);
+        $this->assertSame(['h2'], $out['stream_settings']['tlsSettings']['alpn']);
+        $this->assertSame('packet-up', $out['stream_settings']['xhttpSettings']['mode']);
+        $this->assertSame('/xhttp', $out['stream_settings']['xhttpSettings']['path']);
+        $this->assertSame('100-1000', $out['stream_settings']['xhttpSettings']['extra']['xPaddingBytes']);
+        $this->assertSame('101.69.181.108', $node->host);
     }
 
     private function fixture(): array

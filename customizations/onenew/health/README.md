@@ -133,3 +133,7 @@ worker validation. A portable PHP 8.2 runtime is available in the Windows author
 environment: all overlay PHP files pass `php -l`, and the portable builder smoke
 checks pass. Laravel vendor dependencies and Docker are absent, so no local
 feature-test or native-kernel success is claimed here.
+
+## CDN ingress checks
+
+TLS WebSocket nodes (VMess/VLESS/Trojan) and VLESS XHTTP h2 nodes using an IP dial address and an identical DNS SNI/transport Host are probed through the operator-selected CDN edge `ip.sb:443`. Credentials, TLS checks, WS Host/path and the proxied Cloudflare 204 request are preserved. Subscription fields are not changed. The result source is `node machine · CDN ip.sb:443`: it verifies the substitute CDN ingress and proxy path, not availability of the original preferred/forwarding IP. Plain WS, REALITY, domain dial addresses and mismatching SNI/Host do not use this mapping. Configuration changes invalidate cached status automatically.

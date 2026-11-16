@@ -21,6 +21,11 @@ class ProbeOutboundBuilder extends SingBox
 
     public function build(Server $node, User $user): array
     {
+        if ($cdnHost = $this->cdnProbeHost($node)) {
+            $node = clone $node;
+            $node->host = $cdnHost;
+            $node->port = 443;
+        }
         $settings = $node->protocol_settings ?? [];
         $type = $node->type;
         $network = data_get($settings, 'network') ?: 'tcp';
@@ -95,6 +100,33 @@ class ProbeOutboundBuilder extends SingBox
             'outbound' => ['tag' => 'onenew-probe', 'protocol' => $protocol, 'settings' => $out],
             'target' => self::TARGET,
         ];
+    }
+
+    /** Operator-requested alternate edge for matching CDN transport configurations. */
+    public function cdnProbeHost(Server $node): ?string
+    {
+        $s = $node->protocol_settings ?? [];
+        $network = data_get($s, 'network');
+        $ws = $network === 'ws' && in_array($node->type, ['vless', 'vmess', 'trojan'], true);
+        $alpn = data_get($s, 'network_settings.alpn', []);
+        $alpn = is_string($alpn) ? array_map('trim', explode(',', $alpn)) : (is_array($alpn) ? $alpn : []);
+        $xhttp = $node->type === 'vless' && in_array($network, ['xhttp', 'splithttp'], true)
+            && in_array('h2', $alpn, true);
+        if ((!$ws && !$xhttp) || (int) data_get($s, 'tls', 0) !== 1
+            || !filter_var(trim((string) $node->host, '[]'), FILTER_VALIDATE_IP)) {
+            return null;
+        }
+        $sni = strtolower(trim((string) data_get($s, 'tls_settings.server_name', '')));
+        $headers = array_change_key_case((array) data_get($s, 'network_settings.headers', []), CASE_LOWER);
+        $transportHost = $xhttp ? data_get($s, 'network_settings.host', '')
+            : ($headers['host'] ?? data_get($s, 'network_settings.host', ''));
+        $transportHost = strtolower(trim((string) $transportHost));
+        if ($sni === '' || $sni !== $transportHost || !str_contains($sni, '.')
+            || filter_var($sni, FILTER_VALIDATE_IP)
+            || !filter_var($sni, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
+            return null;
+        }
+        return 'ip.sb';
     }
 
     private function buildXray(Server $node, User $user, int $port): array
