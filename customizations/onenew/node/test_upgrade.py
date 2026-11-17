@@ -59,7 +59,7 @@ else exit 10
 fi
 '''
         with tarfile.open(self.package, 'w:gz') as archive:
-            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.11 (built candidate)"\n'), ('caddyctl', cli)]:
+            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.12 (built candidate)"\n'), ('caddyctl', cli)]:
                 data = content.encode(); info = tarfile.TarInfo(name); info.size = len(data); info.mode = 0o755
                 archive.addfile(info, io.BytesIO(data))
         self.sums.write_text(hashlib.sha256(self.package.read_bytes()).hexdigest() + '  ' + self.package.name + '\n')
@@ -76,9 +76,21 @@ fi
         return '/' + value[0].lower() + value[2:] if os.name == 'nt' else value
 
     def upgrade(self, machine='7', token='fixture-private-token'):
+        env = {**os.environ, 'FIXTURE_ROOT': self.posix(self.root), 'MOCK_BIN': self.posix(self.bin), 'FIXTURE_TOKEN': token}
+        bash = 'C:/Program Files/Git/bin/bash.exe' if os.name == 'nt' else shutil.which('bash')
+        return subprocess.run([bash, '--noprofile', '--norc', '-c', 'export PATH="$MOCK_BIN:$PATH"; printf "%s\\n" "$FIXTURE_TOKEN" | bash "$@"', 'upgrade-test', self.posix(self.fixture_script), '--upgrade', '--panel', 'https://panel.example.test', '--token-stdin', '--machine-id', machine], env=env, input=token + ('\n' if os.name != 'nt' else ''), capture_output=True, text=True, encoding='utf-8', errors='replace')
+
+    def test_bare_upgrade_reuses_saved_binding_and_credentials(self):
+        updater = self.root / 'caddy-updater-linux-amd64'
+        updater.write_text('#!/bin/sh\ncase "$5" in panel) echo https://panel.example.test;; machine) echo 7;; token) echo fixture-private-token;; *) exit 1;; esac\n')
+        (self.root / 'SHA256SUMS-updater-amd64').write_text(hashlib.sha256(updater.read_bytes()).hexdigest() + '  ' + updater.name + '\n')
         env = {**os.environ, 'FIXTURE_ROOT': self.posix(self.root), 'MOCK_BIN': self.posix(self.bin)}
         bash = 'C:/Program Files/Git/bin/bash.exe' if os.name == 'nt' else shutil.which('bash')
-        return subprocess.run([bash, '--noprofile', '--norc', '-c', 'export PATH="$MOCK_BIN:$PATH"; exec bash "$@"', 'upgrade-test', self.posix(self.fixture_script), '--upgrade', '--panel', 'https://panel.example.test', '--token-stdin', '--machine-id', machine], env=env, input=token + '\n', capture_output=True, text=True, encoding='utf-8', errors='replace')
+        result = subprocess.run([bash, '--noprofile', '--norc', '-c', 'export PATH="$MOCK_BIN:$PATH"; exec bash "$@"', 'bare-upgrade', self.posix(self.fixture_script), '--upgrade'], env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('fixture-private-token', result.stdout + result.stderr)
+        self.assertTrue((self.installed / 'caddy-updater').exists())
+        self.assertEqual((self.native / 'config.yml').read_bytes(), self.original[str(self.native / 'config.yml')])
 
     def test_upgrade_preserves_configuration_certificate_and_unit(self):
         result = self.upgrade()
@@ -147,11 +159,12 @@ fi
 
     def _prepare_openrc(self, valid=True):
         self.script('rc-service', '#!/bin/sh\necho "$2" >> "$FIXTURE_ROOT/service-actions"\nexit 0\n')
+        self.script('rc-update', '#!/bin/sh\nexit 0\n')
         self.script('supervise-daemon', '#!/bin/sh\nexit 0\n')
         init = self.root / 'etc/init.d/caddy'
         init.parent.mkdir(parents=True, exist_ok=True)
         description = 'Onenew Native Node' if valid else 'Foreign Service'
-        init.write_text('description="' + description + '"\ncommand="' + self.posix(self.installed) + '/caddy"\ncommand_args="-c ' + self.posix(self.native) + '/config.yml"\nsupervisor="supervise-daemon"\n')
+        init.write_text('#!/sbin/openrc-run\ndescription="' + description + '"\ncommand="' + self.posix(self.installed) + '/caddy"\ncommand_args="-c ' + self.posix(self.native) + '/config.yml"\nsupervisor="supervise-daemon"\n')
         init.chmod(0o755)
         (self.system/'caddy.service').unlink()
 
