@@ -29,6 +29,7 @@ class UpgradeTest(InstallerTest):
         self.original = {str(p): p.read_bytes() for p in [*self.native.iterdir(), *self.installed.iterdir(), self.system/'caddy.service']}
         self.script('id', '#!/bin/sh\necho 0\n')
         self.script('sleep', '#!/bin/sh\nexit 0\n')
+        if os.name == 'nt': self.script('flock', '#!/bin/sh\nexit 0\n')
         self.script('systemctl', '''#!/bin/bash
 echo "$1" >> "$FIXTURE_ROOT/service-actions"
 if [ "$1" = show ]; then
@@ -79,6 +80,18 @@ fi
         env = {**os.environ, 'FIXTURE_ROOT': self.posix(self.root), 'MOCK_BIN': self.posix(self.bin), 'FIXTURE_TOKEN': token}
         bash = 'C:/Program Files/Git/bin/bash.exe' if os.name == 'nt' else shutil.which('bash')
         return subprocess.run([bash, '--noprofile', '--norc', '-c', 'export PATH="$MOCK_BIN:$PATH"; printf "%s\\n" "$FIXTURE_TOKEN" | bash "$@"', 'upgrade-test', self.posix(self.fixture_script), '--upgrade', '--panel', 'https://panel.example.test', '--token-stdin', '--machine-id', machine], env=env, input=token + ('\n' if os.name != 'nt' else ''), capture_output=True, text=True, encoding='utf-8', errors='replace')
+
+    @unittest.skipIf(os.name == 'nt', 'Linux flock integration')
+    def test_manual_upgrade_refuses_assistant_shared_lock_before_mutation(self):
+        import fcntl
+        with (self.native / 'updater.lock').open('w') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = self.upgrade()
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('holds the upgrade lock', result.stderr)
+            actions = self.root / 'service-actions'
+            self.assertNotIn('stop', actions.read_text() if actions.exists() else '')
+            for path, content in self.original.items(): self.assertEqual(Path(path).read_bytes(), content)
 
     def test_bare_upgrade_reuses_saved_binding_and_credentials(self):
         updater = self.root / 'caddy-updater-linux-amd64'

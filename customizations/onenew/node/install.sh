@@ -65,6 +65,16 @@ machine_healthy() {
 }
 
 if [ "$UPGRADE" -eq 1 ]; then
+  # Upgrade only known Onenew services; do not change node configuration or certificates.
+  for path in "$ROOT/config.yml" "$ROOT/credentials.env" /usr/local/bin/caddy /usr/local/bin/caddyctl; do
+    [ -f "$path" ] && [ ! -L "$path" ] || fail 'Upgrade requires a complete native Onenew installation with regular files'
+  done
+  [ ! -L "$ROOT" ] || fail 'Upgrade refuses a symlinked configuration directory'
+  command -v flock >/dev/null || fail 'Missing dependency: flock (install util-linux)'
+  [ ! -L "$ROOT/updater.lock" ] || fail 'Assistant lock is a symlink'
+  exec 9>"$ROOT/updater.lock"
+  flock -n 9 || fail 'Upgrade assistant or another installer holds the upgrade lock'
+  LOCKED=1
   # Once bootstrapped, panel upgrades are serialized by the assistant. Refuse
   # concurrent manual replacement rather than interrupt an active transaction.
   if [ -f /usr/local/bin/caddy-updater ]; then
@@ -74,11 +84,6 @@ if [ "$UPGRADE" -eq 1 ]; then
     fi
     [ ! -e "$ROOT/updater/journal.json" ] || fail 'Assistant has a pending recovery/result journal; start it and resolve the task first'
   fi
-  # Upgrade only known Onenew services; do not change node configuration or certificates.
-  for path in "$ROOT/config.yml" "$ROOT/credentials.env" /usr/local/bin/caddy /usr/local/bin/caddyctl; do
-    [ -f "$path" ] && [ ! -L "$path" ] || fail 'Upgrade requires a complete native Onenew installation with regular files'
-  done
-  [ ! -L "$ROOT" ] || fail 'Upgrade refuses a symlinked configuration directory'
   for path in /etc/php-fpm/config.yml /etc/xboard-node/config.yml; do
     [ ! -e "$path" ] && [ ! -L "$path" ] || fail 'Conflicting node service found; upgrade refused'
   done
@@ -116,7 +121,7 @@ for path in /usr/local/bin/caddy-updater /etc/systemd/system/caddy-updater.servi
   [ ! -L "$path" ] || fail 'Upgrade assistant target is a symlink'
 done
 STAGE=$(mktemp -d)
-trap 'rm -rf -- "$STAGE"' EXIT
+trap 'if [ "${LOCKED:-0}" -eq 1 ]; then flock -u 9 >/dev/null 2>&1 || true; fi; rm -rf -- "$STAGE"' EXIT
 UPDATER="caddy-updater-linux-$ARCH"
 curl --proto '=https' --tlsv1.2 -fsSL --retry 2 "$BASE/$UPDATER" -o "$STAGE/$UPDATER"
 curl --proto '=https' --tlsv1.2 -fsSL --retry 2 "$BASE/SHA256SUMS-updater-$ARCH" -o "$STAGE/updater-sums"
@@ -134,6 +139,9 @@ fi
 [ -n "$TOKEN" ] || fail 'A machine token is required'
 
 install_updater() {
+  # Core replacement and health/rollback have completed. Explicitly unlock
+  # before launching the daemon; OpenRC children may inherit descriptor 9.
+  if [ "${LOCKED:-0}" -eq 1 ]; then flock -u 9; exec 9>&-; LOCKED=0; fi
   # Updating the helper is independent from caddy, and requires no credentials
   # in service arguments or shell environment files.
   local candidate
