@@ -13,6 +13,10 @@ class OnenewServiceProvider extends ServiceProvider
         $worker=['connection'=>'onenew_migration','queue'=>['onenew_migration'],'balance'=>'simple','minProcesses'=>1,'maxProcesses'=>1,'memory'=>128,'tries'=>1,'timeout'=>1800];
         config()->set('horizon.environments.production.migration',$worker);
         config()->set('horizon.environments.local.migration',$worker);
+        config()->set('queue.connections.onenew_ai_operator',['driver'=>'redis','connection'=>'default','queue'=>'onenew_ai_operator','retry_after'=>300,'block_for'=>null]);
+        $operatorWorker=['connection'=>'onenew_ai_operator','queue'=>['onenew_ai_operator'],'balance'=>'simple','minProcesses'=>1,'maxProcesses'=>1,'memory'=>192,'tries'=>1,'timeout'=>240];
+        config()->set('horizon.environments.production.ai_operator',$operatorWorker);
+        config()->set('horizon.environments.local.ai_operator',$operatorWorker);
     }
 
     public function boot(): void
@@ -33,7 +37,7 @@ class OnenewServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom($root . '/energy/database/migrations');
         $this->loadMigrationsFrom($root . '/bandwidth/database/migrations');
         $this->loadMigrationsFrom($root . '/landing-library/database/migrations');
-        $this->commands([\App\Onenew\Traffic\PruneTelemetry::class,\App\Onenew\Migration\PruneMigrations::class,\App\Onenew\Migration\RestoreAssets::class]);
+        $this->commands([\App\Onenew\Traffic\PruneTelemetry::class,\App\Onenew\Migration\PruneMigrations::class,\App\Onenew\Migration\RestoreAssets::class,\App\Onenew\AiOperations\PruneOperatorTasks::class]);
         require $root . '/health/routes.php';
         require $root . '/user-portal/backend/routes.php';
         require $root . '/traffic/routes.php';
