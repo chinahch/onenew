@@ -14,7 +14,7 @@ final class SourceTools
     public function __construct(private RepoSettings $settings, ?array $roots=null) {$this->roots=$roots??['repository'=>'/opt/onenew','runtime'=>'/www'];}
     public function catalog():array {return array_map(fn($name)=>['tool'=>$name,'args'=>['source'=>'repository|runtime','path'=>'relative allowlisted source path','query'=>'literal search text (search only)','start_line'=>'1-based (read only)','limit'=>'max 100'] ,'mapping'=>'repository customizations/onenew overlays map to runtime /www/app; runtime is read-only'],['source.list','source.read','source.search']);}
     private function allowed(string $path,bool $edit=false):bool {
-        if(strlen($path)>240||preg_match('~(^/|\\\\|[\x00-\x1f:]|(^|/)\.{1,2}(/|$)|//)~',$path))return false;
+        if(strlen($path)>240||!preg_match('~^[A-Za-z0-9_./-]+$~',$path)||preg_match('~(^/|\\\\|[\x00-\x1f:]|(^|/)\.{1,2}(/|$)|//)~',$path))return false;
         if(preg_match('~(^|/)(\.[^/]*|vendor|node_modules|storage|database|bootstrap|cache|certs?|certificates|private|secrets?|fixtures|bin|install[^/]*|update[^/]*)(/|$)~i',$path))return false;
         if(!preg_match('~\.(php|mjs|json|css|vue|ts|md)$~i',$path)||preg_match('~(lock|composer\.json|package-lock\.json)$~i',$path))return false;
         return $edit ? (bool)preg_match('~^customizations/onenew/[^/]+/(app/|backend/app/|src/|tests/|backend/tests/)~',$path) : (bool)preg_match('~^(customizations/onenew/|app/|tests/)~',$path);
