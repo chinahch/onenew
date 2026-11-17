@@ -122,6 +122,16 @@ final class AiOperationsTest extends TestCase
         $response=$this->postJson(self::ROOT.'/chat',$request,$auth)->assertStatus(502);self::assertStringNotContainsString('fixture-secret-key',$response->getContent());
         $this->postJson(self::ROOT.'/chat',$request,$auth)->assertStatus(409);Http::assertSentCount(1);
     }
+    public function test_preview_consent_is_bound_to_the_provider_configuration():void
+    {
+        $this->ready();Http::preventStrayRequests();$auth=$this->auth();
+        $preview=$this->postJson(self::ROOT.'/preview',['question'=>'help','scope'=>'panel'],$auth)->assertOk()->assertJsonPath('provider.model','fixture-model')->json();
+        self::assertArrayNotHasKey('config_fingerprint',$preview);self::assertStringNotContainsString('fixture-secret-key',json_encode($preview));
+        app(Config::class)->save(['endpoint'=>'https://different.example.com/v1']);
+        $this->postJson(self::ROOT.'/chat',['preview_id'=>$preview['preview_id'],'request_id'=>(string)Str::uuid(),'confirmed'=>true],$auth)->assertStatus(409);
+        Http::assertNothingSent();
+    }
+
     public function test_test_sends_minimal_saved_configuration_only():void
     {
         $this->ready();Http::fake(['*'=>Http::response(['choices'=>[['message'=>['content'=>'OK']]]],200)]);
