@@ -8,7 +8,7 @@ class Endpoint
     public static function normalize(string $url):string
     {
         $p=parse_url($url);
-        if(!$p||($p['scheme']??'')!=='https'||empty($p['host'])||isset($p['user'])||isset($p['pass'])||isset($p['query'])||isset($p['fragment'])||isset($p['port'])&&$p['port']!==443)
+        if(!$p||($p['scheme']??'')!=='https'||empty($p['host'])||isset($p['user'])||isset($p['pass'])||isset($p['query'])||isset($p['fragment'])||isset($p['port'])&&($p['port']<1||$p['port']>65535))
             throw ValidationException::withMessages(['endpoint'=>'请输入不含认证信息、参数的 HTTPS API 地址。']);
         $host=strtolower($p['host']);
         if(!preg_match('/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/D',$host)||!str_contains($host,'.')||filter_var($host,FILTER_VALIDATE_IP)||preg_match('/(?:^|\.)(?:localhost|local|internal|test|invalid)$/D',$host))
@@ -16,7 +16,7 @@ class Endpoint
         $path=rtrim($p['path']??'','/');
         if(!preg_match('~^/[A-Za-z0-9/_-]*$~D',$path)&&$path!=='')throw ValidationException::withMessages(['endpoint'=>'API 路径无效。']);
         if(!str_ends_with($path,'/chat/completions'))$path.='/chat/completions';
-        return 'https://'.$host.$path;
+        return 'https://'.$host.(isset($p['port'])?':'.$p['port']:'').$path;
     }
     public static function publicIp(string $ip):bool
     {

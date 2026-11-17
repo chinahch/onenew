@@ -16,7 +16,8 @@ final class Service
     }
     public function preview(int $admin,array $data):array
     {
-        $secrets=[$this->config->key()];$question=Redactor::text($data['question'],$secrets);$scope=$data['scope'];
+        try{$secrets=[$this->config->key()];}catch(\Illuminate\Contracts\Encryption\DecryptException $e){abort(422,'AI 密钥无法读取，请重新保存密钥。');}
+        $question=Redactor::text($data['question'],$secrets);$scope=$data['scope'];
         $knowledge=$this->clean($this->knowledge->entries($scope,$question),$secrets);$context=$this->clean($this->context->snapshot($scope,$data['node_id']??null),$secrets);
         $sources=[];foreach($knowledge as $entry)foreach($entry['sources']??[] as $source)if(is_string($source))$sources[]=$source;
         $preview=['preview_id'=>(string)Str::uuid(),'question'=>$question,'scope'=>$scope,'context'=>$context,'knowledge'=>$knowledge,'history'=>$this->clean($data['history']??[],$secrets),'system_instruction'=>self::SYSTEM,'sources'=>array_values(array_unique($sources)),'expires_at'=>now()->addMinutes(10)->toIso8601String()];

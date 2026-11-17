@@ -55,6 +55,38 @@ final class AiOperationsTest extends TestCase
         app(Config::class)->save(['enabled'=>true,'endpoint'=>'https://api.example.com/v1','model'=>'fixture-model','api_key'=>'fixture-secret-key']);
         $this->app->bind(Endpoint::class,fn()=>new class extends Endpoint {public function addresses(string $host):array{return ['93.184.216.34'];}});
     }
+    public function test_custom_https_port_is_preserved_and_socket_is_pinned_to_that_port():void
+    {
+        $this->ready();$url='https://api.example.com:8443/v1/chat/completions';
+        self::assertSame($url,Endpoint::normalize('https://api.example.com:8443/v1'));
+        Http::fake(function($request,$options)use($url){
+            self::assertSame($url,$request->url());self::assertSame(['api.example.com:8443:93.184.216.34'],$options['curl'][CURLOPT_RESOLVE]);
+            self::assertFalse($options['allow_redirects']);self::assertTrue($options['verify']);self::assertSame('',$options['proxy']);
+            return Http::response(['choices'=>[['message'=>['content'=>'OK']]]],200);
+        });
+        $config=app(Config::class)->row();$config['endpoint']=$url;
+        self::assertSame('OK',app(\App\Onenew\AiOperations\Client::class)->complete($config,'fixture-secret-key',[['role'=>'user','content'=>'hello']])['answer']);
+    }
+    public function test_provider_response_size_guards_reject_headers_progress_and_actual_body():void
+    {
+        $this->ready();Http::fake(function($request,$options){
+            foreach([
+                fn()=>($options['on_headers'])(new \GuzzleHttp\Psr7\Response(200,['Content-Length'=>'131073'])),
+                fn()=>($options['progress'])(0,131073,0,0),
+            ] as $guard){
+                try{$guard();self::fail('Oversized response guard did not abort');}catch(\RuntimeException $e){self::assertSame('response_too_large',$e->getMessage());}
+            }
+            return Http::response(str_repeat('x',131073),200);
+        });
+        $this->expectException(\RuntimeException::class);$this->expectExceptionMessage('provider_failed');
+        app(\App\Onenew\AiOperations\Client::class)->complete(app(Config::class)->row(),'fixture-secret-key',[['role'=>'user','content'=>'hello']]);
+    }
+    public function test_preview_decryption_failure_is_generic_and_sends_nothing():void
+    {
+        $this->ready();Http::preventStrayRequests();DB::table('onenew_ai_config')->update(['encrypted_key'=>'fixture-invalid-ciphertext']);
+        $result=$this->postJson(self::ROOT.'/preview',['scope'=>'panel','question'=>'help'],$this->auth())->assertStatus(422);
+        self::assertStringNotContainsString('fixture-invalid-ciphertext',$result->getContent());self::assertStringNotContainsString('DecryptException',$result->getContent());Http::assertNothingSent();
+    }
     public function test_confirm_uses_snapshot_and_is_idempotent_without_second_charge():void
     {
         $this->ready();$auth=$this->auth();
