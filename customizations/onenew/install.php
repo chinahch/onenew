@@ -39,6 +39,8 @@ function copyOverlay(string $source, string $target): void
 copyOverlay($custom . '/health/app', $root . '/app');
 copyOverlay($custom . '/user-portal/backend/app', $root . '/app');
 copyOverlay($custom . '/runtime/app', $root . '/app');
+require $custom . '/runtime/install-subscription-tokens.php';
+applyOnenewSubscriptionTokens($root);
 require $custom . '/domains/install.php';
 applyOnenewUserDomains($root);
 copyOverlay($custom . '/migration/app', $root . '/app');
