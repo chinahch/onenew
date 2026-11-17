@@ -7,7 +7,7 @@ use App\Models\User;
 use App\Protocols\SingBox;
 use App\Utils\Helper;
 
-/** Build an authenticated probe client; selected TCP listeners use machine-local ingress. */
+/** Build an authenticated probe client; selected listeners use machine-local ingress. */
 class ProbeOutboundBuilder extends SingBox
 {
     public const TARGET = 'https://www.cloudflare.com/cdn-cgi/trace';
@@ -68,18 +68,20 @@ class ProbeOutboundBuilder extends SingBox
             $settings['utls']['enabled'] = true;
         }
         // NAT hairpinning can fail even while subscribers reach the public port.
-        // Plain SS and REALITY/TCP keep their native account/handshake through
-        // the local listener. This verifies a local round trip, not public ingress.
+        // Plain SS, REALITY/TCP and Hysteria2/QUIC keep their native account
+        // and handshake through the local listener. This verifies a local round trip, not public ingress.
         $listenerPort = filter_var($node->server_port, FILTER_VALIDATE_INT,
             ['options'=>['min_range'=>1,'max_range'=>65535]]);
-        $localListener = $network === 'tcp' && $listenerPort !== false && (
-            ((int) $tls === 2 && in_array($type, ['vless', 'trojan'], true)) ||
-            ($type === 'shadowsocks' && (int) $tls === 0
-                && !data_get($settings, 'plugin') && !data_get($settings, 'obfs'))
+        $localListener = $listenerPort !== false && (
+            ($network === 'tcp' && (
+                ((int) $tls === 2 && in_array($type, ['vless', 'trojan'], true)) ||
+                ($type === 'shadowsocks' && (int) $tls === 0
+                    && !data_get($settings, 'plugin') && !data_get($settings, 'obfs'))
+            )) || ($type === 'hysteria' && (int) data_get($settings, 'version', 2) === 2)
         );
         $dialHost = $localListener ? '127.0.0.1' : $node->host;
         $dialPort = $localListener ? $listenerPort : (int) $port;
-        // Keep the subscription's TLS name and dial through its public ingress.
+        // Preserve the subscription's certificate name when dialing localhost.
         $tlsKey = in_array($type, ['hysteria', 'tuic', 'anytls'], true) ? 'tls' : 'tls_settings';
         if (!data_get($settings, $tlsKey . '.server_name')) {
             $settings[$tlsKey] = array_replace((array) ($settings[$tlsKey] ?? []), ['server_name' => $node->host]);

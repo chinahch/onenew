@@ -138,7 +138,7 @@ namespace {
             check(data_get($out, 'settings.vnext.0.users.0.id') === $uuid, $name . ': wrong user');
             check(isset($out['stream_settings']), $name . ': stream_settings missing');
         } else {
-            $localReality = ($type === 'shadowsocks' || (in_array($type, ['vless', 'trojan'], true) && (int) ($settings['tls'] ?? 0) === 2))
+            $localReality = ($type === 'hysteria' || $type === 'shadowsocks' || (in_array($type, ['vless', 'trojan'], true) && (int) ($settings['tls'] ?? 0) === 2))
                 && ($settings['network'] ?? 'tcp') === 'tcp';
             check(data_get($out, 'settings.server') === ($localReality ? '127.0.0.1' : 'public.example'), $name . ': wrong probe ingress');
             check(data_get($out, 'settings.server_port') === ($localReality ? 12345 : 443), $name . ': wrong probe port');
@@ -167,6 +167,23 @@ namespace {
         foreach([null,0,-1,65536,'invalid',40558.5,'40558x'] as $invalidPort){
             $node->server_port=$invalidPort;$fallback=$builder->build($node,$user)['outbound']['settings'];
             check($fallback['server']==='8.138.255.100' && $fallback['server_port']===30001,'Invalid SS listener port must preserve public fallback');
+        }
+    }
+    foreach([null,'certificate.example'] as $serverName){
+        $settings=['version'=>2,'obfs'=>['open'=>true,'type'=>'salamander','password'=>'test-obfs']];
+        if($serverName!==null)$settings['tls']=['server_name'=>$serverName];
+        $node=new \App\Models\Server(['id'=>516,'type'=>'hysteria','host'=>'hkbn-1.ddns-go.de','port'=>20201,'server_port'=>20201,'protocol_settings'=>$settings]);
+        $before=$node->protocol_settings;$payload=$builder->build($node,$user);$out=$payload['outbound'];
+        check($out['protocol']==='hysteria2' && $out['settings']['server']==='127.0.0.1' && $out['settings']['server_port']===20201,'Hysteria2 did not dial local QUIC listener');
+        check($out['settings']['tls']['enabled']===true && $out['settings']['tls']['insecure']===false,'Hysteria2 TLS verification changed');
+        check($out['settings']['tls']['server_name']===($serverName??'hkbn-1.ddns-go.de'),'Hysteria2 lost certificate name');
+        check($out['settings']['password']===$uuid && $out['settings']['obfs']===['type'=>'salamander','password'=>'test-obfs'],'Hysteria2 credential/obfs changed');
+        check($payload['target']===\App\Onenew\ProbeOutboundBuilder::TARGET,'Hysteria2 target changed');
+        check(\App\Onenew\ProbeStages::payload($node,'singbox',$payload)['entry_source']==='local_listener_roundtrip','Hysteria2 source mislabeled public');
+        check($node->host==='hkbn-1.ddns-go.de' && $node->port===20201 && $node->protocol_settings===$before,'Hysteria2 subscription mutated');
+        foreach([null,0,-1,65536,'bad'] as $invalid){
+            $node->server_port=$invalid;$fallback=$builder->build($node,$user)['outbound']['settings'];
+            check($fallback['server']==='hkbn-1.ddns-go.de' && $fallback['server_port']===20201,'Invalid Hysteria2 listener must preserve public fallback');
         }
     }
     // The production install patch extends SS's native settings schema. This
@@ -209,6 +226,6 @@ namespace {
     $reloaded = new \App\Models\Server($attributes + ['port' => '443']);
     check($revision->invoke($service, $created) === $revision->invoke($service, $reloaded),
         'Equivalent integer/string native listener ports produced different health revisions');
-    echo count($cases) . " native builder projections, 3 plain SS local/native-key/source checks, SS WS/TLS CDN regression, 5 refusal checks and port revision canonicalization passed (attribute shim, not Laravel/runtime validation)\n";
+    echo count($cases) . " native builder projections, 3 plain SS local/native-key/source checks, 2 Hysteria2 local/TLS/obfs checks, SS WS/TLS CDN regression, 5 refusal checks and port revision canonicalization passed (attribute shim, not Laravel/runtime validation)\n";
 }
 
