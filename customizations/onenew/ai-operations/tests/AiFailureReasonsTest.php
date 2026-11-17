@@ -26,16 +26,20 @@ final class AiFailureReasonsTest extends TestCase
         $endpoint=new class extends Endpoint { public function addresses(string $host):array {return ['93.184.216.34'];} };
         $client=new Client($endpoint);$config=['endpoint'=>'https://api.example.com/v1','model'=>'model'];
         foreach([401=>'provider_auth',403=>'provider_auth',429=>'provider_rate_limit',400=>'provider_request',404=>'provider_request',503=>'provider_http'] as $status=>$expected){
+            Http::swap(new \Illuminate\Http\Client\Factory);
             Http::fake(['*'=>Http::response(['error'=>'Bearer provider-secret prompt'],$status)]);
             try{$client->completeRaw($config,'api-secret',[]);self::fail('Expected provider rejection');}
             catch(\RuntimeException $e){self::assertSame($expected,OperatorTasks::failure($e)['code']);self::assertStringNotContainsString('secret',$e->getMessage());}
         }
+        Http::swap(new \Illuminate\Http\Client\Factory);
         Http::fake(fn()=>throw new \Illuminate\Http\Client\ConnectionException('cURL error 28 https://api-secret prompt'));
         try{$client->completeRaw($config,'api-secret',[]);self::fail('Expected connection failure');}
         catch(\RuntimeException $e){self::assertSame('provider_transport',OperatorTasks::failure($e)['code']);self::assertNull($e->getPrevious());}
+        Http::swap(new \Illuminate\Http\Client\Factory);
         Http::fake(fn()=>throw new \Illuminate\Http\Client\ConnectionException('secret timeout',0,new \GuzzleHttp\Exception\ConnectException('secret URL',new \GuzzleHttp\Psr7\Request('POST','https://api.example.com'),null,['errno'=>28])));
         try{$client->completeRaw($config,'api-secret',[]);self::fail('Expected timeout');}
         catch(\RuntimeException $e){self::assertSame('provider_timeout',OperatorTasks::failure($e)['code']);self::assertNull($e->getPrevious());}
+        Http::swap(new \Illuminate\Http\Client\Factory);
         Http::fake(['*'=>Http::response(['choices'=>[]],200)]);
         try{$client->completeRaw($config,'api-secret',[]);self::fail('Expected invalid response');}
         catch(\RuntimeException $e){self::assertSame('invalid_response',OperatorTasks::failure($e)['code']);}
