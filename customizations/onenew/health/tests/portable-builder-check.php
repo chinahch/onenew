@@ -51,6 +51,9 @@ namespace Illuminate\Foundation\Auth {
 namespace Laravel\Sanctum {
     trait HasApiTokens {}
 }
+namespace App\Services {
+    class ServerService { public static function getRoutes(array $ids): array { return []; } }
+}
 namespace {
     function data_get($target, $key, $default = null)
     {
@@ -81,9 +84,11 @@ namespace {
     require $repo . '/app/Support/AbstractProtocol.php';
     require $repo . '/app/Protocols/SingBox.php';
     require __DIR__ . '/../app/Onenew/ProbeUnavailable.php';
+    require __DIR__ . '/../app/Onenew/ShadowsocksTransport.php';
     require __DIR__ . '/../app/Onenew/ProbeOutboundBuilder.php';
     require __DIR__ . '/../app/Onenew/ProbeStore.php';
     require __DIR__ . '/../app/Onenew/ProbeService.php';
+    require __DIR__ . '/../app/Onenew/ProbeStages.php';
 
     $uuid = '00000000-0000-4000-8000-000000000001';
     $user = new \App\Models\User(['id' => 1, 'uuid' => $uuid]);
@@ -133,8 +138,7 @@ namespace {
             check(data_get($out, 'settings.vnext.0.users.0.id') === $uuid, $name . ': wrong user');
             check(isset($out['stream_settings']), $name . ': stream_settings missing');
         } else {
-            $localReality = in_array($type, ['vless', 'trojan'], true)
-                && (int) ($settings['tls'] ?? 0) === 2
+            $localReality = ($type === 'shadowsocks' || (in_array($type, ['vless', 'trojan'], true) && (int) ($settings['tls'] ?? 0) === 2))
                 && ($settings['network'] ?? 'tcp') === 'tcp';
             check(data_get($out, 'settings.server') === ($localReality ? '127.0.0.1' : 'public.example'), $name . ': wrong probe ingress');
             check(data_get($out, 'settings.server_port') === ($localReality ? 12345 : 443), $name . ': wrong probe port');
@@ -148,8 +152,37 @@ namespace {
             check(data_get($out, 'stream_settings.xhttpSettings.extra.noSSEHeader') === false, 'H3 tuning was dropped');
         }
     }
+    // Machine-local plain SS round trips must keep native subscriber credentials.
+    foreach (['2022-blake3-aes-256-gcm'=>32,'2022-blake3-aes-128-gcm'=>16,'aes-128-gcm'=>null] as $cipher=>$size) {
+        $node = new \App\Models\Server(['id'=>43,'type'=>'shadowsocks','host'=>'8.138.255.100','port'=>30001,
+            'server_port'=>40558,'created_at'=>1700000000,'protocol_settings'=>['cipher'=>$cipher]]);
+        $payload = $builder->build($node,$user);$settings=$payload['outbound']['settings'];
+        check($settings['server']==='127.0.0.1' && $settings['server_port']===40558,$cipher.': plain SS did not use local listener');
+        $expected=$size===null?$uuid:\App\Utils\Helper::getServerKey(1700000000,$size).':'.\App\Utils\Helper::uuidToBase64($uuid,$size);
+        check($settings['password']===$expected,$cipher.': native account key changed');
+        if($size!==null)foreach(explode(':',$settings['password']) as $key)check(strlen(base64_decode($key))===$size,$cipher.': native key length mismatch');
+        check($payload['target']===\App\Onenew\ProbeOutboundBuilder::TARGET,'SS target changed');
+        check(\App\Onenew\ProbeStages::payload($node,'singbox',$payload)['entry_source']==='local_listener_roundtrip','SS stage mislabeled public');
+        check($node->host==='8.138.255.100' && $node->port===30001,'SS subscription endpoint mutated');
+        foreach([null,0,-1,65536,'invalid',40558.5,'40558x'] as $invalidPort){
+            $node->server_port=$invalidPort;$fallback=$builder->build($node,$user)['outbound']['settings'];
+            check($fallback['server']==='8.138.255.100' && $fallback['server_port']===30001,'Invalid SS listener port must preserve public fallback');
+        }
+    }
+    // The production install patch extends SS's native settings schema. This
+    // transport-only fixture retains those fields without applying that patch.
+    $wsNode=new class(['type'=>'shadowsocks','host'=>'101.69.181.108','port'=>443,'server_port'=>28001,
+        'protocol_settings'=>['cipher'=>'aes-128-gcm','network'=>'ws','tls'=>1,'tls_settings'=>['server_name'=>'cdn.example'],
+            'network_settings'=>['path'=>'/ss','headers'=>['Host'=>'cdn.example']]]]) extends \App\Models\Server {
+        public function setProtocolSettingsAttribute($value) { $this->attributes['protocol_settings']=$value; }
+        public function getProtocolSettingsAttribute($value) { return $value; }
+    };
+    $wsPayload=$builder->build($wsNode,$user);
+    check(data_get($wsPayload,'outbound.settings.servers.0.address')==='ip.sb' && data_get($wsPayload,'outbound.settings.servers.0.port')===443,'SS WS/TLS lost CDN ingress');
+    check(data_get($wsPayload,'outbound.stream_settings.security')==='tls','SS WS/TLS lost TLS');
+    check($wsNode->host==='101.69.181.108' && $wsNode->port===443,'SS WS/TLS subscription mutated');
     foreach ([
-        ['network' => 'xhttp', 'network_settings' => ['extra' => ['downloadSettings' => ['address' => 'bypass.example']]]],
+        ['network'  => 'xhttp', 'network_settings' => ['extra' => ['downloadSettings' => ['address' => 'bypass.example']]]],
         ['network' => 'xhttp', 'encryption' => ['enabled' => true]],
         ['network' => 'ws', 'network_settings' => ['headers' => ['Host' => "bad\r\nInjected: yes"]]],
         ['network' => 'tcp', 'network_settings' => ['acceptProxyProtocol' => true]],
@@ -176,6 +209,6 @@ namespace {
     $reloaded = new \App\Models\Server($attributes + ['port' => '443']);
     check($revision->invoke($service, $created) === $revision->invoke($service, $reloaded),
         'Equivalent integer/string native listener ports produced different health revisions');
-    echo count($cases) . " native builder projections, 5 refusal checks and port revision canonicalization passed (attribute shim, not Laravel/runtime validation)\n";
+    echo count($cases) . " native builder projections, 3 plain SS local/native-key/source checks, SS WS/TLS CDN regression, 5 refusal checks and port revision canonicalization passed (attribute shim, not Laravel/runtime validation)\n";
 }
 

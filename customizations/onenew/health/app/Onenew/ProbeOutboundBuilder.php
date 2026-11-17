@@ -7,7 +7,7 @@ use App\Models\User;
 use App\Protocols\SingBox;
 use App\Utils\Helper;
 
-/** Build a client through the same public entry used by subscribers. */
+/** Build an authenticated probe client; selected TCP listeners use machine-local ingress. */
 class ProbeOutboundBuilder extends SingBox
 {
     public const TARGET = 'https://www.cloudflare.com/cdn-cgi/trace';
@@ -67,14 +67,18 @@ class ProbeOutboundBuilder extends SingBox
             $settings['utls'] = array_replace(['enabled' => true, 'fingerprint' => 'chrome'], $settings['utls'] ?? []);
             $settings['utls']['enabled'] = true;
         }
-        // A machine behind NAT may not be able to hairpin through its own public
-        // address. REALITY/TCP can be exercised unchanged through its local
-        // listener: the handshake, account and outbound request still run.
-        $localReality = $network === 'tcp' && (int) $tls === 2
-            && in_array($type, ['vless', 'trojan'], true)
-            && (int) $node->server_port > 0 && (int) $node->server_port <= 65535;
-        $dialHost = $localReality ? '127.0.0.1' : $node->host;
-        $dialPort = $localReality ? (int) $node->server_port : (int) $port;
+        // NAT hairpinning can fail even while subscribers reach the public port.
+        // Plain SS and REALITY/TCP keep their native account/handshake through
+        // the local listener. This verifies a local round trip, not public ingress.
+        $listenerPort = filter_var($node->server_port, FILTER_VALIDATE_INT,
+            ['options'=>['min_range'=>1,'max_range'=>65535]]);
+        $localListener = $network === 'tcp' && $listenerPort !== false && (
+            ((int) $tls === 2 && in_array($type, ['vless', 'trojan'], true)) ||
+            ($type === 'shadowsocks' && (int) $tls === 0
+                && !data_get($settings, 'plugin') && !data_get($settings, 'obfs'))
+        );
+        $dialHost = $localListener ? '127.0.0.1' : $node->host;
+        $dialPort = $localListener ? $listenerPort : (int) $port;
         // Keep the subscription's TLS name and dial through its public ingress.
         $tlsKey = in_array($type, ['hysteria', 'tuic', 'anytls'], true) ? 'tls' : 'tls_settings';
         if (!data_get($settings, $tlsKey . '.server_name')) {
