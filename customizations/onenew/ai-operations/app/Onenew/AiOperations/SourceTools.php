@@ -12,10 +12,12 @@ final class SourceTools
     private const API='https://api.github.com/repos/chinahch/onenew';
     private array $roots;
     public function __construct(private RepoSettings $settings, ?array $roots=null) {$this->roots=$roots??['repository'=>'/opt/onenew','runtime'=>'/www'];}
-    public function catalog():array {return array_map(fn($name)=>['tool'=>$name,'args'=>['source'=>'repository|runtime','path'=>'relative allowlisted source path','query'=>'literal search text (search only)','start_line'=>'1-based (read only)','limit'=>'max 100'] ,'mapping'=>'repository customizations/onenew overlays map to runtime /www/app; runtime is read-only'],['source.list','source.read','source.search']);}
+    public function catalog():array {return array_map(fn($name)=>['tool'=>$name,'args'=>['source'=>'repository|runtime','path'=>'relative allowlisted source path','query'=>'literal search text (search only)','start_line'=>'1-based (read only)','limit'=>'max 100'] ,'mapping'=>'repository path customizations/onenew/<module>/... maps to /opt/onenew/<module>/...; runtime app/... maps to /www/app/... and is read-only; source.read returns at most 12000 UTF-8 bytes'],['source.list','source.read','source.search']);}
     private function allowed(string $path,bool $edit=false):bool {
         if(strlen($path)>240||!preg_match('~^[A-Za-z0-9_./-]+$~',$path)||preg_match('~(^/|\\\\|[\x00-\x1f:]|(^|/)\.{1,2}(/|$)|//)~',$path))return false;
-        if(preg_match('~(^|/)(\.[^/]*|vendor|node_modules|storage|database|bootstrap|cache|certs?|certificates|private|secrets?|fixtures|bin|install[^/]*|update[^/]*)(/|$)~i',$path))return false;
+        if(preg_match('~(^|/)(\.[^/]*|vendor|node_modules|storage|bootstrap|cache|certs?|certificates|private|secrets?|fixtures|bin|install[^/]*|update[^/]*)(/|$)~i',$path))return false;
+        if(preg_match('~(^|/)database(/|$)~i',$path)&&($edit||!preg_match('~^customizations/onenew/[^/]+/(?:backend/)?database/migrations/[A-Za-z0-9_-]+\.php$~',$path)))return false;
+        if(preg_match('~(^|/)(credentials?|tokens?|passwords?)([./]|$)~i',$path))return false;
         if(!preg_match('~\.(php|mjs|json|css|vue|ts|md)$~i',$path)||preg_match('~(lock|composer\.json|package-lock\.json)$~i',$path))return false;
         return $edit ? (bool)preg_match('~^customizations/onenew/[^/]+/(app/|backend/app/|src/|tests/|backend/tests/)~',$path) : (bool)preg_match('~^(customizations/onenew/|app/|tests/)~',$path);
     }
@@ -23,6 +25,7 @@ final class SourceTools
     private function local(string $source,string $path):string {
         abort_unless(isset($this->roots[$source])&&$this->allowed($path),422,'源码路径不允许。');
         $root=realpath($this->roots[$source]);abort_unless($root!==false,422,'源码目录不可用。');$at=$root;
+        if($source==='repository'){abort_unless(str_starts_with($path,'customizations/onenew/'),422,'维护源码必须使用仓库覆盖路径。');$path=substr($path,strlen('customizations/onenew/'));}else{abort_unless(str_starts_with($path,'app/')||str_starts_with($path,'tests/'),422,'运行源码路径不允许。');}
         foreach(explode('/',$path) as $part){$at.=DIRECTORY_SEPARATOR.$part;abort_if(is_link($at),422,'不允许符号链接。');}
         $real=realpath($at);abort_unless($real&&str_starts_with($real,$root.DIRECTORY_SEPARATOR)&&is_file($real)&&filesize($real)<=100000,422,'源码文件不可用或过大。');
         return $this->text(file_get_contents($real));
@@ -30,10 +33,10 @@ final class SourceTools
     private function text(string $text):string {abort_if(strlen($text)>100000||str_contains($text,"\0")||!preg_match('//u',$text),422,'仅允许有界 UTF-8 文本。');return $text;}
     public function read(string $tool,array $args):array {
         abort_unless(in_array($tool,['source.list','source.read','source.search'],true),422,'未知源码工具。');$source=$args['source']??'repository';abort_unless(isset($this->roots[$source]),422,'未知源码来源。');$rev=$this->revision();
-        if($tool==='source.read'){$path=$args['path']??'';abort_unless(is_string($path),422,'无效路径。');$text=$this->local($source,$path);$start=max(1,min(100000,(int)($args['start_line']??1)));$limit=max(1,min(100,(int)($args['limit']??100)));return ['source'=>$source,'path'=>$path,'revision'=>$rev,'sha'=>hash('sha256',$text),'start_line'=>$start,'content'=>implode("\n",array_slice(explode("\n",$text),$start-1,$limit)),'read_only'=>$source==='runtime'];}
+        if($tool==='source.read'){$path=$args['path']??'';abort_unless(is_string($path),422,'无效路径。');$text=$this->local($source,$path);$start=max(1,min(100000,(int)($args['start_line']??1)));$limit=max(1,min(100,(int)($args['limit']??100)));return ['source'=>$source,'path'=>$path,'revision'=>$rev,'sha'=>hash('sha256',$text),'start_line'=>$start,'content'=>mb_strcut(implode("\n",array_slice(explode("\n",$text),$start-1,$limit)),0,12000,'UTF-8'),'content_byte_limit'=>12000,'read_only'=>$source==='runtime'];}
         $query=$args['query']??'';abort_unless(is_string($query)&&strlen($query)<=200&&($tool!=='source.search'||$query!==''),422,'无效搜索词。');$prefix=$args['path']??'';abort_unless(is_string($prefix)&&!preg_match('~[\\\\\x00-\x1f:]|(^|/)\.~',$prefix),422,'无效目录。');$root=$this->roots[$source];abort_unless(is_dir($root),422,'源码目录不可用。');$items=[];$scanned=0;$bytes=0;
         $it=new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root,\FilesystemIterator::SKIP_DOTS));
-        foreach($it as $file){if(++$scanned>10000)break;$path=str_replace('\\','/',substr($file->getPathname(),strlen(rtrim($root,'/\\'))+1));if(!$this->allowed($path)||!str_starts_with($path,$prefix))continue;try{$text=$this->local($source,$path);}catch(\Throwable $e){continue;}
+        foreach($it as $file){if(++$scanned>10000)break;$path=str_replace('\\','/',substr($file->getPathname(),strlen(rtrim($root,'/\\'))+1));if($source==='repository')$path='customizations/onenew/'.$path;if(!$this->allowed($path)||!str_starts_with($path,$prefix))continue;try{$text=$this->local($source,$path);}catch(\Throwable $e){continue;}
             if($tool==='source.list')$items[]=['path'=>$path,'sha'=>hash('sha256',$text)];else foreach(explode("\n",$text) as $line=>$value){if(str_contains($value,$query)){$value=mb_substr($value,0,300);$items[]=['path'=>$path,'line'=>$line+1,'text'=>$value];$bytes+=strlen($value);if(count($items)>=100||$bytes>=30000)break;}}
             if(count($items)>=100||$bytes>=30000)break;
         }return ['source'=>$source,'revision'=>$rev,'items'=>$items,'bounded'=>true];
