@@ -153,4 +153,23 @@ final class NativeAdminToolsTest extends TestCase
         self::assertSame('succeeded',$fresh->execute($admin->id,$card['id'],(string)Str::uuid())['status']);
         try{$fresh->prepare($admin->id,$args);self::fail();}catch(HttpException $e){self::assertSame(422,$e->getStatusCode());}
     }
+
+    public function test_energy_review_is_a_confirmed_pinned_native_action_and_credits_once(): void
+    {
+        $tools=$this->gateway();$admin=$this->user();$owner=$this->user(false);
+        $id=(string)Str::uuid();
+        DB::table('onenew_energy_requests')->insert(['id'=>$id,'user_id'=>$owner->id,'request_hash'=>hash('sha256',Str::random(24)),
+            'amount_cents'=>1200,'status'=>'pending','created_at'=>time(),'note'=>'']);
+        $capability=$this->capability($tools,'api/onenew/admin/energy/{id}/review');
+        $card=$tools->prepare($admin->id,['capability'=>$capability,'params'=>['id'=>$id,'decision'=>'approved','note'=>'verified']]);
+        self::assertSame('native.admin',$card['kind']);
+        self::assertSame(0,(int)$owner->fresh()->balance);
+        $first=$tools->execute($admin->id,$card['id'],(string)Str::uuid());
+        self::assertSame('succeeded',$first['status']);
+        self::assertSame(1200,(int)$owner->fresh()->balance);
+        $second=$tools->execute($admin->id,$card['id'],(string)Str::uuid());
+        self::assertSame($first,$second);
+        self::assertSame(1200,(int)$owner->fresh()->balance);
+        self::assertSame('approved',DB::table('onenew_energy_requests')->where('id',$id)->value('status'));
+    }
 }

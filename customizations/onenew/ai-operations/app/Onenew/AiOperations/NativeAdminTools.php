@@ -182,6 +182,7 @@ final class NativeAdminTools
         $primary=isset($models[$entry['category']])?(new $models[$entry['category']])->getTable():null;
         if($entry['category']==='Landing')$primary=\App\Onenew\LandingLibrary\Library::TABLE;
         if($entry['category']==='External')$primary=\App\Onenew\External\ExternalNodes::TABLE;
+        if($entry['category']==='Energy')$primary='onenew_energy_requests';
         if($entry['category']==='GiftCard')$primary=(new (str_contains(strtolower($entry['action']),'template')?\App\Models\GiftCardTemplate::class:\App\Models\GiftCardCode::class))->getTable();
         $foreign=['node_id'=>\App\Models\Server::class,'nodeId'=>\App\Models\Server::class,'server_id'=>\App\Models\Server::class,'machine_id'=>\App\Models\ServerMachine::class,'machineId'=>\App\Models\ServerMachine::class,'user_id'=>\App\Models\User::class,'userId'=>\App\Models\User::class,'plan_id'=>\App\Models\Plan::class,'group_id'=>\App\Models\ServerGroup::class,'template_id'=>\App\Models\GiftCardTemplate::class];
         foreach(['node_ids'=>'node_id','server_ids'=>'server_id','machine_ids'=>'machine_id','user_ids'=>'user_id','plan_ids'=>'plan_id','group_ids'=>'group_id','invite_user_id'=>'user_id'] as $plural=>$singular)$foreign[$plural]=$foreign[$singular];
