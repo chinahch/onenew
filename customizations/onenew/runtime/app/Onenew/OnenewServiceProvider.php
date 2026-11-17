@@ -21,6 +21,7 @@ class OnenewServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom($root . '/user-portal/backend/database/migrations');
         $this->loadMigrationsFrom($root . '/traffic/database/migrations');
         $this->loadMigrationsFrom($root . '/runtime/database/migrations');
+        $this->loadMigrationsFrom($root . '/remote-upgrade/database/migrations');
         $this->loadMigrationsFrom($root . '/external/database/migrations');
         $this->loadMigrationsFrom($root . '/egress/database/migrations');
         $this->loadMigrationsFrom($root . '/energy/database/migrations');
@@ -31,6 +32,7 @@ class OnenewServiceProvider extends ServiceProvider
         require $root . '/user-portal/backend/routes.php';
         require $root . '/traffic/routes.php';
         require $root . '/exit-probe/routes.php';
+        require $root . '/remote-upgrade/routes.php';
         require $root . '/landing-library/routes.php';
         require $root . '/external/routes.php';
         require $root . '/egress/routes.php';
