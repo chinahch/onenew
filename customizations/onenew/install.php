@@ -65,6 +65,7 @@ require $custom . '/protocols/install.php';
 applyOnenewProtocolPatch($root);
 copyOverlay($custom . '/exit-probe/app', $root . '/app');
 copyOverlay($custom . '/remote-upgrade/app', $root . '/app');
+copyOverlay($custom . '/ai-operations/app', $root . '/app');
 copyOverlay($custom . '/landing-library/app', $root . '/app');
 require $custom . '/landing-library/install.php';
 applyOnenewLandingLibrary($root);
