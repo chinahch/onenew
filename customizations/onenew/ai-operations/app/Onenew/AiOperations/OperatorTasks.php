@@ -80,6 +80,7 @@ final class OperatorTasks
             $tokens=['configuration_changed'=>'config_changed','context_too_large'=>'context_budget','file_budget'=>'read_budget','invalid_envelope'=>'invalid_response','invalid_answer'=>'invalid_response','invalid_token_parameter'=>'provider_request','response_too_large'=>'invalid_response','unsafe_endpoint'=>'provider_transport','unresolved_endpoint'=>'provider_transport','provider_failed'=>'provider_http'];
             if(get_class($exception)===\RuntimeException::class){$token=$exception->getMessage();if(isset(self::FAILURES[$token]))$code=$token;elseif(isset($tokens[$token]))$code=$tokens[$token];}
             if($exception instanceof \JsonException)$code='invalid_response';
+            if($exception instanceof \Illuminate\Database\QueryException && in_array($exception->errorInfo[0]??null,['42S02','42P01','42S22','42703'],true))$code='schema_missing';
             if($exception instanceof \Illuminate\Queue\TimeoutExceededException)$code='task_timeout';
         }
         return ['code'=>$code,'stage'=>self::FAILURES[$code][0],'message'=>self::FAILURES[$code][1]];

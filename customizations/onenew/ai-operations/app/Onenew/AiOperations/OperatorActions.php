@@ -18,7 +18,7 @@ final class OperatorActions
         return [
             ['kind'=>'user.create','args'=>['email'=>'explicit administrator email alias resolved locally','plan_id'=>'optional integer','days'=>'optional 1..3650','expired_at'=>'optional Unix timestamp; mutually exclusive with days']],
             ['kind'=>'user.extend','args'=>['user_id'=>'integer','amount'=>'1..3650','unit'=>'hours|days|months'],'description'=>'Free administrator duration adjustment; unlimited expiry needs clarification.'],
-            ['kind'=>'node.create','args'=>['template_node_id'=>'required integer','name'=>'required','host'=>'required','port'=>'required 1..65535','server_port'=>'required 1..65535','machine_id'=>'optional','group_ids'=>'optional integer array']],
+            ['kind'=>'node.create','args'=>['template_node_id'=>'required integer','name'=>'required','host'=>'required','port'=>'required 1..65535','server_port'=>'required 1..65535','machine_id'=>'optional','group_ids'=>'optional integer array','enabled'=>'optional boolean; default false','regenerate_reality'=>'optional boolean; default true for REALITY']],
             ['kind'=>'node.update','args'=>array_merge(['node_id'],self::NODE_FIELDS)],
             ['kind'=>'node.delete','args'=>['node_id'=>'integer'],'description'=>'Remove this exact node from subscriptions; never delete its machine.'],
         ];
@@ -65,19 +65,30 @@ final class OperatorActions
             $before=['user_id'=>$user->id,'expiry'=>$this->date($user->expired_at)];$after=['user_id'=>$user->id,'expiry'=>$this->date($args['new_expired_at']),'charge'=>0];
         }elseif(in_array($kind,['node.create','node.update','node.delete'],true)){
             $create=$kind==='node.create';$delete=$kind==='node.delete';$idKey=$create?'template_node_id':'node_id';
-            $allowed=$delete?[$idKey]:array_merge([$idKey],$create?['name','host','port','server_port','machine_id','group_ids']:self::NODE_FIELDS);$this->only($args,$allowed);
+            $allowed=$delete?[$idKey]:array_merge([$idKey],$create?['name','host','port','server_port','machine_id','group_ids','enabled','regenerate_reality']:self::NODE_FIELDS);$this->only($args,$allowed);
             Validator::make($args,[$idKey=>'required|integer|min:1'])->validate();$node=Server::findOrFail($args[$idKey]);$snapshot[]=$this->snapshot($node);
             $before=$this->nodeView($node);$before['effect']=$delete?'This exact node will be removed from subscriptions. Its machine remains.':'Current node';
             if(!$delete){
-                $rules=['name'=>($create?'required':'sometimes').'|string|max:255','host'=>($create?'required':'sometimes').'|string|max:255','port'=>($create?'required':'sometimes').'|integer|between:1,65535','server_port'=>($create?'required':'sometimes').'|integer|between:1,65535','show'=>'sometimes|boolean','enabled'=>'sometimes|boolean','machine_id'=>'nullable|integer|exists:v2_server_machine,id','group_ids'=>'sometimes|array|max:50','group_ids.*'=>'integer|distinct|exists:v2_server_group,id','node_speed_limit_mbps'=>'nullable|numeric|min:0|max:1000000'];Validator::make($args,$rules)->validate();
+                $rules=['regenerate_reality'=>'sometimes|boolean','name'=>($create?'required':'sometimes').'|string|max:255','host'=>($create?'required':'sometimes').'|string|max:255','port'=>($create?'required':'sometimes').'|integer|between:1,65535','server_port'=>($create?'required':'sometimes').'|integer|between:1,65535','show'=>'sometimes|boolean','enabled'=>'sometimes|boolean','machine_id'=>'nullable|integer|exists:v2_server_machine,id','group_ids'=>'sometimes|array|max:50','group_ids.*'=>'integer|distinct|exists:v2_server_group,id','node_speed_limit_mbps'=>'nullable|numeric|min:0|max:1000000'];Validator::make($args,$rules)->validate();
                 $machineId=array_key_exists('machine_id',$args)?$args['machine_id']:$node->machine_id;
                 if($machineId)$snapshot[]=$this->snapshot(ServerMachine::findOrFail($machineId));
                 foreach($args['group_ids']??$node->group_ids??[] as $id)$snapshot[]=$this->snapshot(ServerGroup::findOrFail($id));
                 $data=$node->attributesToArray();unset($data['id'],$data['created_at'],$data['updated_at']);
                 if($create){foreach(['onenew_identity','code','spectific_key'] as $key)unset($data[$key]);foreach(['u','d'] as $key)$data[$key]=0;foreach(['last_check_at','last_push_at'] as $key)unset($data[$key]);$data['parent_id']=null;$data['enabled']=false;foreach(['onenew_landing_bindings','custom_routes','custom_outbounds','route_ids'] as $key)$data[$key]=[];}
                 foreach(self::NODE_FIELDS as $key)if(array_key_exists($key,$args))$data[$key]=$args[$key];
+                if($create && (int)($data['protocol_settings']['tls']??0)===2){
+                    if($args['regenerate_reality']??true){
+                        $private=random_bytes(32);$private[0]=chr(ord($private[0])&248);$private[31]=chr((ord($private[31])&127)|64);
+                        $encode=static fn(string $bytes): string=>rtrim(strtr(base64_encode($bytes),'+/','-_'),'=');
+                        $data['protocol_settings']['reality_settings']=array_merge($data['protocol_settings']['reality_settings']??[],['private_key'=>$encode($private),'public_key'=>$encode(sodium_crypto_scalarmult_base($private)),'short_id'=>bin2hex(random_bytes(8))]);
+                    }
+                }
+                $this->validateNodePort($data,$create?null:$node->id);
                 $request=ServerSave::create('/','POST',$data);Validator::make($data,$request->rules(),$request->messages())->validate();
-                $args['data']=$data;$after=array_intersect_key($data,array_flip(self::NODE_FIELDS));if($create)$after['effect']='Create a disabled draft; review and enable the node separately.';
+                $args['data']=$data;$after=array_intersect_key($data,array_flip(self::NODE_FIELDS));if($create){
+                    $after['effect']=$data['enabled']?(!empty($data['machine_id'])?'Save enabled node and queue native configuration; runtime listening is not verified.':'Save enabled node without an assigned machine; runtime listening is not verified.'):'Create a disabled draft; review and enable the node separately.';
+                    if((int)($data['protocol_settings']['tls']??0)===2)$after['reality']=array_intersect_key($data['protocol_settings']['reality_settings']??[],array_flip(['public_key','short_id']));
+                }
             }else $after=['deleted'=>true,'machine_deleted'=>false];
         }else $this->invalid('kind','Unknown administrator operation.');
         $id=(string)Str::uuid();$card=['id'=>$id,'kind'=>$kind,'title'=>$kind,'summary'=>'Review the exact target and changes, then explicitly confirm.','before'=>$before,'after'=>$after,'expires_at'=>time()+600];
@@ -101,14 +112,23 @@ final class OperatorActions
                     // Trial defaults must not override an explicit administrator expiry.
                     if(isset($a['expired_at']))$user->expired_at=$a['expired_at'];$user->saveOrFail();$result['target_id']=$user->id;$result['credentials']=['password'=>$password];
                 }elseif($kind==='user.extend'){$user=$targets[User::class.':'.$a['user_id']];$user->expired_at=$a['new_expired_at'];$user->saveOrFail();$result['target_id']=$user->id;$result['expired_at']=$user->expired_at;
-                }elseif($kind==='node.create'){$node=new Server();$node->fill($a['data']);$node->saveOrFail();$result['target_id']=$node->id;
-                }else{$node=$targets[Server::class.':'.$a['node_id']];$result['target_id']=$node->id;if($kind==='node.delete'){if(!$node->delete())throw new \RuntimeException('Node delete failed.');}else{$node->fill(array_intersect_key($a['data'],array_flip(self::NODE_FIELDS)));$node->saveOrFail();}}
+                }elseif($kind==='node.create'){$this->validateNodePort($a['data']);$node=new Server();$node->fill($a['data']);$node->saveOrFail();$result['target_id']=$node->id;$result['deployment_status']=$node->enabled&&$node->machine_id?'saved_configuration_queued':'saved_disabled_or_unassigned';
+                }else{$node=$targets[Server::class.':'.$a['node_id']];$result['target_id']=$node->id;if($kind==='node.delete'){if(!$node->delete())throw new \RuntimeException('Node delete failed.');}else{$this->validateNodePort($a['data'],$node->id);$node->fill(array_intersect_key($a['data'],array_flip(self::NODE_FIELDS)));$node->saveOrFail();}}
                 $auditResult=$result;unset($auditResult['credentials']);
                 DB::table('onenew_ai_action_audit')->insert(['admin_id'=>$admin,'action_id'=>$id,'request_id'=>$requestId,'kind'=>$kind,'target_id'=>$result['target_id'],'result_code'=>'succeeded','encrypted_result'=>Crypt::encryptString(json_encode($auditResult,JSON_THROW_ON_ERROR)),'credential_expires_at'=>time()+600,'created_at'=>time()]);
                 if(isset($result['credentials']))Cache::put($this->key($admin,$id).':credentials',Crypt::encryptString(json_encode($result['credentials'],JSON_THROW_ON_ERROR)),600);
                 return $result;
             });
         });
+    }
+    /** Drafts reserve listener ports too. Machine snapshot locks serialize confirmed creates. */
+    private function validateNodePort(array $data,?int $except=null): void
+    {
+        $port=(int)$data['server_port'];$query=Server::query()->where('server_port',$port);
+        if($except)$query->where('id','!=',$except);
+        if(!empty($data['machine_id']))$query->where('machine_id',$data['machine_id']);
+        else $query->whereNull('machine_id')->where('host',$data['host']);
+        if($query->exists())$this->invalid('server_port','Listen port '.$port.' is already reserved by another active node or disabled draft on this machine/host. Choose a different server_port.');
     }
     private function nodeView(Server $node): array {return array_intersect_key($node->attributesToArray(),array_flip(array_merge(['id','type'],self::NODE_FIELDS)));}
     private function key(int $admin,string $id): string{return 'onenew:ai:action:'.$admin.':'.$id;}
