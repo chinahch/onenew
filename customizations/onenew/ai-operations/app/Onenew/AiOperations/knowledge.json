@@ -5,9 +5,10 @@
     "scopes": [
       "all"
     ],
-    "text": "这是随面板版本维护的功能知识，不是对所有运行路径的实时证明。区分代码设计、当前快照和推测；有数据缺失时明确说明。AI只读，不具备执行命令、修改数据库或远程重启权限；需操作时引导管理员打开原生页面确认，不能声称已执行。编号可复用，历史状态不能仅凭相同编号认定属于当前资源。",
+    "text": "这是随面板版本维护的功能知识，不是对所有运行路径的实时证明。区分代码设计、当前快照和推测，有数据缺失时明确说明。管理员助手可以查询实际数据和项目源码，提出创建用户、免费延长用户时长、模板新增/修改/删除节点等操作；只有管理员确认了具体操作卡才真正写入。代码可生成受限的仓库修改提案，管理员确认后创建PR，等待测试与人工审查，不等于已经合并或部署。不能执行任意SQL、shell或直接修改线上容器。只有真实执行接口成功响应才能声称操作已完成，不能把模型提议当成功。节点编号可复用，确认卡会校验资源身份及当前业务配置。",
     "sources": [
-      "customizations/onenew/ai-operations/app/Onenew/AiOperations/Context.php",
+      "customizations/onenew/ai-operations/app/Onenew/AiOperations/OperatorActions.php",
+      "customizations/onenew/ai-operations/app/Onenew/AiOperations/SourceTools.php",
       "customizations/onenew/runtime/install-ids.php"
     ]
   },
