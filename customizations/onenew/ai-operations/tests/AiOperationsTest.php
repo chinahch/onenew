@@ -125,7 +125,7 @@ final class AiOperationsTest extends TestCase
     public function test_preview_consent_is_bound_to_the_provider_configuration():void
     {
         $this->ready();Http::preventStrayRequests();$auth=$this->auth();
-        $preview=$this->postJson(self::ROOT.'/preview',['question'=>'help','scope'=>'panel'],$auth)->assertOk()->assertJsonPath('provider.model','fixture-model')->json();
+        $preview=$this->postJson(self::ROOT.'/preview',['question'=>'help','scope'=>'panel'],$auth)->assertOk()->assertJsonPath('provider.model','fixture-model')->assertJsonPath('provider.endpoint','https://api.example.com/v1/chat/completions')->json();
         self::assertArrayNotHasKey('config_fingerprint',$preview);self::assertStringNotContainsString('fixture-secret-key',json_encode($preview));
         app(Config::class)->save(['endpoint'=>'https://different.example.com/v1']);
         $this->postJson(self::ROOT.'/chat',['preview_id'=>$preview['preview_id'],'request_id'=>(string)Str::uuid(),'confirmed'=>true],$auth)->assertStatus(409);
