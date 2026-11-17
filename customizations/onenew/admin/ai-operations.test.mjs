@@ -56,3 +56,8 @@ test('current page scope is inferred from router pathname without sending anythi
  const {scopeForPath}=await import('./src/ai-operations.mjs');for(const [path,scope] of [['/server/manage','nodes'],['/server/machine','nodes'],['/user/manage','users'],['/plan/manage','users'],['/finance/order','orders'],['/config/system/energy','orders'],['/config/system/migration','backups'],['/server/upgrade','upgrades'],['/config/system','panel']])assert.equal(scopeForPath(path),scope);
  const x=harness();let sent=0;const tree=AiConversation({react:x.R,get:async()=>({nodes:[]}),post:async()=>{sent++},Link:()=>{},useLocation:()=>({pathname:'/finance/order'})});all(tree).find(n=>n.children[0]==='使用当前页面范围').props.onClick();assert.equal(sent,0);const next=AiConversation({react:x.R,get:async()=>({nodes:[]}),post:async()=>{},Link:()=>{},useLocation:()=>({pathname:'/finance/order'})});assert.equal(all(next).find(n=>n.type==='select').props.value,'orders');
 });
+
+test('long model replies remain visible but bounded UTF-8 history permits the next question',()=>{
+ const s=createAiSession();s.history=[{role:'assistant',content:'🍂'.repeat(4001)}];
+ const payload=previewPayload(s);assert.equal(Array.from(payload.history[0].content).length,4000);assert.equal(s.history[0].content,'🍂'.repeat(4001));assert.doesNotThrow(()=>JSON.stringify(payload));
+});

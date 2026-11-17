@@ -12,7 +12,7 @@ export function scopeForPath(path=''){
 export function createAiSession(){return {question:'',scope:'panel',nodeId:'',history:[],preview:null,requestId:null,busy:false,error:'',sources:[]}}
 let session=createAiSession();const listeners=new Set();const emit=()=>listeners.forEach(fn=>fn());
 function change(values){Object.assign(session,values);emit()}
-export function previewPayload(s){return {question:s.question.trim(),scope:s.scope,...(s.nodeId?{node_id:Number(s.nodeId)}:{}),history:s.history.slice(-8).map(({role,content})=>({role,content}))}}
+export function previewPayload(s){return {question:s.question.trim(),scope:s.scope,...(s.nodeId?{node_id:Number(s.nodeId)}:{}),history:s.history.slice(-8).map(({role,content})=>({role,content:Array.from(String(content)).slice(0,4000).join('')}))}}
 export function confirmPayload(s){return {preview_id:s.preview.preview_id,request_id:s.requestId,confirmed:true}}
 function useSession(R){const [,render]=R.useState(0);R.useEffect(()=>{const f=()=>render(v=>v+1);listeners.add(f);return()=>listeners.delete(f)},[]);return session}
 const errorText=()=> '操作失败，请检查配置或稍后重试。未自动重试外部请求。';
@@ -34,7 +34,7 @@ export function AiConversation({react:R,get,post,Link,useLocation}){
  h('div',{className:'onenew-ai-controls'},h('label',null,'问题范围',h('select',{value:s.scope,disabled:s.busy,onChange:e=>edit({scope:e.target.value})},Object.entries(scopes).map(([value,label])=>h('option',{key:value,value},label)))),h('label',null,'节点（可选）',h('select',{value:s.nodeId,disabled:s.busy,onChange:e=>edit({nodeId:e.target.value})},h('option',{value:''},'不指定节点'),nodes.map(n=>h('option',{key:n.id,value:n.id},'节点 #'+n.id))))),
  h('label',null,'问题',h('textarea',{value:s.question,maxLength:4000,rows:4,disabled:s.busy,placeholder:'请勿输入密码、API Key 或用户隐私。',onChange:e=>edit({question:e.target.value})})),
  h('div',{className:'onenew-ai-actions'},btn('使用当前页面范围',()=>edit({scope:scopeForPath(location.pathname)})),btn(s.busy?'处理中…':'预览待发送内容',preview,{disabled:s.busy||!s.question.trim()}),btn('清空对话',()=>{session=createAiSession();emit()})),
- s.error&&h('p',{role:'alert'},s.error),s.preview&&h('section',{className:'onenew-ai-preview','aria-label':'发送确认'},h('h3',null,'确认发送给外部模型'),h('p',null,'以下为服务器保存的不可变快照；确认后才会发送。包含脱敏问题、历史、知识与面板上下文。'),h('pre',null,JSON.stringify(s.preview,null,2)),btn('确认发送 / 重试同一请求',send),btn('取消',()=>change({preview:null,requestId:null}))),h('p',{className:'onenew-ai-note'},'模型回答可能有误，快照与代码说明不能证明客户端连接成功。'));
+ s.error&&h('p',{role:'alert'},s.error),s.preview&&h('section',{className:'onenew-ai-preview','aria-label':'发送确认'},h('h3',null,'确认发送给外部模型'),h('p',null,'以下为服务器保存的不可变快照；确认后才会发送。包含脱敏问题、最近8条历史（每条最多4000字）、知识与面板上下文。'),h('pre',null,JSON.stringify(s.preview,null,2)),btn('确认发送 / 重试同一请求',send),btn('取消',()=>change({preview:null,requestId:null}))),h('p',{className:'onenew-ai-note'},'模型回答可能有误，快照与代码说明不能证明客户端连接成功。'));
 }
 export function AiLauncher({react:R,get,post,Link,useLocation}){
  const h=R.createElement,[open,setOpen]=R.useState(false),launcher=R.useRef(null),dialog=R.useRef(null);

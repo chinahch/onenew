@@ -22,6 +22,16 @@ final class AiContextTest extends TestCase {
   $this->assertSame('ws',$context['nodes']['items'][0]['transport']);
   $this->assertSame($before,Server::count());
  }
+ public function test_actual_successful_restore_is_preserved_in_the_snapshot():void {
+  $source=sys_get_temp_dir().'/ai-restore-'.bin2hex(random_bytes(6));mkdir($source.'/.docker/.data',0700,true);config(['onenew.migration_source'=>$source]);
+  $admin=User::create(['email'=>'ai-admin@example.test','password'=>'unused','uuid'=>(string)\Illuminate\Support\Str::uuid(),'token'=>'unused-token','is_admin'=>true]);\Laravel\Sanctum\Sanctum::actingAs($admin);
+  try {
+   $service=app(\App\Onenew\WebRestore\Service::class);$id=(string)\Illuminate\Support\Str::uuid();$dir=$service->directory($id);mkdir($dir,0700,true);
+   \App\Onenew\WebRestore\Recovery::write($dir.'/status.json',json_encode(['id'=>$id,'owner'=>$admin->id,'state'=>'uploading','created_at'=>time(),'updated_at'=>time(),'expires_at'=>time()+600]));
+   \App\Onenew\WebRestore\Recovery::state($dir,['state'=>'success','error'=>'private-error-must-not-export']);
+   $snapshot=app(Context::class)->snapshot('backups');$this->assertSame('success',$snapshot['backups']['web_restore']['latest']['state']);$this->assertStringNotContainsString('private-error',json_encode($snapshot));
+  } finally {\Illuminate\Support\Facades\File::deleteDirectory($source);}
+ }
  public function test_redactor_covers_credential_urls_bearer_keys_email_and_uuid():void {
   $input="vless://uuid@secret.example:443/path socks://user:pass@host:5 Authorization: Bearer secretBearer\napi_key=secret-key-value\nmail@private.example 12345678-1234-1234-1234-123456789abc\n-----BEGIN PRIVATE KEY-----\nsecret-key-content\n-----END PRIVATE KEY-----\nexplicit-secret";
   $safe=Redactor::text($input,['explicit-secret']);
