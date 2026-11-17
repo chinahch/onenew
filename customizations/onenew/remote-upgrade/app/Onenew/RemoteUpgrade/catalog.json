@@ -1,1 +1,12 @@
-{}
+{
+  "v0.1.12": {
+    "amd64": {
+      "sha256": "37ae9f37b495047fa0a1c58bb5007dcc7b596f851469760e5f5c5ed9fb14a826",
+      "url": "https://github.com/chinahch/onenew-releases/releases/download/node-v0.1.12/onenew-node-linux-amd64.tar.gz"
+    },
+    "arm64": {
+      "sha256": "ce3e8076ceeb90b0fff7a94b48f15bcfecac1f9ea151f2d44144f2fb4be22684",
+      "url": "https://github.com/chinahch/onenew-releases/releases/download/node-v0.1.12/onenew-node-linux-arm64.tar.gz"
+    }
+  }
+}
