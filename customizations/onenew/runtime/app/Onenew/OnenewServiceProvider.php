@@ -21,7 +21,6 @@ class OnenewServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->app->booted(function(){app(\Illuminate\Console\Scheduling\Schedule::class)->command('onenew:prune-ai-tasks')->everyTenMinutes()->withoutOverlapping();});
         \Illuminate\Support\Facades\RateLimiter::for('onenew-ai-external',fn () =>
             \Illuminate\Cache\RateLimiting\Limit::perMinute(5)->by('ai-admin:'.(string)\Illuminate\Support\Facades\Auth::guard('sanctum')->id()));
         // Fleet agents commonly share an egress IP; isolate quotas by credential without exposing it.

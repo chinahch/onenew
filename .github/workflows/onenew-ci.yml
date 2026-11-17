@@ -54,6 +54,7 @@ jobs:
           bash customizations/onenew/migration/tests/upgrade-restored.sh
           python3 customizations/onenew/migration/tests/bootstrap_success.py
           python3 customizations/onenew/runtime/tests/startup-update.py
+          php customizations/onenew/runtime/tests/provider-boot.php
           docker run --rm --entrypoint sh onenew:local -c '
             set -eu
             cd /www
