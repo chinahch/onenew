@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 final class OperatorActionsTest extends TestCase
 {
     use RefreshDatabase;
-    private function user(): User { return User::create(['email'=>Str::random(12).'@example.test','password'=>'hashed','uuid'=>(string)Str::uuid(),'token'=>Str::random(32),'expired_at'=>time()+86400,'balance'=>123]); }
+    private function user(): User { return User::create(['email'=>Str::random(12).'@example.test','password'=>'hashed','uuid'=>(string)Str::uuid(),'token'=>Str::random(32),'expired_at'=>time()+86400,'balance'=>123])->fresh(); }
     public function test_prepare_is_read_only_extend_preserves_account_and_executes_once(): void
     {
         $u=$this->user();$before=$u->getRawOriginal();$a=app(OperatorActions::class);
@@ -38,6 +38,7 @@ final class OperatorActionsTest extends TestCase
         $result=$a->execute(1,$card['id'],(string)Str::uuid());$u=User::where('email',$email)->firstOrFail();
         self::assertTrue(password_verify($result['credentials']['password'],$u->password));self::assertFalse((bool)$u->is_admin);
         self::assertStringNotContainsString($result['credentials']['password'],json_encode(DB::table('onenew_ai_action_audit')->first()));
+        self::assertArrayNotHasKey('credentials',json_decode(\Illuminate\Support\Facades\Crypt::decryptString(DB::table('onenew_ai_action_audit')->value('encrypted_result')),true));
         self::assertStringNotContainsString($email,json_encode($a->read('users.lookup',['user_id'=>$u->id])));
     }
     public function test_unlimited_expiry_and_unknown_fields_are_rejected(): void
@@ -45,6 +46,18 @@ final class OperatorActionsTest extends TestCase
         $u=$this->user();$u->expired_at=null;$u->save();
         $this->expectException(\Illuminate\Validation\ValidationException::class);
         app(OperatorActions::class)->prepare(1,'user.extend',['user_id'=>$u->id,'amount'=>1,'unit'=>'days']);
+    }
+    public function test_model_supplied_password_and_privilege_are_rejected(): void
+    {
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(OperatorActions::class)->prepare(1,'user.create',['email'=>'example@example.test','password'=>'injected-password','is_admin'=>true]);
+    }
+    public function test_failed_native_creation_rolls_back_audit_and_user(): void
+    {
+        $a=app(OperatorActions::class);$card=$a->prepare(1,'user.create',['email'=>'rollback@example.test']);
+        $mock=\Mockery::mock(\App\Services\UserService::class);$mock->shouldReceive('createUser')->once()->andThrow(new \RuntimeException('Native validation failed'));$this->app->instance(\App\Services\UserService::class,$mock);
+        try {$a->execute(1,$card['id'],(string)Str::uuid());self::fail();} catch(\RuntimeException $e) {self::assertSame('Native validation failed',$e->getMessage());}
+        self::assertFalse(User::where('email','rollback@example.test')->exists());self::assertSame(0,DB::table('onenew_ai_action_audit')->count());
     }
     public function test_node_copy_clears_bindings_and_reused_identity_fails(): void
     {
