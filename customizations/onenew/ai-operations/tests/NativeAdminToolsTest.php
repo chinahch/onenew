@@ -16,6 +16,12 @@ final class NativeAdminToolsTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config()->set('cache.stores.redis.driver','array');\Illuminate\Support\Facades\Cache::purge('redis');
+    }
+
     private function user(bool $admin=true): User
     {
         return User::create(['email'=>Str::random(12).'@example.test','password'=>'fixture-private-password','uuid'=>(string)Str::uuid(),'token'=>'fixture-private-token','is_admin'=>$admin,'banned'=>false]);
@@ -30,6 +36,9 @@ final class NativeAdminToolsTest extends TestCase
         $router->get('native-fixture/unsafe-get',[UserController::class,'resetSecret'])->middleware('admin');
         $router->post('native-fixture/public',[PlanController::class,'save']);
         $router->get('native-fixture/external','External\\AdminController@fetch')->middleware('admin');
+        $router->get('native-fixture/provider/{id}',[\App\Onenew\External\ExternalController::class,'detail'])->middleware('admin');
+        $router->get('native-fixture/egress',[\App\Onenew\MachineEgressController::class,'fetch'])->middleware('admin');
+        $router->post('native-fixture/egress',[\App\Onenew\MachineEgressController::class,'save'])->middleware('admin');
         return app(NativeAdminTools::class);
     }
 
@@ -100,5 +109,48 @@ final class NativeAdminToolsTest extends TestCase
         $request=(string)Str::uuid();DB::table('onenew_ai_native_actions')->where('id',$card['id'])->update(['status'=>'dispatching','request_id'=>$request]);
         self::assertSame('uncertain',$tools->execute($admin->id,$card['id'],$request)['status']);self::assertSame($before,Plan::count());
         try{$tools->execute($admin->id,$card['id'],(string)Str::uuid());self::fail();}catch(HttpException $e){self::assertSame(409,$e->getStatusCode());}
+    }
+
+    public function test_changed_identity_and_handler_are_rejected_before_reserving_dispatch(): void
+    {
+        $tools=$this->gateway();$admin=$this->user();$target=$this->user(false);
+        $args=['capability'=>$this->capability($tools,'native-fixture/user/update'),'params'=>['id'=>$target->id,'expired_at'=>time()+3600]];
+        $card=$tools->prepare($admin->id,$args);
+        DB::table('v2_user')->where('id',$target->id)->update(['uuid'=>(string)Str::uuid()]);
+        try{$tools->execute($admin->id,$card['id'],(string)Str::uuid());self::fail();}catch(HttpException $e){self::assertSame(409,$e->getStatusCode());}
+        self::assertSame('prepared',DB::table('onenew_ai_native_actions')->where('id',$card['id'])->value('status'));
+        $card=$tools->prepare($admin->id,$args);$row=DB::table('onenew_ai_native_actions')->where('id',$card['id'])->first();
+        $payload=json_decode(\Illuminate\Support\Facades\Crypt::decryptString($row->encrypted_payload),true);$payload['handler_hash']=str_repeat('0',64);
+        DB::table('onenew_ai_native_actions')->where('id',$card['id'])->update(['encrypted_payload'=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode($payload))]);
+        try{$tools->execute($admin->id,$card['id'],(string)Str::uuid());self::fail();}catch(HttpException $e){self::assertSame(409,$e->getStatusCode());}
+    }
+
+    public function test_provider_links_and_short_financial_codes_never_leave_sanitizer(): void
+    {
+        $tools=$this->gateway();$admin=$this->user();$link='trojan://shortpass@provider.example:443';
+        $id=DB::table(\App\Onenew\External\ExternalNodes::TABLE)->insertGetId(['name'=>'Provider','link_ciphertext'=>\Illuminate\Support\Facades\Crypt::encryptString($link),'user_ids'=>'[]','group_ids'=>'[]','enabled'=>true,'sort'=>1,'created_at'=>now(),'updated_at'=>now()]);
+        $result=$tools->read($admin->id,['capability'=>$this->capability($tools,'native-fixture/provider/{id}'),'params'=>['id'=>$id]]);
+        self::assertStringNotContainsString('shortpass',json_encode($result));self::assertSame('[redacted]',$result['data']['link']);
+        $method=new \ReflectionMethod($tools,'sanitize');$method->setAccessible(true);
+        $result=$method->invoke($tools,['code'=>'shortgift','nested'=>['name'=>'vless://shortuuid@provider.example:443','uri'=>'ss://shortbase64@host:443']]);
+        foreach(['shortgift','shortuuid','shortbase64'] as $secret)self::assertStringNotContainsString($secret,json_encode($result));
+    }
+
+    public function test_resource_identity_references_are_actor_owned_and_survive_immutable_card_execution(): void
+    {
+        $tools=$this->gateway();$admin=$this->user();$other=$this->user();
+        $machine=\App\Models\ServerMachine::create(['name'=>'Alias fixture','token'=>'fixture-private-machine-token']);
+        $catalog=$tools->catalog(['search'=>'native-fixture/egress','limit'=>30]);$read=$write=null;
+        foreach($catalog['items'] as $item){if($item['method']==='GET')$read=$item['capability'];else $write=$item['capability'];}
+        $response=$tools->read($admin->id,['capability'=>$read,'params'=>['machine_id'=>$machine->id]]);
+        $ref=$response['data']['data']['machine_identity'];self::assertMatchesRegularExpression('/^resource_ref_[a-f0-9]{20}$/',$ref);
+        self::assertStringNotContainsString($machine->onenew_identity,json_encode($response));
+        $args=['capability'=>$write,'params'=>['machine_id'=>$machine->id,'machine_identity'=>$ref,'node_identities'=>[],'mode'=>'inherit','node_overrides'=>[]]];
+        try{$tools->prepare($other->id,$args);self::fail();}catch(HttpException $e){self::assertSame(422,$e->getStatusCode());}
+        $card=$tools->prepare($admin->id,$args);
+        // New task-local instance has no reference map; encrypted card already contains concrete identities.
+        $fresh=new NativeAdminTools($this->app['router']);
+        self::assertSame('succeeded',$fresh->execute($admin->id,$card['id'],(string)Str::uuid())['status']);
+        try{$fresh->prepare($admin->id,$args);self::fail();}catch(HttpException $e){self::assertSame(422,$e->getStatusCode());}
     }
 }
