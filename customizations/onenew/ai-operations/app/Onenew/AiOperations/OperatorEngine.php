@@ -73,7 +73,7 @@ final class OperatorEngine
                         $result=$this->source->read($tool,$args);$paths=[];if($tool==='source.read')$paths[]=$result['path']??'';if($tool==='source.search')foreach($result['items']??[] as $item)$paths[]=$item['path']??'';
                         $candidate=array_unique(array_merge($files,$paths));if(count($candidate)>8)throw new \RuntimeException('file_budget');$files=$candidate;
                     }else throw new \RuntimeException('unsupported_tool');
-                    $result=$this->clean($result);$size=strlen(json_encode($result,JSON_THROW_ON_ERROR));if($bytes+$size>100000)throw new \RuntimeException('read_budget');$bytes+=$size;
+                    $size=strlen(json_encode($result,JSON_THROW_ON_ERROR));if($bytes+$size>100000)throw new \RuntimeException('read_budget');$bytes+=$size;$result=$this->clean($result);
                     $results[]=['tool'=>$tool,'result'=>$result];$trace[]=['tool'=>$tool,'status'=>'read','message'=>'已读取允许范围内的数据'];$progress('已完成只读工具：'.$tool);
                 }catch(\Throwable $e){$results[]=['tool'=>in_array($tool,['users.lookup','nodes.lookup','inventory','source.list','source.search','source.read'],true)?$tool:'unsupported','error'=>'读取不可用、目标无效或超出安全预算；请澄清目标。'];$trace[]=['tool'=>$results[array_key_last($results)]['tool'],'status'=>'rejected','message'=>'该读取未获允许或未找到有效目标'];}
             }
