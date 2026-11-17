@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {createAiSession,operatorPayload,AiConversation,AiLauncher,AiSettings,RepositorySettings} from './src/ai-operations.mjs';
+import {createAiSession,operatorPayload,executionContext,AiConversation,AiLauncher,AiSettings,RepositorySettings} from './src/ai-operations.mjs';
 function harness(){const effects=[];let state=[],cursor=0;const R={Fragment:'fragment',createElement:(type,props,...children)=>({type,props:props||{},children}),useState:v=>{const i=cursor++;if(!(i in state))state[i]=v;return[state[i],v=>state[i]=typeof v==='function'?v(state[i]):v]},useRef:()=>({current:null}),useEffect:fn=>effects.push(fn)};return {R,effects,render:(Component,props)=>{cursor=0;return Component({react:R,...props})}}}
 function all(tree){return [tree,...(tree?.children||[]).flat(Infinity).filter(x=>x&&typeof x==='object').flatMap(all)]}
 const button=(tree,label)=>all(tree).find(n=>n.type==='button'&&n.props['aria-label']===label||n.type==='button'&&n.children[0]===label);
@@ -50,3 +50,6 @@ test('duplicate terminal polls do not append cards or history twice',async()=>{
 });
 
 test('native administrator cards execute only through confirmed native endpoint',async()=>{reset();const x=harness(),calls=[];const props={get:async()=>({}),post:async(url,body)=>{calls.push({url,body});return url.includes('/execute')?{status:'succeeded',message:'套餐已保存'}:{id:'native-task',state:'done',result:{answer:'请确认套餐修改',actions:[{id:'native-card',kind:'native.admin',title:'修改套餐',before:{endpoint:'plan/save'},after:{name:'套餐A'}}]}}},Link:'a'};let t=x.render(AiConversation,props);all(t).find(n=>n.type==='textarea').props.onChange({target:{value:'修改套餐'}});await button(x.render(AiConversation,props),'发送消息').props.onClick();assert.equal(calls.length,1);await button(x.render(AiConversation,props),'确认执行').props.onClick();assert.ok(calls[1].url.endsWith('/native/native-card/execute'));assert.equal(calls[1].body.confirmed,true);assert.ok(JSON.stringify(x.render(AiConversation,props)).includes('套餐已保存'))});
+
+
+test('execution context carries only bounded operation outcomes and never credentials or raw output',()=>{const event=executionContext({kind:'node.create'},{status:'succeeded',target_id:77,deployment_status:'saved_configuration_queued',credentials:{password:'private-password'},message:'raw-secret',data:{token:'secret'},validation_fields:['name','private-password value']});assert.ok(event.includes('77'));assert.ok(event.includes('saved_configuration_queued'));for(const value of ['private-password','raw-secret','token','credentials'])assert.ok(!event.includes(value));assert.equal(executionContext({kind:'native.admin'},{status:'<script>bad</script>'}),'')});
