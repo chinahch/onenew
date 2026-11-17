@@ -35,7 +35,7 @@ export function RemoteUpgrade({react:R,get,post,table,machineId}){
       h('div',{className:'overflow-x-auto'},h('table',{className:'w-full text-left text-sm'},
         h('thead',null,h('tr',null,...['选择','服务器','当前版本','目标版本','助手 / 升级状态','操作'].map(label=>h('th',{key:label,className:'p-2'},label)))),
         h('tbody',null,rows.map(row=>h('tr',{key:row.machine_id,className:'border-t'},
-          h('td',{className:'p-2'},h('input',{type:'checkbox','aria-label':`选择服务器 ${row.machine_id}`,checked:selected.includes(row.machine_id),disabled:busy||!upgradeEligible(row,target),onChange:e=>{setConfirm(false);setSelected(old=>e.target.checked?[...old,row.machine_id]:old.filter(id=>id!==row.machine_id))}})),
+          h('td',{className:'p-2'},h('input',{type:'checkbox','aria-label':`选择服务器 ${row.machine_id}`,checked:selected.includes(row.machine_id),disabled:busy||(!upgradeEligible(row,target)&&!selected.includes(row.machine_id)),onChange:e=>{setConfirm(false);setSelected(old=>e.target.checked?[...old,row.machine_id]:old.filter(id=>id!==row.machine_id))}})),
           h('td',{className:'p-2'},`${row.name} (#${row.machine_id})`),h('td',{className:'p-2'},row.version||'尚未上报'),
           h('td',{className:'p-2'},row.job?.target||target||'—'),
           h('td',{className:'p-2'},!row.capable?'需先安装助手':`${row.online?'助手在线':'助手离线'} · ${row.job?(states[row.job.state]||'未知状态'):(upgradeEligible(row,target)?'可升级':'已是当前或更新版本')}`,

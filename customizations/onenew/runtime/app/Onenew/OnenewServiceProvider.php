@@ -17,6 +17,9 @@ class OnenewServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Fleet agents commonly share an egress IP; isolate quotas by credential without exposing it.
+        \Illuminate\Support\Facades\RateLimiter::for('onenew-upgrade-machine',fn (\Illuminate\Http\Request $request) =>
+            \Illuminate\Cache\RateLimiting\Limit::perMinute(30)->by(hash('sha256',(string)$request->input('machine_id').'|'.(string)$request->bearerToken())));
         $root = '/opt/onenew';
         $this->loadMigrationsFrom($root . '/user-portal/backend/database/migrations');
         $this->loadMigrationsFrom($root . '/traffic/database/migrations');

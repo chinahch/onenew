@@ -21,6 +21,11 @@ final class UpgradeService
         },3);
     }
     private function binding(ServerMachine $m): array { return ['identity'=>(string)$m->onenew_identity,'credential_hash'=>hash('sha256',(string)$m->token)]; }
+    private function current(ServerMachine $authenticated): ServerMachine {
+        $m=ServerMachine::lockForUpdate()->find($authenticated->id);
+        abort_unless($m && $m->is_active && (string)$m->onenew_identity===(string)$authenticated->onenew_identity && hash_equals((string)$m->token,(string)$authenticated->token),403);
+        return $m;
+    }
     private function matches($row,ServerMachine $m): bool {
         $b=$this->binding($m); return $row && hash_equals($row->identity,$b['identity']) && hash_equals($row->credential_hash,$b['credential_hash']);
     }
@@ -50,11 +55,15 @@ final class UpgradeService
         return $this->locked(function () use($ids,$target,$admin) {
             $result=[];
             foreach($ids as $id) {
-                $m=ServerMachine::findOrFail($id); $a=DB::table(self::AGENTS)->where('machine_id',$id)->first();
+                $m=ServerMachine::lockForUpdate()->findOrFail($id); $a=DB::table(self::AGENTS)->where('machine_id',$id)->first();
                 abort_unless($m->is_active && $this->matches($a,$m),422,'Install the upgrade assistant on every selected server first');
+                $binding=$this->binding($m);
+                DB::table(self::JOBS)->where('machine_id',$id)->where('state','pending')
+                    ->where(function($q) use($binding) { $q->where('identity','!=',$binding['identity'])->orWhere('credential_hash','!=',$binding['credential_hash']); })
+                    ->update(['state'=>'failed','error_code'=>'invalid_task','updated_at'=>now()->timestamp]);
                 $this->catalog->asset($target,$a->arch);
                 abort_unless(version_compare(ltrim($a->version,'v'),ltrim($target,'v'),'<'),422,'Selected server is already current or newer');
-                abort_if(DB::table(self::JOBS)->where('machine_id',$id)->whereIn('state',array_merge(['pending'],self::ACTIVE))->exists(),409,'A selected server already has an upgrade queued');
+                abort_if(DB::table(self::JOBS)->where('machine_id',$id)->where($binding)->whereIn('state',array_merge(['pending'],self::ACTIVE))->exists(),409,'A selected server already has an upgrade queued');
                 $now=now()->timestamp;
                 $row=array_merge(['id'=>(string)Str::uuid(),'machine_id'=>(int)$id,'admin_id'=>$admin,'target'=>$target,'arch'=>$a->arch,
                     'previous_version'=>$a->version,'reported_version'=>null,'state'=>'pending','error_code'=>'','lease_hash'=>null,
@@ -66,6 +75,7 @@ final class UpgradeService
     }
     public function poll(ServerMachine $m,array $data): ?array {
         return $this->locked(function () use($m,$data) {
+            $m=$this->current($m);
             $agent=array_merge($this->binding($m),['machine_id'=>(int)$m->id,'arch'=>$data['arch'],'version'=>$data['version'],
                 'assistant_version'=>$data['assistant_version'],'seen_at'=>now()->timestamp]);
             DB::table(self::AGENTS)->updateOrInsert(['machine_id'=>$m->id],$agent);
@@ -80,12 +90,13 @@ final class UpgradeService
                 DB::table(self::JOBS)->where('id',$row->id)->update(['state'=>'failed','error_code'=>'invalid_task','reported_version'=>$data['version'],'updated_at'=>now()->timestamp]); return null;
             }
             $asset=$this->catalog->asset($row->target,$row->arch); $lease=bin2hex(random_bytes(32)); $expiry=now()->timestamp+900;
-            DB::table(self::JOBS)->where('id',$row->id)->update(['state'=>'leased','lease_hash'=>hash('sha256',$lease),'lease_expires_at'=>$expiry,'updated_at'=>now()->timestamp]);
+            DB::table(self::JOBS)->where('id',$row->id)->update(['state'=>'leased','previous_version'=>$data['version'],'lease_hash'=>hash('sha256',$lease),'lease_expires_at'=>$expiry,'updated_at'=>now()->timestamp]);
             return ['id'=>$row->id,'lease'=>$lease,'expires_at'=>$expiry,'release'=>$asset];
         });
     }
     public function accept(ServerMachine $m,string $id,array $data): void {
         $this->locked(function () use($m,$id,$data) {
+            $m=$this->current($m);
             $row=DB::table(self::JOBS)->where('id',$id)->first();
             abort_unless($row && (int)$row->machine_id===(int)$m->id && $this->matches($row,$m) && $row->lease_hash && hash_equals($row->lease_hash,hash('sha256',$data['lease'])),409);
             $state=$data['state']; $error=$data['error_code']??'';

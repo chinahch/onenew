@@ -80,4 +80,12 @@ class RemoteUpgradeTest extends TestCase
         $this->getJson('/api/onenew/admin/upgrades')->assertJsonPath('machines.0.version','v0.1.11')->assertJsonPath('machines.0.job.state','rolled_back')->assertJsonPath('machines.0.job.reported_version','v0.1.11');
         $this->create([$m])->assertOk();
     }
+    public function test_reused_machine_id_drops_pending_old_binding_and_uses_claimed_actual_version(): void {
+        $m=$this->machine();$this->poll($m);$this->admin();$old=$this->create([$m])->json('jobs.0.id');
+        $m->token=bin2hex(random_bytes(24));$m->onenew_identity=(string)Str::uuid();$m->save();
+        $this->poll($m)->assertOk()->assertJsonPath('job',null);$this->create([$m])->assertOk();
+        $this->assertSame('failed',DB::table('v2_onenew_upgrade_jobs')->where('id',$old)->value('state'));
+        $job=$this->poll($m,'v0.1.10')->json('job');
+        $this->report($m,$job,'rolled_back','v0.1.10','health_failed')->assertOk();
+    }
 }
