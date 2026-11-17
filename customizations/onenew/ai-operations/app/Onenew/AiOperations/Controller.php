@@ -11,7 +11,7 @@ final class Controller
     public function config(Config $config){return $this->response(['config'=>$config->view()]);}
     public function save(Request $request,Config $config)
     {
-        $data=$request->validate(['enabled'=>'sometimes|boolean','endpoint'=>'sometimes|required|string|max:512','model'=>['sometimes','required','string','max:200','regex:/^[^\x00-\x20\x7f]+$/D'],'api_key'=>['sometimes','nullable','string','max:16384','regex:/^[^\x00-\x20\x7f]*$/D'],'clear_key'=>'sometimes|boolean']);
+        $data=$request->validate(['enabled'=>'sometimes|boolean','endpoint'=>'sometimes|required|string|max:512','model'=>['sometimes','required','string','max:200','regex:/^[^\x00-\x20\x7f]+$/D'],'token_parameter'=>'sometimes|required|in:max_tokens,max_completion_tokens','api_key'=>['sometimes','nullable','string','max:16384','regex:/^[^\x00-\x20\x7f]*$/D'],'clear_key'=>'sometimes|boolean']);
         return $this->response(['config'=>$config->save($data)]);
     }
     public function preview(Request $request,Service $service)

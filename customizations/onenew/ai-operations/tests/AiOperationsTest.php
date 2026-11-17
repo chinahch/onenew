@@ -55,6 +55,21 @@ final class AiOperationsTest extends TestCase
         app(Config::class)->save(['enabled'=>true,'endpoint'=>'https://api.example.com/v1','model'=>'fixture-model','api_key'=>'fixture-secret-key']);
         $this->app->bind(Endpoint::class,fn()=>new class extends Endpoint {public function addresses(string $host):array{return ['93.184.216.34'];}});
     }
+    public function test_token_parameter_is_saved_validated_and_only_selected_field_is_sent():void
+    {
+        $this->ready();$auth=$this->auth();
+        $this->getJson(self::ROOT.'/config',$auth)->assertOk()->assertJsonPath('config.token_parameter','max_tokens');
+        $this->postJson(self::ROOT.'/config',['token_parameter'=>'untrusted_field'],$auth)->assertStatus(422);
+        $selected='max_tokens';Http::fake(function($request)use(&$selected){
+            self::assertSame(1500,$request[$selected]);self::assertArrayNotHasKey($selected==='max_tokens'?'max_completion_tokens':'max_tokens',$request->data());
+            return Http::response(['choices'=>[['message'=>['content'=>'OK']]]],200);
+        });
+        foreach(['max_tokens','max_completion_tokens'] as $parameter){
+            $selected=$parameter;
+            $this->postJson(self::ROOT.'/config',['token_parameter'=>$parameter],$auth)->assertOk()->assertJsonPath('config.token_parameter',$parameter);
+            self::assertTrue(app(Service::class)->test());
+        }
+    }
     public function test_custom_https_port_is_preserved_and_socket_is_pinned_to_that_port():void
     {
         $this->ready();$url='https://api.example.com:8443/v1/chat/completions';
