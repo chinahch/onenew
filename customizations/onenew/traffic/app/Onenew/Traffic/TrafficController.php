@@ -79,6 +79,12 @@ class TrafficController extends Controller
             ->where('observed_at', '<', $end)->select(['server_id', 'node_identity', 'server_type', 'domain'])
             ->selectRaw('MAX(node_name) AS node_name, MIN(observed_at) AS first_seen, MAX(observed_at) AS last_seen, COUNT(*) AS hit_count')
             ->groupBy('server_id', 'node_identity', 'server_type', 'domain');
+        $request->validate(['include_background'=>'sometimes|boolean']);
+        if (!$request->boolean('include_background')) {
+            // Apply before grouping/counting/pagination, including previously collected rows.
+            $query->whereNotIn('domain',['www.cloudflare.com','cloudflare.com','cp.cloudflare.com','connectivitycheck.gstatic.com','www.gstatic.com']);
+            foreach (['api','telemetry','analytics','metrics'] as $label) $query->where('domain','not like',$label.'.%');
+        }
         $total = DB::query()->fromSub(clone $query, 'domains')->count();
         $rows = $query->orderByDesc('last_seen')->orderBy('server_id')->orderBy('domain')
             ->offset(($page - 1) * $perPage)->limit($perPage)->get();

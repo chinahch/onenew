@@ -25,8 +25,10 @@ test('patched advanced component keeps TLS, multiplex and commits draft only thr
 });
 test('sidebar removal leaves original menu hierarchy and unrelated navigation intact',()=>{
   const patched=patchBundle(source,'');const a=patched.indexOf('Vlt=[')+4,b=patched.indexOf(',Wlt=',a),expression=patched.slice(a,b);
-  const ctx={Q:{jsx:()=>null}};for(const match of expression.matchAll(/Q\.jsx\((\w+),/g))ctx[match[1]]=match[1];
+  const ctx={Q:{jsx:(type,props)=>({type,props})},H:{},IL:()=>{},OnenewAdmin:{AttentionIcon:'AttentionIcon'}};for(const match of expression.matchAll(/Q\.jsx\((\w+),/g))ctx[match[1]]=match[1];
   const menu=vm.runInNewContext(`(${expression})`,ctx),hrefs=[];function visit(entries){for(const item of entries){if(item.href)hrefs.push(item.href);visit(item.sub||[])}}visit(menu);
+  assert.equal(menu.find(row=>row.id==='subscription-management').icon.props.kind,'orders');
+  assert.equal(menu.find(row=>row.id==='system-management').icon.props.kind,'energy');
   assert.ok(hrefs.includes('/config/payment'));assert.ok(hrefs.includes('/finance/order'));assert.ok(hrefs.includes('/server/manage'));assert.ok(hrefs.includes('/user/manage'));
   for(const removed of ['/config/knowledge','/finance/coupon','/finance/gift-card','/user/ticket'])assert.ok(!hrefs.includes(removed));
 });

@@ -12,6 +12,17 @@ final class EnergyTest extends TestCase
     private function account(bool $admin=false): User {return User::create(['email'=>Str::random(16).'@example.invalid','password'=>password_hash('fixture-pass-1234',PASSWORD_DEFAULT),'uuid'=>(string)Str::uuid(),'token'=>Str::random(32),'is_admin'=>$admin,'balance'=>0,'transfer_enable'=>100000,'u'=>0,'d'=>0]);}
     private function auth(User $u): array {$this->app['auth']->forgetGuards();return ['Authorization'=>(new AuthService($u))->generateAuthData()['auth_data']];}
     private function submit(User $u,string $amount='12.34',string $key='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'): string {return $this->postJson('/api/onenew/user/energy',['amount'=>$amount,'request_id'=>$key],$this->auth($u))->assertOk()->json('id');}
+    public function test_pending_attention_is_admin_only_and_clears_after_review(): void {
+        $u=$this->account();$a=$this->account(true);$id=$this->submit($u);
+        $this->getJson('/api/onenew/admin/energy/attention',$this->auth($u))->assertStatus(403);
+        $this->getJson('/api/onenew/admin/energy/attention',$this->auth($a))->assertOk()->assertJsonPath('energy',1)->assertJsonPath('orders',0);
+        $this->postJson('/api/onenew/admin/energy/'.$id.'/review',['decision'=>'approved'],$this->auth($a))->assertOk();
+        $this->getJson('/api/onenew/admin/energy/attention',$this->auth($a))->assertOk()->assertJsonPath('energy',0);
+        $order=\App\Models\Order::create(['user_id'=>$u->id,'plan_id'=>1,'type'=>2,'trade_no'=>'attention-'.Str::random(16),'period'=>'monthly','status'=>0,'total_amount'=>100]);
+        foreach ([0,1] as $status) {$order->update(['status'=>$status]);$this->getJson('/api/onenew/admin/energy/attention',$this->auth($a))->assertOk()->assertJsonPath('orders',1);}
+        $order->update(['status'=>3]);$this->getJson('/api/onenew/admin/energy/attention',$this->auth($a))->assertOk()->assertJsonPath('orders',0);
+
+    }
     public function test_requests_do_not_credit_balance_and_retries_are_idempotent(): void {
         $u=$this->account();$id=$this->submit($u);self::assertSame($id,$this->submit($u));self::assertSame(0,(int)$u->fresh()->balance);self::assertSame(1,DB::table('onenew_energy_requests')->count());
         $this->postJson('/api/onenew/user/energy',['amount'=>'2','request_id'=>str_repeat('a',32)],$this->auth($u))->assertStatus(409);
