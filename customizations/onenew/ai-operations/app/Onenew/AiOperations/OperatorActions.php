@@ -99,7 +99,14 @@ final class OperatorActions
     {
         Validator::make(['id'=>$id,'request_id'=>$requestId],['id'=>'required|uuid','request_id'=>'required|uuid'])->validate();$this->only($inputs,[]);abort_if($admin<1,403);
         return Cache::lock('onenew:ai:action-lock:'.$id,60)->block(5,function()use($admin,$id,$requestId){
-            return DB::transaction(function()use($admin,$id,$requestId){
+            // The listener reservation lock wraps the whole transaction, including
+            // commit. Different templates on the same unassigned host must serialize.
+            $cached=Cache::get($this->key($admin,$id));$listenerKey=null;
+            if(is_string($cached)){
+                $prepared=json_decode(Crypt::decryptString($cached),true,512,JSON_THROW_ON_ERROR);
+                if(in_array($prepared['card']['kind'],['node.create','node.update'],true))$listenerKey=$this->listenerLockKey($prepared['args']['data']);
+            }
+            $dispatch=function()use($admin,$id,$requestId){return DB::transaction(function()use($admin,$id,$requestId){
                 $prior=DB::table('onenew_ai_action_audit')->where('action_id',$id)->first();
                 if($prior){abort_unless((int)$prior->admin_id===$admin,404);$r=json_decode(Crypt::decryptString($prior->encrypted_result),true,512,JSON_THROW_ON_ERROR);$secret=Cache::get($this->key($admin,$id).':credentials');if(is_string($secret)&&time()<=$prior->credential_expires_at)$r['credentials']=json_decode(Crypt::decryptString($secret),true,512,JSON_THROW_ON_ERROR);return $r;}
                 abort_if(DB::table('onenew_ai_action_audit')->where('admin_id',$admin)->where('request_id',$requestId)->exists(),409,'Request ID already belongs to another action.');
@@ -118,10 +125,16 @@ final class OperatorActions
                 DB::table('onenew_ai_action_audit')->insert(['admin_id'=>$admin,'action_id'=>$id,'request_id'=>$requestId,'kind'=>$kind,'target_id'=>$result['target_id'],'result_code'=>'succeeded','encrypted_result'=>Crypt::encryptString(json_encode($auditResult,JSON_THROW_ON_ERROR)),'credential_expires_at'=>time()+600,'created_at'=>time()]);
                 if(isset($result['credentials']))Cache::put($this->key($admin,$id).':credentials',Crypt::encryptString(json_encode($result['credentials'],JSON_THROW_ON_ERROR)),600);
                 return $result;
-            });
+            });};
+            return $listenerKey===null?$dispatch():Cache::lock($listenerKey,60)->block(5,$dispatch);
         });
     }
-    /** Drafts reserve listener ports too. Machine snapshot locks serialize confirmed creates. */
+    private function listenerLockKey(array $data): string
+    {
+        $scope=!empty($data['machine_id'])?'machine:'.(int)$data['machine_id']:'host:'.strtolower(trim((string)$data['host']));
+        return 'onenew:ai:listener:'.hash('sha256',$scope.':'.(int)$data['server_port']);
+    }
+    /** Drafts reserve listener ports too. The outer listener lock serializes AI saves. */
     private function validateNodePort(array $data,?int $except=null): void
     {
         $port=(int)$data['server_port'];$query=Server::query()->where('server_port',$port);
