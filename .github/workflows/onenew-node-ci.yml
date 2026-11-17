@@ -81,6 +81,15 @@ jobs:
           dist/amd64/caddyctl config init --mode machine --panel-url https://panel.example.test --token fixture-disposable-token --machine-id 7 --kernel singbox --health-port 65530 --version onenew-v0.1.12 --output /tmp/onenew-fixture/config.yml --credentials-out /tmp/onenew-fixture/credentials.env --meta /tmp/onenew-fixture/install-meta.json --install-root /etc/caddy
           test -s /tmp/onenew-fixture/config.yml
           test -s /tmp/onenew-fixture/credentials.env
+      - name: Exercise real v11 to v12 asset upgrade and rollback
+        if: matrix.arch == 'amd64'
+        run: |
+          curl --fail --location --retry 3 https://github.com/chinahch/onenew-releases/releases/download/node-v0.1.11/onenew-node-linux-amd64.tar.gz -o old-v11.tar.gz
+          echo '44e97934cb095a4bc9e61756fa492a462866b039d8cb3aec2dedbed02a1b5435  old-v11.tar.gz' | sha256sum -c -
+          export ONENEW_TEST_V11_PACKAGE="$PWD/old-v11.tar.gz"
+          export ONENEW_TEST_V12_PACKAGE="$PWD/dist/onenew-node-linux-amd64.tar.gz"
+          cd onenew/customizations/onenew/node/updater
+          go test -v -run TestRealV11ToV12Assets .
       - name: Package corresponding native source and build instructions
         if: matrix.arch == 'amd64'
         run: |
