@@ -111,6 +111,32 @@ final class PortalFeatureTest extends TestCase
         }
     }
 
+    public function test_imported_alphanumeric_subscription_survives_paid_renewal_without_rotating_credentials(): void
+    {
+        admin_setting(['subscribe_url'=>'https://subscription.example.test']);
+        $plan=Plan::create(['name'=>'Legacy renewal','transfer_enable'=>100,'show'=>true,'sell'=>true,'renew'=>true,'prices'=>['monthly'=>20]]);
+        $user=$this->account();$token=str_repeat('AbG9',8);$user->token=$token;$user->plan_id=$plan->id;$user->balance=2000;$user->expired_at=time()-60;$user->save();
+        $uuid=$user->uuid;$headers=$this->headersFor($user);
+        $link=$this->getJson('/api/onenew/user/subscription',$headers)->assertOk()->json('path');
+        $path=parse_url($link,PHP_URL_PATH);$this->assertStringEndsWith('/'.$token,$path);
+        $this->postJson('/api/onenew/user/renewals',['request_id'=>str_repeat('c',32),'period'=>'monthly'],$headers)->assertOk()->assertJsonPath('status','approved');
+        $fresh=$user->fresh();$this->assertSame($token,$fresh->token);$this->assertSame($uuid,$fresh->uuid);$this->assertGreaterThan(time(),$fresh->expired_at);
+        $this->getJson('/api/onenew/user/subscription',$headers)->assertOk()->assertJsonPath('path',$link);
+        $this->app['auth']->forgetGuards();$this->get($path)->assertOk();
+        // An explicit security reset still revokes the old URL; no compatibility alias is created.
+        $this->postJson('/api/onenew/user/subscription-token',[],$headers)->assertOk();$this->app['auth']->forgetGuards();$this->get($path)->assertStatus(403);
+    }
+
+    public function test_subscription_tokens_remain_strictly_bounded_and_case_sensitive(): void
+    {
+        $legacy=str_repeat('AbG9',8);$this->assertSame($legacy,\App\Utils\Helper::validateSubscriptionToken($legacy));
+        $hex=str_repeat('a9',16);$this->assertSame($hex,\App\Utils\Helper::validateSubscriptionToken($hex));
+        foreach([null,[],42,'',str_repeat('a',31),str_repeat('a',33),str_repeat('a',31)."\n",str_repeat('a',31).'-',str_repeat('a',31)."'",str_repeat('a',31).'中'] as $bad)$this->assertNull(\App\Utils\Helper::validateSubscriptionToken($bad));
+        $user=$this->account();$user->token=$legacy;$user->save();
+        $path='/'.admin_setting('subscribe_path','s').'/'.$legacy;
+        $this->app['auth']->forgetGuards();$this->get(strtolower($path))->assertStatus(403);
+    }
+
     public function test_other_account_cannot_cancel_order_or_replay_its_request(): void
     {
         $a=$this->account();$b=$this->account();
