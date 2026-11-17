@@ -18,6 +18,12 @@ final class OperatorEngine
         foreach($this->aliases as $alias=>$email)$text=preg_replace('~'.preg_quote($email,'~').'~i',$alias,$text)??'';
         return Redactor::text($text,$this->secrets);
     }
+    private function containsSecret(mixed $value):bool
+    {
+        if(is_string($value)){foreach($this->secrets as $secret)if($secret!==''&&str_contains($value,$secret))return true;}
+        if(is_array($value))foreach($value as $item)if($this->containsSecret($item))return true;
+        return false;
+    }
     private function resolve(array $args):array
     {
         foreach(['password','passwd','token','uuid','api_key','secret','is_admin','is_staff','role','permissions'] as $forbidden)if(array_key_exists($forbidden,$args))throw new \RuntimeException('forbidden_argument');
@@ -91,9 +97,9 @@ final class OperatorEngine
         $patches=$final['patches']??[];
         if($patches){
             try{if(count($patches)>5||strlen(json_encode($patches,JSON_THROW_ON_ERROR))>100000)throw new \RuntimeException('patch_budget');
-                foreach($this->secrets as $secret)if($secret!==''&&str_contains(json_encode($patches,JSON_THROW_ON_ERROR),$secret))throw new \RuntimeException('secret_in_patch');
+                if($this->containsSecret($patches))throw new \RuntimeException('secret_in_patch');
                 if(microtime(true)>$deadline-20)throw new \RuntimeException('time_budget');
-                $progress('正在校验固定版本源码修改');$changes[]=$this->source->propose($admin,$patches);$trace[]=['tool'=>'source.propose','status'=>'prepared','message'=>'已生成代码差异；尚未提交、运行或部署'];
+                $progress('正在校验固定版本源码修改');$proposal=$this->source->propose($admin,$patches);if($this->containsSecret($proposal))throw new \RuntimeException('secret_in_source');$changes[]=$proposal;$trace[]=['tool'=>'source.propose','status'=>'prepared','message'=>'已生成代码差异；尚未提交、运行或部署'];
             }catch(\Throwable $e){$trace[]=['tool'=>'source.propose','status'=>'rejected','message'=>'源码修改未通过固定版本校验或超出预算，请缩小范围并读取准确原文。'];}
         }
         $answer=$this->clean($final['answer']??'请查看读取记录与待确认操作。');
