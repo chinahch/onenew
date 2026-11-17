@@ -27,7 +27,7 @@ export function AiConversation({react:R,get,post,Link,useLocation}){
  async function preview(){if(s.busy||!s.question.trim())return;change({busy:true,error:'',preview:null,requestId:null});try{const p=await apiPost(post,'/preview',previewPayload(s));if(session!==s)return;change({preview:p,requestId:globalThis.crypto.randomUUID()})}catch{if(session===s)change({error:errorText()})}finally{if(session===s)change({busy:false})}}
  async function send(){if(s.busy||!s.preview)return;const p=s.preview;change({busy:true,error:''});try{const a=await apiPost(post,'/chat',confirmPayload(s));if(session!==s)return;change({history:[...s.history,{role:'user',content:p.question},{role:'assistant',content:String(a.answer||'')}].slice(-8),sources:a.sources||[],question:'',preview:null,requestId:null})}catch{if(session===s)change({error:errorText()})}finally{if(session===s)change({busy:false})}}
  const edit=values=>change({...values,preview:null,requestId:null,error:''});
- return h('div',{className:'onenew-ai'},h('h2',null,'AI运维助手'),h('p',null,'回答面板功能、配置与排障问题。只读分析；任何更改请在原管理页面确认。对话仅保存在本次页面内存中。'),
+ return h('div',{className:'onenew-ai'},h('h2',null,'AI运维助手'),h('p',null,'回答面板功能、配置与排障问题。只读分析；任何更改请在原管理页面确认。对话保存在当前页面；服务器会短暂缓存脱敏预览和回复，用于确认及防重复发送。'),
  h('nav',{'aria-label':'运维页面',className:'onenew-ai-links'},links.map(([label,href])=>h(Link,{key:href,to:href},label))),
  h('div',{className:'onenew-ai-history','aria-live':'polite'},s.history.length?s.history.map((m,i)=>h('article',{key:i,className:'onenew-ai-message'},h('strong',null,m.role==='user'?'你':'助手'),h('pre',null,m.content))):h('p',null,'例如：套餐续费后流量如何计算？节点显示正常为何客户端仍无法连接？怎样安全恢复备份？')),
  s.sources.length>0&&h('details',null,h('summary',null,'回答来源'),h('pre',null,JSON.stringify(s.sources,null,2))),
