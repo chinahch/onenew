@@ -24,12 +24,27 @@ class Client
         $ip=$ips[0];$port=parse_url($url,PHP_URL_PORT)??443;$pin=$host.':'.$port.':'.(str_contains($ip,':')?'['.$ip.']':$ip);
         $tokenParameter=$config['token_parameter']??'max_tokens';
         if(!in_array($tokenParameter,['max_tokens','max_completion_tokens'],true))throw new \RuntimeException('invalid_token_parameter');
+        try{
         $response=Http::withToken($key)->acceptJson()->asJson()->connectTimeout(5)->timeout(35)
             ->withOptions(['allow_redirects'=>false,'verify'=>true,'proxy'=>'','curl'=>[CURLOPT_RESOLVE=>[$pin],CURLOPT_PROXY=>'',CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS],
                 'on_headers'=>function($response){$length=$response->getHeaderLine('Content-Length');if($length!==''&&((int)$length>131072))throw new \RuntimeException('response_too_large');},
                 'progress'=>function($total,$downloaded){if($downloaded>131072)throw new \RuntimeException('response_too_large');}])
             ->post($url,['model'=>$config['model'],'messages'=>$messages,$tokenParameter=>$limit,'stream'=>false]);
-        if(!$response->successful()||strlen($response->body())>131072)throw new \RuntimeException('provider_failed');
+        }catch(\Throwable $exception){
+            // Handler errno is structured transport metadata; never inspect a provider body or exception text.
+            $code='provider_transport';$cause=$exception;
+            for($depth=0;$cause&&$depth<8;$depth++,$cause=$cause->getPrevious()){
+                if($cause instanceof \GuzzleHttp\Exception\ConnectException && (int)($cause->getHandlerContext()['errno']??0)===28)$code='provider_timeout';
+                if(get_class($cause)===\RuntimeException::class && $cause->getMessage()==='response_too_large')$code='invalid_response';
+            }
+            throw new \RuntimeException($code);
+        }
+        if(!$response->successful()){
+            $status=$response->status();
+            $code=match(true){in_array($status,[401,403],true)=>'provider_auth',$status===429=>'provider_rate_limit',in_array($status,[400,404,405,422],true)=>'provider_request',in_array($status,[408,504],true)=>'provider_timeout',default=>'provider_http'};
+            throw new \RuntimeException($code);
+        }
+        if(strlen($response->body())>131072)throw new \RuntimeException('invalid_response');
         $body=$response->json();$answer=$body['choices'][0]['message']['content']??null;
         if(!is_string($answer)||trim($answer)==='')throw new \RuntimeException('invalid_response');
         $usage=[];foreach(['prompt_tokens','completion_tokens','total_tokens'] as $field)if(isset($body['usage'][$field])&&is_int($body['usage'][$field])&&$body['usage'][$field]>=0)$usage[$field]=min($body['usage'][$field],100000000);

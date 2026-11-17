@@ -14,5 +14,5 @@ final class OperatorJob implements ShouldQueue
     public bool $failOnTimeout=true;
     public function __construct(public string $id){$this->onConnection('onenew_ai_operator');$this->onQueue('onenew_ai_operator');}
     public function handle(OperatorTasks $tasks):void {$tasks->run($this->id);}
-    public function failed(?\Throwable $exception):void {app(OperatorTasks::class)->fail($this->id);}
+    public function failed(?\Throwable $exception):void {app(OperatorTasks::class)->fail($this->id,$exception,'queue_failed');}
 }
