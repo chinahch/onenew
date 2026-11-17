@@ -19,7 +19,7 @@ class SourceTools {
     public array $proposed=[];
     public function catalog(){return [];}
     public function read($tool,$args){return ['path'=>$args['path']??'file.php','content'=>str_repeat('x',100001)];}
-    public function propose($admin,$patches){$this->proposed[]=$patches;return ['id'=>'local-code-id'];}
+    public function propose($admin,$patches){$this->proposed[]=$patches;return ['id'=>'local-code-id','before'=>($patches[0]['path']??'')==='secret.php'?'fixture-repo-key':'safe source'];}
 }
 class Client {
     public array $messages=[];
@@ -49,5 +49,7 @@ check(count($client->messages)===4&&count($actions->reads)===3&&$actions->prepar
 [$result,$client,$actions,$source]=run([['reads'=>[['tool'=>'source.read','args'=>['path'=>'customizations/onenew/test/app/file.php']]]],['answer'=>'bounded']]);
 check($result['trace'][0]['status']==='rejected','Read byte budget not enforced');
 [$result]=run(['Plain text answer fixture-api-key']);check($result['actions']===[]&&$result['answer']==='Plain text answer [REDACTED]','Plain text fallback unsafe');
+[$result,$client,$actions,$source]=run([['patches'=>[['path'=>'secret.php','old_text'=>'old','new_text'=>'new']]]]);check($result['code_changes']===[]&&count($source->proposed)===1,'Existing source credentials reached a proposal card');
+[$result,$client,$actions,$source]=run([['patches'=>[['path'=>'safe.php','old_text'=>'old','new_text'=>'fixture-api-key']]]]);check($result['code_changes']===[]&&$source->proposed===[],'Model credential reached proposal tool');
 try{run([new \RuntimeException('fixture provider error')]);check(false,'Provider exception swallowed');}catch(\RuntimeException $e){check($e->getMessage()==='fixture provider error','Unexpected provider failure');}
 echo "Operator engine alias isolation, proposal boundary, unknown tools, budgets, redaction and plain-text tests passed\n";
