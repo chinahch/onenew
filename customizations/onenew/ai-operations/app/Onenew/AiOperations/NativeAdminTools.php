@@ -14,6 +14,14 @@ final class NativeAdminTools
     private array $resourceReferences=[];
     private const TABLE = 'onenew_ai_native_actions';
     private const READS = ['fetch','list','get','getNodes','nodes','history','detail','getUserInfoById','getOverride','getStats','getServerLastRank','getServerYesterdayRank','getOrder','getStatUser','getRanking','getStatRecord','getTrafficRank','templates','codes','usages','statistics','types','getCategory','getPaymentMethods','getSystemStatus','getQueueStats','getQueueWorkload','getHorizonFailedJobs','getAuditLog','getThemes','getThemeConfig','logs','stats','userHistory','getEmailTemplate','getThemeTemplate'];
+    private const CLASS_READS = [
+        'App\\Onenew\\CloudBackup\\Controller'=>['info'],
+        'App\\Onenew\\WebRestore\\Controller'=>['info','status'],
+        'App\\Onenew\\External\\ExternalController'=>['index','lookups'],
+        'App\\Onenew\\LandingLibrary\\LandingController'=>['index','show'],
+        'App\\Onenew\\Energy\\EnergyController'=>['adminIndex','attention'],
+        'App\\Http\\Controllers\\V2\\Admin\\PluginController'=>['index'],
+    ];
     private const SECRET = '/password|passwd|(^|_)pass($|_)|secret|token|uuid|private.?key|api.?key|credential|authorization|cookie|certificate|cert$|salt|encrypted|subscribe.?url|install.?command|(^|_)key$|\.env/i';
 
     public function __construct(private Router $router) {}
@@ -39,7 +47,10 @@ final class NativeAdminTools
             foreach (array_intersect(['GET','POST','PUT','PATCH','DELETE'], $route->methods()) as $verb) {
                 $id = hash('sha256', $verb.'|'.$route->uri().'|'.$class.'@'.$method);
                 $parts = explode('/', $route->uri());
-                $out[$id] = ['capability'=>$id, 'method'=>$verb, 'action'=>$method, 'path'=>$route->uri(), 'category'=>preg_replace('/Controller$/', '', class_basename($class)), 'mode'=>in_array($method, self::READS, true) ? 'read' : 'confirm', 'schema'=>['params'=>['type'=>'object','description'=>'Native endpoint parameters; native FormRequest validation is authoritative. Credentials and role changes require the native UI.','validation_hints'=>$this->ruleHints($class,$method)],'path_parameters'=>$route->parameterNames()], '_route'=>$route];
+                $category=preg_replace('/Controller$/','',class_basename($class));
+                if($category===''){$segments=explode('\\',$class);$category=$segments[count($segments)-2];}
+                $read=in_array($method,self::READS,true)||in_array($method,self::CLASS_READS[$class]??[],true);
+                $out[$id] = ['capability'=>$id, 'method'=>$verb, 'action'=>$method, 'path'=>$route->uri(), 'category'=>$category, 'mode'=>$read ? 'read' : 'confirm', 'schema'=>['params'=>['type'=>'object','description'=>'Native endpoint parameters; native FormRequest validation is authoritative. Credentials and role changes require the native UI.','validation_hints'=>$this->ruleHints($class,$method)],'path_parameters'=>$route->parameterNames()], '_route'=>$route];
             }
         }
         ksort($out);
