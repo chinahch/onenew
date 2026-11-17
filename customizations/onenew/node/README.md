@@ -1,5 +1,6 @@
 # 当前版本：node-v0.1.12 远程升级
 
+升级安装器需要 `flock`；Alpine 缺少时先运行 `apk add util-linux`。
 新安装会同时安装独立 `caddy-updater` 服务。已有原生 systemd 或 Alpine
 OpenRC 节点需先进行一次引导升级，root 执行：
 

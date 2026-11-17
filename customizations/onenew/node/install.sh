@@ -163,6 +163,7 @@ UMask=0077
 [Install]
 WantedBy=multi-user.target
 UNIT
+    if [ "$UPGRADE" -eq 1 ]; then flock -u 9; exec 9>&-; fi
     systemctl daemon-reload
     systemctl enable caddy-updater.service
     systemctl restart caddy-updater.service
@@ -182,6 +183,7 @@ depend() { need net; }
 UNIT
     chmod 755 /etc/init.d/caddy-updater
     rc-update add caddy-updater default
+    if [ "$UPGRADE" -eq 1 ]; then flock -u 9; exec 9>&-; fi
     rc-service caddy-updater restart
     rc-service caddy-updater status >/dev/null || fail 'Upgrade assistant failed to start'
   fi

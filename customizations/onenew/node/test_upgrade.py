@@ -32,6 +32,9 @@ class UpgradeTest(InstallerTest):
         if os.name == 'nt': self.script('flock', '#!/bin/sh\nexit 0\n')
         self.script('systemctl', '''#!/bin/bash
 echo "$1" >> "$FIXTURE_ROOT/service-actions"
+if [ "$1" = restart ] && [ "$2" = caddy-updater.service ]; then
+ flock -n "$FIXTURE_ROOT/etc/caddy/updater.lock" true || exit 75
+fi
 if [ "$1" = show ]; then
  case "$2" in
  --property=Description) echo 'Onenew Native Node';;
