@@ -9,6 +9,13 @@ class RepoSettings {public function token(){return 'fixture-repo-key';}}
 class OperatorTasks {public function current($fingerprint){if($fingerprint!=='fixture')throw new \RuntimeException('configuration_changed');return ['model'=>'fixture'];}}
 class Context {public function snapshot($scope){return ['scope'=>$scope];}}
 class Knowledge {public function entries($scope,$question){return [];}}
+class NativeAdminTools {
+    public static array $calls=[];
+    public function catalog($args=[]){self::$calls[]=['catalog',$args];return ['items'=>[['capability'=>'fixture-plan-save','mode'=>'confirm']]];}
+    public function read($admin,$args){self::$calls[]=['read',$admin,$args];return ['items'=>[['id'=>3,'name'=>'Plan']]];}
+    public function prepare($admin,$args){self::$calls[]=['prepare',$admin,$args];return ['id'=>'native-card','kind'=>'native.admin','after'=>['capability'=>$args['capability']]];}
+}
+function app($class){if($class===NativeAdminTools::class)return new NativeAdminTools;throw new \RuntimeException('Unexpected dependency');}
 class OperatorActions {
     public array $reads=[];public array $prepared=[];
     public function catalog(){return [];}
@@ -53,4 +60,16 @@ check($result['trace'][0]['status']==='rejected','Read byte budget not enforced'
 [$result,$client,$actions,$source]=run([['patches'=>[['path'=>'safe.php','old_text'=>'old','new_text'=>'fixture-api-key']]]]);check($result['code_changes']===[]&&$source->proposed===[],'Model credential reached proposal tool');
 [$result,$client]=run(['safe'],'Create target@example.com password natural-secret 密码是中文口令');check(!str_contains(json_encode($client->messages,JSON_UNESCAPED_UNICODE),'natural-secret')&&!str_contains(json_encode($client->messages,JSON_UNESCAPED_UNICODE),'中文口令'),'Natural-language password reached provider');
 try{run([new \RuntimeException('fixture provider error')]);check(false,'Provider exception swallowed');}catch(\RuntimeException $e){check($e->getMessage()==='fixture provider error','Unexpected provider failure');}
+NativeAdminTools::$calls=[];
+[$result,$client]=run([
+    ['reads'=>[['tool'=>'admin.catalog','args'=>['category'=>'plan']]]],
+    ['reads'=>[['tool'=>'admin.read','args'=>['capability'=>'fixture-plan-list','params'=>[]]]]],
+    ['answer'=>'Review native administrator action.','operations'=>[['kind'=>'native.admin','args'=>['capability'=>'fixture-plan-save','params'=>['email'=>'email_ref_1','name'=>'Updated']]]]],
+]);
+check(count(NativeAdminTools::$calls)===3&&count($result['actions'])===1,'Native discovery/read/confirmation proposal not supported');
+check(NativeAdminTools::$calls[2][2]['params']['email']==='target@example.com','Nested native email alias not resolved locally');
+check(!str_contains(json_encode($client->messages),'target@example.com'),'Native email alias leaked to provider');
+NativeAdminTools::$calls=[];
+[$result]=run([['operations'=>[['kind'=>'native.admin','args'=>['capability'=>'fixture','params'=>['email'=>'invented@example.com']]]]]]);
+check(NativeAdminTools::$calls===[]&&$result['actions']===[],'Invented native email reached preparation');
 echo "Operator engine alias isolation, proposal boundary, unknown tools, budgets, redaction and plain-text tests passed\n";

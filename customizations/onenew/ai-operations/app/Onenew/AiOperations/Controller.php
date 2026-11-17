@@ -43,6 +43,12 @@ final class Controller
         catch(\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e){throw $e;}
         catch(\Throwable $e){return response()->json(['message'=>'仓库提交失败，请检查独立仓库设置后使用原请求重试。'],502)->header('Cache-Control','no-store');}
     }
+    public function executeNative(Request $request,string $id,NativeAdminTools $native)
+    {
+        $data=$request->validate(['request_id'=>'required|uuid','confirmed'=>'required|accepted']);
+        abort_unless($request->input('confirmed')===true,422,'请明确确认此管理操作。');
+        return $this->response($native->execute($this->admin($request),$id,$data['request_id']));
+    }
     public function repository(RepoSettings $settings){return $this->response(['repository'=>$settings->view()]);}
     public function saveRepository(Request $request,RepoSettings $settings)
     {
