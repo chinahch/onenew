@@ -93,6 +93,7 @@ jobs:
       - name: Package corresponding native source and build instructions
         if: matrix.arch == 'amd64'
         run: |
+          python3 onenew/customizations/onenew/node/collect_source.py --source prepared
           cp onenew/customizations/onenew/node/BUILDING.md prepared/ONENEW-BUILDING.md
           cp -R onenew/customizations/onenew/node/updater prepared/onenew-updater
           cp onenew/customizations/onenew/node/build.py prepared/onenew-build.py

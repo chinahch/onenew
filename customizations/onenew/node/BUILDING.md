@@ -35,3 +35,10 @@ Xboard-Node baseline or its referenced upstream tree. This distribution does not
 relicense that baseline as MIT. Existing copyright statements and dependency
 licenses remain applicable; upstream provenance is recorded in build-source.json.
 The separately authored assistant license applies only to onenew-updater/.
+
+The archive also contains complete source trees (including licenses) for the Go
+modules used by the dual-kernel build in corresponding-dependencies/. Their exact
+versions and directories are recorded in corresponding-dependencies.json. They
+are supplied for source availability; the normal Go module commands above use
+the pinned go.mod/go.sum. For an offline build, add local module replacements
+for those manifest entries before running the same build commands.
