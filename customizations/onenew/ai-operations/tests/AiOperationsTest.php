@@ -33,6 +33,14 @@ final class AiOperationsTest extends TestCase
         $this->postJson(self::ROOT.'/config',['api_key'=>''],$admin)->assertOk();self::assertSame('fixture-secret-key',app(Config::class)->key());
         $this->postJson(self::ROOT.'/config',['clear_key'=>true],$admin)->assertOk()->assertJsonPath('config.key_configured',false);
     }
+    public function test_unmigrated_ai_schema_returns_an_actionable_error_without_creating_tables():void
+    {
+        $auth=$this->auth();Http::preventStrayRequests();\Illuminate\Support\Facades\Schema::drop('onenew_ai_config');
+        $this->getJson(self::ROOT.'/config',$auth)->assertStatus(503)->assertJsonPath('code','ai_schema_missing');
+        $this->postJson(self::ROOT.'/preview',['question'=>'help','scope'=>'panel'],$auth)->assertStatus(503)->assertJsonPath('code','ai_schema_missing');
+        self::assertFalse(\Illuminate\Support\Facades\Schema::hasTable('onenew_ai_config'));Http::assertNothingSent();
+    }
+
     public function test_preview_is_local_immutable_owned_and_single_send():void
     {
         Http::preventStrayRequests();$a=$this->auth();
