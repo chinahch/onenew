@@ -30,6 +30,8 @@ test('native archive epoch is passed intact and date formatting never uses brows
  await fetchTrafficDay({get,userId:42,recordAt:String(epoch),tab:'domains',page:2});
  assert.equal(calls[0][0],'/api/onenew/admin/traffic/records');assert.equal(calls[0][1].baseURL,'/');
  assert.deepEqual(calls[0][1].params,{user_id:42,page:3,per_page:20});
+ await fetchTrafficDay({get,userId:42,recordAt:epoch,tab:'domains',includeBackground:true});
+ assert.equal(calls[1][1].params.include_background,0);assert.equal(calls[2][1].params.include_background,1);
  assert.equal(calls[1][0],'/api/onenew/admin/traffic/domains');assert.equal(calls[1][1].params.record_at,epoch);
  assert.throws(()=>fetchTrafficDay({get,userId:42,recordAt:epoch*1000}),/秒级/);
  assert.throws(()=>fetchTrafficDay({get,userId:42,recordAt:epoch,tab:'content'}),/类型/);

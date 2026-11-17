@@ -143,6 +143,21 @@ class NodeTrafficTest extends TestCase
             ->assertJsonPath('data.0.hit_count', 1)->assertJsonPath('coverage.state', 'available');
     }
 
+    public function test_background_domains_are_filtered_before_count_and_pagination_without_deleting_history(): void
+    {
+        [$user,$server,$machine]=$this->fixture();admin_setting(['onenew_domain_audit_enable'=>1]);
+        $domains=['www.cloudflare.com','api.example.com','telemetry.example.com','analytics.example.com','metrics.example.com','chatgpt.com','capital.example.com','example.com'];
+        $body=['machine_id'=>$machine->id,'node_id'=>$server['id'],'batch_id'=>(string)\Illuminate\Support\Str::uuid(),
+            'events'=>array_map(fn($domain)=>['user_id'=>$user->id,'domain'=>$domain,'observed_at'=>time()],$domains)];
+        $this->withToken($machine->token)->postJson('/api/v3/server/domain-audit',$body)->assertOk();
+        $this->actingAdmin();$url=$this->url('domains',$user);
+        $this->getJson($url.'&per_page=1')->assertOk()->assertJsonPath('total',3)->assertJsonCount(1,'data');
+        $shown=$this->getJson($url)->assertOk()->json('data');
+        $this->assertEqualsCanonicalizing(['chatgpt.com','capital.example.com','example.com'],array_column($shown,'domain'));
+        $this->getJson($url.'&include_background=1')->assertOk()->assertJsonPath('total',8);
+        $this->assertDatabaseCount('v2_onenew_domain_events',8);
+    }
+
     public function test_domain_settings_retention_and_user_isolation(): void
     {
         [$user, $server, $machine] = $this->fixture();

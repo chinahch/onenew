@@ -12,11 +12,11 @@ export function archiveDay(recordAt,timezone){
 export function fetchTrafficRecords({get,userId,page=1,perPage=20}){
  return get(`${apiRoot}/records`,{baseURL:'/',params:{user_id:integer(userId,'用户'),page:integer(page,'页码'),per_page:integer(perPage,'每页条数')}});
 }
-export function fetchTrafficDay({get,userId,recordAt,tab='nodes',page=1,perPage=20}){
+export function fetchTrafficDay({get,userId,recordAt,tab='nodes',page=1,perPage=20,includeBackground=false}){
  if(!['nodes','domains'].includes(tab))throw new Error('流量明细类型无效');
  const epoch=integer(recordAt,'归档时间');
  if(epoch>=100000000000)throw new Error('归档时间必须使用原始秒级时间戳');
- return get(`${apiRoot}/${tab}`,{baseURL:'/',params:{user_id:integer(userId,'用户'),record_at:epoch,page:integer(page,'页码'),per_page:integer(perPage,'每页条数')}});
+ return get(`${apiRoot}/${tab}`,{baseURL:'/',params:{user_id:integer(userId,'用户'),record_at:epoch,page:integer(page,'页码'),per_page:integer(perPage,'每页条数'),...(tab==='domains'?{include_background:includeBackground?1:0}:{})}});
 }
 export function trafficColumns({react:React,columns,select,timezone}){
  const h=React.createElement;
@@ -46,14 +46,14 @@ function reportTime(value,timezone){
 }
 export function trafficPage(value,pages){if(!/^\d+$/.test(String(value)))return null;const n=Number(value);return Number.isSafeInteger(n)?Math.min(Math.max(1,pages),Math.max(1,n)):null}
 export function TrafficDetails({react:React,get,post,format,userId,selection,onBack}){
- const h=React.createElement,[tab,setTab]=React.useState('nodes'),[page,setPage]=React.useState(1),[result,setResult]=React.useState(null),[busy,setBusy]=React.useState(true),[error,setError]=React.useState(''),[retry,setRetry]=React.useState(0),[setting,setSetting]=React.useState(false),[auditError,setAuditError]=React.useState(''),[jump,setJump]=React.useState('1'),tabRefs=React.useRef([]);
- const requestKey=`${userId}:${selection.recordAt}:${tab}:${page}`,data=result?.key===requestKey?result.data:null;
+ const h=React.createElement,[tab,setTab]=React.useState('nodes'),[page,setPage]=React.useState(1),[result,setResult]=React.useState(null),[busy,setBusy]=React.useState(true),[error,setError]=React.useState(''),[retry,setRetry]=React.useState(0),[setting,setSetting]=React.useState(false),[auditError,setAuditError]=React.useState(''),[jump,setJump]=React.useState('1'),[includeBackground,setIncludeBackground]=React.useState(false),tabRefs=React.useRef([]);
+ const requestKey=`${userId}:${selection.recordAt}:${tab}:${page}:${includeBackground}`,data=result?.key===requestKey?result.data:null;
  React.useEffect(()=>{
   let active=true;setBusy(true);setError('');
   const config=tab==='domains'?get(`${apiRoot}/audit-config`,{baseURL:'/'}).then(value=>({value})).catch(e=>({error:e?.message||'域名收集设置读取失败'})):Promise.resolve(null);
-  Promise.all([fetchTrafficDay({get,userId,recordAt:selection.recordAt,tab,page}),config]).then(([value,audit])=>{if(active)setResult({key:requestKey,data:value,audit})}).catch(e=>{if(active)setError(e?.message||'明细加载失败，请稍后重试')}).finally(()=>{if(active)setBusy(false)});
+  Promise.all([fetchTrafficDay({get,userId,recordAt:selection.recordAt,tab,page,includeBackground}),config]).then(([value,audit])=>{if(active)setResult({key:requestKey,data:value,audit})}).catch(e=>{if(active)setError(e?.message||'明细加载失败，请稍后重试')}).finally(()=>{if(active)setBusy(false)});
   return()=>{active=false};
- },[get,userId,selection.recordAt,tab,page,retry]);
+ },[get,userId,selection.recordAt,tab,page,retry,includeBackground]);
  const prefix=`onenew-traffic-${userId}-${selection.recordAt}`,timezone=data?.timezone||selection.timezone;
  function choose(value,focus=false){setTab(value);setPage(1);if(focus)tabRefs.current[value==='nodes'?0:1]?.focus()}
  function keydown(event,index){let next;if(event.key==='ArrowRight'||event.key==='ArrowLeft')next=1-index;else if(event.key==='Home')next=0;else if(event.key==='End')next=1;else return;event.preventDefault();choose(next?'domains':'nodes',true)}
@@ -83,6 +83,8 @@ export function TrafficDetails({react:React,get,post,format,userId,selection,onB
     tab==='domains'&&h('div',{className:'rounded-md border p-2 space-y-2'},
      auditConfig?h('div',{className:'flex items-center justify-between gap-2'},h('span',{className:'text-xs text-muted-foreground'},'域名元数据收集：',auditConfig.enabled?'已启用':'已停用',` · 保留 ${auditConfig.retention_days} 天`),h('button',{type:'button',className:'rounded-md border px-2 py-1 text-xs',disabled:setting||!post,onClick:toggleAudit},setting?'正在保存…':auditConfig.enabled?'停用域名收集':'启用域名收集')):h('p',{role:'alert',className:'text-xs text-destructive'},audit?.error||'域名收集设置暂不可用',' ',h('button',{type:'button',className:'underline',onClick:()=>setRetry(value=>value+1)},'重试')),
      h('p',{className:'text-xs text-muted-foreground'},'仅收集实际报告的域名、时间、节点及次数，不保存完整 URL 或访问内容。'),
+     h('label',{className:'flex items-center gap-2 text-xs'},h('input',{type:'checkbox',checked:includeBackground,onChange:e=>{setIncludeBackground(e.target.checked);setPage(1)}}),'显示检测及 API / 遥测域名'),
+     !includeBackground&&h('p',{className:'text-xs text-muted-foreground'},'已过滤 Cloudflare 等检测域名，以及 api、telemetry、analytics、metrics 子域名。按域名规则筛选，无法判断是否主动访问；可勾选查看全部。'),
      auditError&&h('p',{role:'alert',className:'text-xs text-destructive'},auditError)),
     tab==='nodes'&&h('p',{className:'text-xs text-muted-foreground'},'本日计费总量 ',trafficValue(data.native_totals?.total,format),' · 已归属节点 ',trafficValue(data.totals?.total,format),' · 未归属 ',trafficValue(data.unattributed?.total,format)),
     coverage&&(tab==='nodes'?coverage.state!=='complete':coverage.state!=='available')&&h('p',{role:'status',className:'rounded-md border p-2 text-xs text-muted-foreground'},coverageNotice(coverage,tab)),
