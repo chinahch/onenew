@@ -33,3 +33,5 @@ Namespace `App\Onenew\AiOperations`:
 
 ## Verification gates
 Auth for all methods, secret write/read/blank/clear; preview no HTTP; scope validation, no credential snapshots, injection cannot change system instruction; pinned snapshots admin-bound/expiry/idempotency; provider auth/transport and error redaction with Http fakes; zero real account requirement. UI route/sidebar/global launcher actual upstream patch integration, keyboard/close/responsive layout, never auto-send on mount or preview. External provider live smoke deferred until owner fills real API; don't claim it tested.
+
+Ruling: selected-node routing suffixes are allowed in preview (max 8 bindings × 20 suffixes), since answering which sites use a landing requires them; raw entry/outbound hosts and credentials remain excluded.

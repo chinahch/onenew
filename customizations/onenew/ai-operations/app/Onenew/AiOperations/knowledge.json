@@ -1,0 +1,156 @@
+[
+  {
+    "id": "boundaries",
+    "title": "回答依据与权限",
+    "scopes": [
+      "all"
+    ],
+    "text": "这是随面板版本维护的功能知识，不是对所有运行路径的实时证明。区分代码设计、当前快照和推测；有数据缺失时明确说明。AI只读，不具备执行命令、修改数据库或远程重启权限；需操作时引导管理员打开原生页面确认，不能声称已执行。编号可复用，历史状态不能仅凭相同编号认定属于当前资源。",
+    "sources": [
+      "customizations/onenew/ai-operations/app/Onenew/AiOperations/Context.php",
+      "customizations/onenew/runtime/install-ids.php"
+    ]
+  },
+  {
+    "id": "limits",
+    "title": "套餐、用户与节点限速",
+    "scopes": [
+      "nodes",
+      "users"
+    ],
+    "text": "套餐 speed_limit 是用户限速设置，开通订单时写入用户；节点 node_speed_limit_mbps 是单节点所有用户共享总带宽，上行和下行分别限速，0表示不限。用户套餐100Mbps不等于全节点共享100Mbps；实际吞吐还受节点总限制、服务器线路、落地和客户端影响。套餐设备/人数容量和权限组是不同规则，不能由速度数值推断。",
+    "sources": [
+      "app/Services/OrderService.php",
+      "customizations/onenew/bandwidth/app/Onenew/NodeBandwidth.php",
+      "customizations/onenew/bandwidth/install.php"
+    ]
+  },
+  {
+    "id": "energy",
+    "title": "能量、补充审核与续期",
+    "scopes": [
+      "users",
+      "orders"
+    ],
+    "text": "能量以原余额1:1显示，整数分为存储单位。申请补充并不增加可用能量，管理员批准后才入账，重复批准不能重复入账。续期在用户锁与事务内调用原生订单计价/抵扣；抵扣足额使待付total_amount为0时，立即走paid并同步开通，无需再审核；不足仍是待处理。request_id保证重试不重复扣能量，不能重置标识来绕过未处理订单。确认弹窗展示的价格是套餐标价，最终按原生优惠/余额规则结算。",
+    "sources": [
+      "customizations/onenew/energy/app/Onenew/Energy/EnergyController.php",
+      "customizations/onenew/user-portal/backend/app/Onenew/PortalController.php",
+      "app/Services/OrderService.php"
+    ]
+  },
+  {
+    "id": "orders",
+    "title": "订单状态与红点",
+    "scopes": [
+      "users",
+      "orders"
+    ],
+    "text": "原生订单状态0待支付、1处理中、2已取消、3已完成、4已折抵。待处理订单红点统计0/1，能量红点只统计pending；后台约15秒刷新，审核后会触发刷新。订单完成和余额足额是不同条件；历史未处理订单不会因AI回答而变更。取消与退款应走原生订单流程，不直接写余额或订单状态。",
+    "sources": [
+      "app/Models/Order.php",
+      "customizations/onenew/admin/src/attention.mjs",
+      "customizations/onenew/energy/app/Onenew/Energy/EnergyController.php"
+    ]
+  },
+  {
+    "id": "subscription",
+    "title": "订阅、权限与到期提示",
+    "scopes": [
+      "users",
+      "nodes"
+    ],
+    "text": "订阅资格与账号禁用状态、有效期、流量和权限组有关。外部节点根据指定用户或权限组加入，并与原生节点共同订阅/排序；不同客户端格式可能受转换能力限制。到期账号允许更新到过期占位节点（本地127.0.0.1:65535），这不是有效代理。用户端域名共享数据，邀请链接沿当前许可域名，订阅链接仍按独立订阅URL设置。重置UUID/订阅会使旧凭据失效，不能把链接发送给第三方。",
+    "sources": [
+      "app/Services/ServerService.php",
+      "customizations/onenew/external/install.php",
+      "customizations/onenew/domains/install.php",
+      "customizations/onenew/protocols/install.php"
+    ]
+  },
+  {
+    "id": "health",
+    "title": "真实代理检测与故障分类",
+    "scopes": [
+      "nodes",
+      "upgrades"
+    ],
+    "text": "机器心跳在线不证明代理链路可用。检测任务由面板调度、节点机领取执行，经过真实代理访问Cloudflare HTTPS检测目标；不是依赖ping。每个节点普通重测最短约60秒，失败等情况有30秒重试间隔；每台机器同一时间一个租约，节点多会排队。任务有效期120秒，结果新鲜度600秒。编辑配置后旧版本结果失效，变更优先重测，仍受下发轮询和单机队列约束，不能承诺零延迟。分阶段区分入口故障、落地故障/部分故障和未知；未完成或检测目标错误不能直接当节点坏。",
+    "sources": [
+      "customizations/onenew/health/app/Onenew/ProbeService.php",
+      "customizations/onenew/health/app/Onenew/ProbeOutboundBuilder.php",
+      "customizations/onenew/health/app/Onenew/ProbeStages.php"
+    ]
+  },
+  {
+    "id": "cdn",
+    "title": "CDN、Argo、TLS及NAT",
+    "scopes": [
+      "nodes"
+    ],
+    "text": "CDN/Argo支持的传输应区分客户端TLS入口与本地明文监听；本地未配公网证书不代表CF入口不可用。兼容CDN检测有单独入口来源，可能使用ip.sb:443并保留SNI/Host；NAT回环受限时使用本地回退并明确检测来源。Cloudflare Origin CA用于CF到源站，不能据本地系统不信任Origin CA断言用户入口证书有问题。必须根据检测来源和错误分层，不应把SNI探测成功说成原IP公开入口已验证。",
+    "sources": [
+      "customizations/onenew/health/app/Onenew/ProbeOutboundBuilder.php",
+      "customizations/onenew/health/app/Onenew/ProbeStages.php",
+      "customizations/onenew/node/README.md"
+    ]
+  },
+  {
+    "id": "landing",
+    "title": "落地库、分流与出口优先",
+    "scopes": [
+      "nodes"
+    ],
+    "text": "落地统一保存在落地库供节点选择复用；节点主编辑表单绑定并排序分流规则，全局落地应在最后。落地测试从选中节点归属服务器实际走临时本地SOCKS出口，不应只测面板机能否连通。复制节点会清除落地绑定/路由，防止复制旧落地。高级TLS设置的证书推送和落地链接认证都属于敏感信息，不能发给AI。服务器IPv4/IPv6优先是整台caddy默认，节点可单独覆盖；优先不是强制固定IP，实际要看DNS/线路/出口。",
+    "sources": [
+      "customizations/onenew/landing-library/app/Onenew/LandingLibrary/Compiler.php",
+      "customizations/onenew/exit-probe/app/Onenew/ExitProbeService.php",
+      "customizations/onenew/egress/app/Onenew/MachineEgress.php",
+      "customizations/onenew/admin/src/unified-nodes.mjs"
+    ]
+  },
+  {
+    "id": "audit",
+    "title": "流量明细、访问域名与订阅拉取日志",
+    "scopes": [
+      "users",
+      "nodes"
+    ],
+    "text": "访问域名只记录实际节点上报的域名、时间、节点和命中次数，不是完整URL或访问内容，也不能证明用户主动打开网站。默认过滤Cloudflare等检测主机和api/telemetry/analytics/metrics首级子域名，可显示全部；过滤在计数和分页之前，原记录仍按保留期限清理。订阅日志按所选用户显示，同一用户同一天相同IP只展示最近一次，保留原始审计；本地IP数据库识别中文归属地及运营商，可能不准或未知，不能据此认定共享。",
+    "sources": [
+      "customizations/onenew/traffic/app/Onenew/Traffic/TrafficController.php",
+      "customizations/onenew/runtime/app/Onenew/SubscriptionLogs.php",
+      "customizations/onenew/runtime/app/Onenew/IpRegion.php"
+    ]
+  },
+  {
+    "id": "backup",
+    "title": "备份恢复与Google云盘",
+    "scopes": [
+      "backups",
+      "upgrades"
+    ],
+    "text": "备份包是加密.onm，保留数据库、APP_KEY、订阅及节点凭据等；不是节点二进制快照。上传验证不会恢复：先验密码/完整性、展示备份与当前计数，二次确认后才维护恢复；恢复前创建回滚备份，失败回滚，成功重新登录。迁移沿用原面板域名时节点通常无需重装，还需切换DNS/反代/隧道。Google备份使用自己的OAuth，按北京时间自定义每日时刻，显示最近尝试和最近成功；恢复后云备份暂停以避免误上传，缓存会话和运行队列不照搬。没有凭据或运行数据不能声称云盘上传成功。",
+    "sources": [
+      "customizations/onenew/web-restore/app/Onenew/WebRestore/Service.php",
+      "customizations/onenew/cloud-backup/app/Onenew/CloudBackup/Service.php",
+      "customizations/onenew/cloud-backup/app/Onenew/CloudBackup/Schedule.php",
+      "customizations/onenew/migration/restore.sh"
+    ]
+  },
+  {
+    "id": "upgrade",
+    "title": "caddy升级与配置下发",
+    "scopes": [
+      "upgrades",
+      "nodes"
+    ],
+    "text": "服务进程使用caddy。旧节点需先执行一次后台提供的升级命令安装独立caddy-updater，自动复用本机绑定和Token；Alpine缺flock时需util-linux。之后管理员可在面板单台/批量下发官方允许版本，不是任意脚本。助手校验官方下载与SHA，保留配置/凭据，健康失败尝试回滚；等待任务24小时过期，离线排队不占执行槽，全局同时1台。新配置随轮询同步，进程心跳在线不代表所有配置已应用，AI不能把查询当成已执行升级或重新检测。",
+    "sources": [
+      "customizations/onenew/remote-upgrade/app/Onenew/RemoteUpgrade/UpgradeService.php",
+      "customizations/onenew/node/install.sh",
+      "customizations/onenew/node/updater/transaction.go",
+      "customizations/onenew/health/app/Onenew/ProbeService.php"
+    ]
+  }
+]
