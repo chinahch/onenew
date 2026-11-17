@@ -110,6 +110,14 @@ export function patchBundle(source,runtime){
     const part=source.slice(pos,end),patched=replaceOnce(part,'icon:Q.jsx('+icon+',{size:18})','icon:Q.jsx(OnenewAdmin.AttentionIcon,{react:H,get:IL,kind:"'+kind+'",icon:Q.jsx('+icon+',{size:18})})');
     source=source.slice(0,pos)+patched+source.slice(end);
   }
+  source=replaceOnce(source,'Vlt=[','Vlt=[{id:"ai-operations",title:"AI运维助手",label:"",href:"/ai-operations",icon:Q.jsx(Zm,{size:18})},');
+  source=replaceOnce(source,'{path:"config",errorElement:','{path:"ai-operations",element:Q.jsx(OnenewAdmin.AiPage,{react:H,get:IL,post:RL,Link:jg,useLocation:ig})},{path:"config",errorElement:');
+  source=replaceOnce(source,'{path:"subscribe-template",element:Q.jsx(WQe,{})}','{path:"ai",element:Q.jsx(OnenewAdmin.AiSettings,{react:H,get:IL,post:RL})},{path:"subscribe-template",element:Q.jsx(WQe,{})}');
+  source=replaceOnce(source,'const KGt=[','const KGt=[{title:"AI运维助手设置",key:"ai",icon:Q.jsx(Zm,{size:18}),href:"/config/system/ai",description:"API、模型与密钥配置"},');
+  const shellStart=source.indexOf('const sct='),shellEnd=source.indexOf('var oct=',shellStart);
+  if(shellStart<0||shellEnd<0)throw new Error('已认证管理布局锚点不存在');
+  const shell=replaceOnce(source.slice(shellStart,shellEnd),'children:Q.jsx(vg,{})})]})','children:Q.jsx(vg,{})}),Q.jsx(OnenewAdmin.AiLauncher,{react:H,get:IL,post:RL,Link:jg,useLocation:ig})]})');
+  source=source.slice(0,shellStart)+shell+source.slice(shellEnd);
   return runtime+'\n'+source;
 }
 
