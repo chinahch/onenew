@@ -8,6 +8,13 @@ use Illuminate\Support\Str;
 final class EnergyController
 {
     private const FIELDS=['e.id','e.user_id','e.amount_cents','e.status','e.created_at','e.reviewed_at','e.reviewer_id','e.note','e.balance_before','e.balance_after'];
+    public function attention()
+    {
+        return response()->json([
+            'orders'=>\App\Models\Order::whereIn('status',[0,1])->count(),
+            'energy'=>DB::table('onenew_energy_requests')->where('status','pending')->count(),
+        ])->header('Cache-Control','no-store');
+    }
     public function index(Request $r)
     {
         $r->validate(['page'=>'sometimes|integer|min:1']);

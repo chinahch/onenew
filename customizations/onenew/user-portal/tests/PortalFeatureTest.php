@@ -94,6 +94,23 @@ final class PortalFeatureTest extends TestCase
         $this->postJson('/api/onenew/user/renewals',[...$body,'period'=>'quarterly'],$headers)->assertStatus(409);
     }
 
+    public function test_sufficient_energy_activates_renewal_once_and_insufficient_energy_stays_pending(): void
+    {
+        $plan=Plan::create(['name'=>'Energy renewal','transfer_enable'=>100,'show'=>true,'sell'=>true,'renew'=>true,'prices'=>['monthly'=>20]]);
+        foreach ([2500,2000,500] as $balance) {
+            $user=$this->account();$user->plan_id=$plan->id;$user->balance=$balance;$user->save();$expiry=$user->expired_at;
+            $headers=$this->headersFor($user);$body=['request_id'=>bin2hex(random_bytes(16)),'period'=>'monthly'];
+            $result=$this->postJson('/api/onenew/user/renewals',$body,$headers)->assertOk()
+                ->assertJsonPath('status',$balance>=2000?'approved':'pending');
+            $trade=$result->json('id');$remaining=$user->fresh()->balance;$newExpiry=$user->fresh()->expired_at;
+            $this->assertEquals(max(0,$balance-2000),$remaining);
+            if ($balance>=2000) $this->assertGreaterThan($expiry,$newExpiry); else $this->assertEquals($expiry,$newExpiry);
+            $this->postJson('/api/onenew/user/renewals',$body,$headers)->assertOk()->assertJsonPath('id',$trade);
+            $this->assertEquals($remaining,$user->fresh()->balance);$this->assertEquals($newExpiry,$user->fresh()->expired_at);
+            $this->assertEquals(1,Order::where('user_id',$user->id)->count());
+        }
+    }
+
     public function test_other_account_cannot_cancel_order_or_replay_its_request(): void
     {
         $a=$this->account();$b=$this->account();

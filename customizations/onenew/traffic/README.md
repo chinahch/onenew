@@ -151,3 +151,12 @@ opt-in/domain validation, retention, replay and user isolation. Test-only Redis
 cache aliases use the array driver because native settings explicitly select the
 Redis store. Production cache configuration is unchanged. Native collector/kernel
 and complete browser flow verification remain separate integration checks.
+
+
+Domain view filters health-check hosts (`www.cloudflare.com`, `cloudflare.com`,
+`cp.cloudflare.com`, `connectivitycheck.gstatic.com`, `www.gstatic.com`) and
+first-label `api`, `telemetry`, `analytics`, `metrics` domains by default. SQL
+filtering runs before grouping, totals and pagination, including existing history.
+The admin can enable “显示检测及 API / 遥测域名” (`include_background=1`) to inspect
+all retained events. This is a hostname heuristic, not proof of user intent;
+raw records remain subject to the existing retention policy.
