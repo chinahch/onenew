@@ -97,6 +97,17 @@ export function patchBundle(source,runtime){
     'shadowsocks:{schema:h4t(t).extend({onenew_transport_managed:uy().default(!1),tls:yy().default(0),network:cy().default("tcp"),network_settings:fy(hy()).nullable().optional(),tls_settings:fy(hy()).default({}),cert_config:e.optional().default({cert_mode:"none"})}),component:e=>Q.jsxs(Q.Fragment,{children:[Q.jsx(p4t,e),Q.jsx(OnenewAdmin.ShadowsocksTransport,{react:H,form:e.form})]})}');
   source=replaceOnce(source,'app_url:cy().nullable().default(""),subscribe_url:','app_url:cy().nullable().default(""),user_frontend_urls:gy(cy()).default([]),subscribe_url:');
   source=replaceOnce(source,'Q.jsx($y,{control:o.control,name:"force_https",','Q.jsx(OnenewAdmin.UserDomainsField,{react:H,form:o}),Q.jsx($y,{control:o.control,name:"force_https",');
+  for(const [href,icon,kind] of [['/finance/order','ef','orders'],['/config/system','qm','energy']]) {
+    const before='href:"'+href+'",icon:Q.jsx('+icon+',{size:18})';
+    source=replaceOnce(source,before,'href:"'+href+'",icon:Q.jsx(OnenewAdmin.AttentionIcon,{react:H,get:IL,kind:"'+kind+'",icon:Q.jsx('+icon+',{size:18})})');
+  }
+  source=replaceOnce(source,'title:"能量补充审核",key:"energy",icon:Q.jsx(Zm,{size:18})','title:"能量补充审核",key:"energy",icon:Q.jsx(OnenewAdmin.AttentionIcon,{react:H,get:IL,kind:"energy",icon:Q.jsx(Zm,{size:18})})');
+  for(const [id,icon,kind] of [['system-management','bf','energy'],['subscription-management','Ym','orders']]) {
+    const pos=source.indexOf('id:"'+id+'"'),end=source.indexOf('sub:[',pos);
+    if(pos<0||end<0)throw new Error('待办导航锚点不存在');
+    const part=source.slice(pos,end),patched=replaceOnce(part,'icon:Q.jsx('+icon+',{size:18})','icon:Q.jsx(OnenewAdmin.AttentionIcon,{react:H,get:IL,kind:"'+kind+'",icon:Q.jsx('+icon+',{size:18})})');
+    source=source.slice(0,pos)+patched+source.slice(end);
+  }
   return runtime+'\n'+source;
 }
 

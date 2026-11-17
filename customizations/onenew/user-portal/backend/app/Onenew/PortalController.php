@@ -115,10 +115,14 @@ final class PortalController extends Controller
             abort_unless(in_array($input['period'],array_column($allowed,'period'),true),422,'请选择可用的续期周期');
             $pending=Order::where('user_id',$user->id)->whereIn('status',[0,1])->first();
             abort_if($pending,409,'已有待支付或处理中的订单，请先处理或取消');
-            // Native service validates purchases, reserves balance and creates a pending order.
-            // It never calls paid/open: payment or the existing XB admin must confirm.
+            // Native pricing reserves confirmed balance first. Only a fully covered order may be paid automatically.
             $order=OrderService::createFromRequest($user,$plan,$input['period']);
             DB::table('onenew_user_requests')->insert(['user_id'=>$user->id,'request_hash'=>$hash,'period'=>$input['period'],'trade_no'=>$order->trade_no,'created_at'=>time()]);
+            if ((int)$order->total_amount === 0) {
+                abort_unless((new OrderService($order))->paid($order->trade_no),500,'能量续期未完成，请重试');
+                $order->refresh();
+                abort_unless((int)$order->status === Order::STATUS_COMPLETED,500,'续期未生效，请重试');
+            }
             return response()->json(PortalData::order($order->load('plan')));
         },3);
     }
