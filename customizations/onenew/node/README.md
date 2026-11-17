@@ -1,3 +1,34 @@
+# 当前版本：node-v0.1.12 远程升级
+
+升级安装器需要 `flock`；Alpine 缺少时先运行 `apk add util-linux`。
+新安装会同时安装独立 `caddy-updater` 服务。已有原生 systemd 或 Alpine
+OpenRC 节点需先进行一次引导升级，root 执行：
+
+```bash
+bash <(curl -fsSL https://get.timi.baby/upgrade || printf '\nexit 1\n')
+```
+
+这条简短升级命令从现有配置只读识别唯一机器绑定，从权限受限的凭据文件
+读取 Token；不需要重新输入，不通过 shell source/eval 读取文件。多机器或
+歧义配置会安全拒绝。也可使用服务器详情里带完整绑定的升级命令。
+
+引导后等待服务器管理显示“助手在线”，再选择单台或多台服务器和官方目标
+版本，确认服务器数量及短暂断线提示后提交。任务在刷新页面后仍存在，离线
+任务等待上线，24 小时未领取会过期；全局每次只执行一台。已安装目标版本
+的服务器显示当前版本，无需再次升级。只能取消未领取的等待任务。
+
+助手独立于 caddy 服务，替换 caddy/caddyctl 后核对实际版本及匹配机器健康，
+失败恢复原二进制。断电恢复读取持久事务日志；已完成结果会重试上报。
+现有配置、证书、Token 和 caddy 服务定义保留。后续官方版本由面板固定目录
+允许，助手独立核对固定公开仓库 HTTPS 和官方 SHA256，不接受任意 URL、
+脚本或远程 shell，不宣称已对构建签名。助手在线时手工安装器拒绝并发替换。
+
+查看服务：systemd 使用 `systemctl status caddy-updater`，Alpine 使用
+`rc-service caddy-updater status`。升级任务不自动替换助手自身；未来节点版本
+可由当前助手安装，助手的修复需要单独安排维护窗口。
+
+以下为历史版本记录，当前行为以上述 v0.1.12 说明为准。
+
 # Onenew 原生节点
 
 节点机不需要 Docker。服务/进程继续叫 `caddy`，命令为 `caddyctl`，配置保留 `/etc/caddy`；这是代理节点二进制，不是 Caddy Web Server。

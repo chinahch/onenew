@@ -12,13 +12,16 @@ class InstallerTest(unittest.TestCase):
         self.bin.mkdir()
         self.package = self.root / 'onenew-node-linux-amd64.tar.gz'
         with tarfile.open(self.package, 'w:gz') as archive:
-            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.11 (built fixture)"\n'), ('caddyctl', '#!/bin/sh\nexit 0\n')]:
+            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.12 (built fixture)"\n'), ('caddyctl', '#!/bin/sh\nexit 0\n')]:
                 data = content.encode()
                 info = tarfile.TarInfo(name)
                 info.size, info.mode = len(data), 0o755
                 archive.addfile(info, io.BytesIO(data))
         self.sums = self.root / 'SHA256SUMS-amd64'
         self.sums.write_text(hashlib.sha256(self.package.read_bytes()).hexdigest() + '  ' + self.package.name + '\n')
+        updater = self.root / 'caddy-updater-linux-amd64'
+        updater.write_text('#!/bin/sh\nexit 0\n')
+        (self.root / 'SHA256SUMS-updater-amd64').write_text(hashlib.sha256(updater.read_bytes()).hexdigest() + '  ' + updater.name + '\n')
         self.script('uname', '#!/bin/sh\necho x86_64\n')
         self.script('systemctl', '#!/bin/sh\necho SERVICE-MUST-NOT-RUN >&2\nexit 99\n')
         self.script('curl', '''#!/bin/bash
@@ -76,7 +79,7 @@ cp "$FIXTURE_ROOT/${url##*/}" "$dest"
     def test_valid_release_checks_without_service_changes_or_secret_output(self):
         result = self.run_installer()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('Verified onenew-v0.1.11', result.stdout)
+        self.assertIn('Verified onenew-v0.1.12', result.stdout)
         self.assertNotIn('fixture-private-token', result.stdout + result.stderr)
         self.assertNotIn('SERVICE-MUST-NOT-RUN', result.stderr)
 

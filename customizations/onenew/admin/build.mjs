@@ -20,10 +20,11 @@ let esbuild;
 if(process.env.ONENEW_ESBUILD_MODULE)esbuild=await import(pathToFileURL(path.resolve(process.env.ONENEW_ESBUILD_MODULE)).href);
 else esbuild=await import('esbuild');
 if(esbuild.version!=='0.28.2')throw new Error('需要 esbuild 0.28.2');
-const modules=new Map(await Promise.all(['component.mjs','attention.mjs','rules.mjs','traffic.mjs','landing-state.mjs','landing-probe.mjs','resources.mjs','migration.mjs','cloud-backup.mjs','web-restore.mjs','energy.mjs','unified-nodes.mjs','bandwidth.mjs','subscription-logs.mjs','landing-library.mjs','user-domains.mjs','upgrade-command.mjs','shadowsocks-transport.mjs','catalog.json'].map(async file=>[file,await fs.readFile(path.join(here,'src',file),'utf8')])));
+const modules=new Map(await Promise.all(['component.mjs','attention.mjs','rules.mjs','traffic.mjs','landing-state.mjs','landing-probe.mjs','resources.mjs','migration.mjs','cloud-backup.mjs','web-restore.mjs','energy.mjs','unified-nodes.mjs','bandwidth.mjs','subscription-logs.mjs','landing-library.mjs','user-domains.mjs','upgrade-command.mjs','remote-upgrade.mjs','shadowsocks-transport.mjs','catalog.json'].map(async file=>[file,await fs.readFile(path.join(here,'src',file),'utf8')])));
 modules.set('component.mjs',modules.get('component.mjs')+"\nexport * from './traffic.mjs';\nexport * from './resources.mjs';\nexport * from './migration.mjs';\nexport * from './energy.mjs';\nexport * from './unified-nodes.mjs';\nexport * from './bandwidth.mjs';\nexport * from './subscription-logs.mjs';\nexport * from './landing-library.mjs';\nexport * from './upgrade-command.mjs';\nexport * from './user-domains.mjs';\nexport * from './shadowsocks-transport.mjs';\n");
 modules.set('component.mjs',modules.get('component.mjs')+"\nexport * from './attention.mjs';\n");
 // A virtual namespace prevents dependency/tsconfig walks outside the customization tree.
+modules.set('component.mjs',modules.get('component.mjs')+"\nexport * from './remote-upgrade.mjs';\n");
 const runtime=await esbuild.build({entryPoints:['component.mjs'],bundle:true,write:false,format:'iife',globalName:'OnenewAdmin',target:'es2022',minify:true,legalComments:'inline',tsconfigRaw:{},plugins:[{
   name:'onenew-local-source',setup(build){
     build.onResolve({filter:/.*/},args=>{const name=args.path.replace(/^\.\//,'');if(!modules.has(name))throw new Error(`意外依赖：${args.path}`);return {path:name,namespace:'onenew'}});

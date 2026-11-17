@@ -3,7 +3,7 @@ import argparse, gzip, hashlib, io, json, os, subprocess, tarfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = 'onenew-v0.1.11'
+VERSION = 'onenew-v0.1.12'
 UPSTREAM = '0a29338e1f102a462363ce3527417029f89bab28'
 
 def validate_source(source):
@@ -52,7 +52,7 @@ def build(source, arch, out):
     brand(source)
     out.mkdir(parents=True, exist_ok=True)
     folder = out / arch
-    folder.mkdir()
+    folder.mkdir(exist_ok=True)
     epoch = manifest['source_date_epoch']
     stamp = datetime.fromtimestamp(epoch, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     env = {**os.environ, 'CGO_ENABLED': '0', 'GOOS': 'linux', 'GOARCH': arch, 'GOAMD64': 'v1'}
@@ -62,6 +62,13 @@ def build(source, arch, out):
         if name == 'caddy':
             command += ['-tags', 'with_quic with_utls with_wireguard with_acme with_clash_api']
         subprocess.run(command + ['-o', str(folder / name), target], cwd=source, env=env, check=True)
+    updater_source = Path(__file__).resolve().parent / 'updater'
+    updater_name = f'caddy-updater-linux-{arch}'
+    subprocess.run(['go', 'build', '-mod=readonly', '-trimpath', '-buildvcs=false',
+                    '-ldflags', '-s -w',
+                    '-o', str(out / updater_name), '.'], cwd=updater_source, env=env, check=True)
+    (out / f'SHA256SUMS-updater-{arch}').write_text(
+        hashlib.sha256((out / updater_name).read_bytes()).hexdigest() + '  ' + updater_name + '\n', encoding='utf-8')
     content = archive(folder, epoch)
     name = f'onenew-node-linux-{arch}.tar.gz'
     (out / name).write_bytes(content)

@@ -17,10 +17,14 @@ class OnenewServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Fleet agents commonly share an egress IP; isolate quotas by credential without exposing it.
+        \Illuminate\Support\Facades\RateLimiter::for('onenew-upgrade-machine',fn (\Illuminate\Http\Request $request) =>
+            \Illuminate\Cache\RateLimiting\Limit::perMinute(30)->by(hash('sha256',(string)$request->input('machine_id').'|'.(string)$request->bearerToken())));
         $root = '/opt/onenew';
         $this->loadMigrationsFrom($root . '/user-portal/backend/database/migrations');
         $this->loadMigrationsFrom($root . '/traffic/database/migrations');
         $this->loadMigrationsFrom($root . '/runtime/database/migrations');
+        $this->loadMigrationsFrom($root . '/remote-upgrade/database/migrations');
         $this->loadMigrationsFrom($root . '/external/database/migrations');
         $this->loadMigrationsFrom($root . '/egress/database/migrations');
         $this->loadMigrationsFrom($root . '/energy/database/migrations');
@@ -31,6 +35,7 @@ class OnenewServiceProvider extends ServiceProvider
         require $root . '/user-portal/backend/routes.php';
         require $root . '/traffic/routes.php';
         require $root . '/exit-probe/routes.php';
+        require $root . '/remote-upgrade/routes.php';
         require $root . '/landing-library/routes.php';
         require $root . '/external/routes.php';
         require $root . '/egress/routes.php';
