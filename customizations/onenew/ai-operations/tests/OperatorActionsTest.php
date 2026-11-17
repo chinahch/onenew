@@ -34,7 +34,7 @@ final class OperatorActionsTest extends TestCase
     public function test_create_uses_secure_local_password_and_no_role_grant(): void
     {
         $a=app(OperatorActions::class);$email='new-admin-created@example.test';$card=$a->prepare(1,'user.create',['email'=>$email,'days'=>10]);
-        self::assertFalse(User::where('email',$email)->exists());self::assertStringNotContainsString('password',json_encode($card));
+        self::assertFalse(User::where('email',$email)->exists());self::assertArrayNotHasKey('credentials',$card);self::assertArrayNotHasKey('password',$card['after']);
         $result=$a->execute(1,$card['id'],(string)Str::uuid());$u=User::where('email',$email)->firstOrFail();
         self::assertTrue(password_verify($result['credentials']['password'],$u->password));self::assertFalse((bool)$u->is_admin);
         self::assertStringNotContainsString($result['credentials']['password'],json_encode(DB::table('onenew_ai_action_audit')->first()));
@@ -51,6 +51,33 @@ final class OperatorActionsTest extends TestCase
     {
         $this->expectException(\Illuminate\Validation\ValidationException::class);
         app(OperatorActions::class)->prepare(1,'user.create',['email'=>'example@example.test','password'=>'injected-password','is_admin'=>true]);
+    }
+    public function test_live_traffic_and_login_changes_do_not_invalidate_duration_confirmation(): void
+    {
+        $u=$this->user();$a=app(OperatorActions::class);$card=$a->prepare(1,'user.extend',['user_id'=>$u->id,'amount'=>1,'unit'=>'days']);
+        DB::table('v2_user')->where('id',$u->id)->update(['u'=>123,'d'=>456,'balance'=>999,'last_login_at'=>time(),'updated_at'=>time()+1]);
+        $a->execute(1,$card['id'],(string)Str::uuid());$u->refresh();self::assertSame(123,(int)$u->u);self::assertSame(999,(int)$u->balance);
+    }
+    public function test_machine_heartbeat_and_node_traffic_do_not_invalidate_copy(): void
+    {
+        $machine=\App\Models\ServerMachine::create(['name'=>'Heartbeat machine','token'=>Str::random(32)]);
+        $node=Server::create(['name'=>'Template live','type'=>'shadowsocks','host'=>'example.test','port'=>443,'server_port'=>443,'rate'=>1,'group_ids'=>[],'protocol_settings'=>['cipher'=>'aes-128-gcm']]);
+        $a=app(OperatorActions::class);$card=$a->prepare(1,'node.create',['template_node_id'=>$node->id,'machine_id'=>$machine->id,'name'=>'Heartbeat clone','host'=>'clone.example.test','port'=>8443,'server_port'=>8443]);
+        self::assertFalse($card['after']['enabled']);self::assertStringContainsString('disabled draft',$card['after']['effect']);
+        DB::table('v2_server_machine')->where('id',$machine->id)->update(['last_seen_at'=>time(),'load_status'=>json_encode(['cpu'=>12]),'updated_at'=>time()+1]);
+        DB::table('v2_server')->where('id',$node->id)->update(['u'=>100,'d'=>200,'updated_at'=>time()+1]);
+        $r=$a->execute(1,$card['id'],(string)Str::uuid());self::assertNotNull(Server::find($r['target_id']));
+    }
+    public function test_default_trial_plan_and_expiry_are_frozen_in_confirmation(): void
+    {
+        $old=['try_out_plan_id'=>admin_setting('try_out_plan_id',0),'try_out_hour'=>admin_setting('try_out_hour',1)];
+        try {
+            $plan=\App\Models\Plan::create(['name'=>'Trial fixture','transfer_enable'=>10,'show'=>true,'sell'=>false,'renew'=>false,'prices'=>[]]);admin_setting(['try_out_plan_id'=>$plan->id,'try_out_hour'=>12]);
+            $a=app(OperatorActions::class);$card=$a->prepare(1,'user.create',['email'=>'trial-confirm@example.test']);self::assertSame($plan->id,$card['after']['plan_id']);self::assertNotNull($card['after']['expiry']);
+            $this->travel(60)->seconds();$r=$a->execute(1,$card['id'],(string)Str::uuid());$u=User::findOrFail($r['target_id']);
+            self::assertSame($plan->id,(int)$u->plan_id);self::assertSame(10*1073741824,(int)$u->transfer_enable);
+            self::assertSame($card['after']['expiry'],\Carbon\CarbonImmutable::createFromTimestamp((int)$u->expired_at,config('app.timezone','UTC'))->format('Y-m-d H:i:s T (P)'));
+        } finally {$this->travelBack();admin_setting($old);}
     }
     public function test_failed_native_creation_rolls_back_audit_and_user(): void
     {

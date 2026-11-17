@@ -50,6 +50,11 @@ final class OperatorActions
             if(isset($args['email'])&&is_string($args['email']))$args['email']=User::normalizeEmail($args['email']);
             Validator::make($args,['email'=>'required|email|max:254|unique:v2_user,email','plan_id'=>'nullable|integer|exists:v2_plan,id','days'=>'nullable|integer|min:1|max:3650|prohibits:expired_at','expired_at'=>'nullable|integer|min:1|prohibits:days'])->validate();
             if(isset($args['days'])){$args['expired_at']=now()->addDays((int)$args['days'])->timestamp;unset($args['days']);}
+            if(!isset($args['plan_id'])){
+                $args['trial_config']=$this->trialConfig();
+                $trial=Plan::find($args['trial_config']['plan_id']);
+                if($trial){$args['plan_id']=$trial->id;if(!isset($args['expired_at']))$args['expired_at']=now()->addHours($args['trial_config']['hours'])->timestamp;}
+            }
             if(isset($args['plan_id']))$snapshot[]=$this->snapshot(Plan::findOrFail($args['plan_id']));
             $after=['email'=>$args['email'],'plan_id'=>$args['plan_id']??null,'expiry'=>$this->date($args['expired_at']??null),'initial_password'=>'Generated securely and shown locally after confirmation'];
         }elseif($kind==='user.extend'){
@@ -65,13 +70,14 @@ final class OperatorActions
             $before=$this->nodeView($node);$before['effect']=$delete?'This exact node will be removed from subscriptions. Its machine remains.':'Current node';
             if(!$delete){
                 $rules=['name'=>($create?'required':'sometimes').'|string|max:255','host'=>($create?'required':'sometimes').'|string|max:255','port'=>($create?'required':'sometimes').'|integer|between:1,65535','server_port'=>($create?'required':'sometimes').'|integer|between:1,65535','show'=>'sometimes|boolean','enabled'=>'sometimes|boolean','machine_id'=>'nullable|integer|exists:v2_server_machine,id','group_ids'=>'sometimes|array|max:50','group_ids.*'=>'integer|distinct|exists:v2_server_group,id','node_speed_limit_mbps'=>'nullable|numeric|min:0|max:1000000'];Validator::make($args,$rules)->validate();
-                if(isset($args['machine_id']))$snapshot[]=$this->snapshot(ServerMachine::findOrFail($args['machine_id']));
-                foreach($args['group_ids']??[] as $id)$snapshot[]=$this->snapshot(ServerGroup::findOrFail($id));
+                $machineId=array_key_exists('machine_id',$args)?$args['machine_id']:$node->machine_id;
+                if($machineId)$snapshot[]=$this->snapshot(ServerMachine::findOrFail($machineId));
+                foreach($args['group_ids']??$node->group_ids??[] as $id)$snapshot[]=$this->snapshot(ServerGroup::findOrFail($id));
                 $data=$node->attributesToArray();unset($data['id'],$data['created_at'],$data['updated_at']);
                 if($create){foreach(['onenew_identity','code','spectific_key'] as $key)unset($data[$key]);foreach(['u','d'] as $key)$data[$key]=0;foreach(['last_check_at','last_push_at'] as $key)unset($data[$key]);$data['parent_id']=null;$data['enabled']=false;foreach(['onenew_landing_bindings','custom_routes','custom_outbounds','route_ids'] as $key)$data[$key]=[];}
                 foreach(self::NODE_FIELDS as $key)if(array_key_exists($key,$args))$data[$key]=$args[$key];
                 $request=ServerSave::create('/','POST',$data);Validator::make($data,$request->rules(),$request->messages())->validate();
-                $args['data']=$data;$after=array_intersect_key($data,array_flip(self::NODE_FIELDS));
+                $args['data']=$data;$after=array_intersect_key($data,array_flip(self::NODE_FIELDS));if($create)$after['effect']='Create a disabled draft; review and enable the node separately.';
             }else $after=['deleted'=>true,'machine_deleted'=>false];
         }else $this->invalid('kind','Unknown administrator operation.');
         $id=(string)Str::uuid();$card=['id'=>$id,'kind'=>$kind,'title'=>$kind,'summary'=>'Review the exact target and changes, then explicitly confirm.','before'=>$before,'after'=>$after,'expires_at'=>time()+600];
@@ -90,6 +96,7 @@ final class OperatorActions
                 $targets=[];foreach($p['snapshots'] as $s){$model=$s['class']::query()->lockForUpdate()->find($s['id']);abort_unless($model&&hash_equals($s['hash'],$this->fingerprint($model)),409,'Target changed; prepare a new action.');$targets[$s['class'].':'.$s['id']]=$model;}
                 $a=$p['args'];$kind=$p['card']['kind'];$result=['id'=>$id,'kind'=>$kind,'status'=>'succeeded'];
                 if($kind==='user.create'){
+                    if(isset($a['trial_config']))abort_unless($a['trial_config']===$this->trialConfig(),409,'Default trial configuration changed; prepare a new action.');
                     abort_if(User::where('email',$a['email'])->exists(),409,'Email already exists.');$password=bin2hex(random_bytes(24));$user=app(UserService::class)->createUser(array_merge($a,['password'=>$password]));
                     // Trial defaults must not override an explicit administrator expiry.
                     if(isset($a['expired_at']))$user->expired_at=$a['expired_at'];$user->saveOrFail();$result['target_id']=$user->id;$result['credentials']=['password'=>$password];
@@ -106,7 +113,16 @@ final class OperatorActions
     private function nodeView(Server $node): array {return array_intersect_key($node->attributesToArray(),array_flip(array_merge(['id','type'],self::NODE_FIELDS)));}
     private function key(int $admin,string $id): string{return 'onenew:ai:action:'.$admin.':'.$id;}
     private function snapshot($model): array{return ['class'=>get_class($model),'id'=>$model->getKey(),'hash'=>$this->fingerprint($model)];}
-    private function fingerprint($model): string{$raw=$model->getRawOriginal();ksort($raw);return hash('sha256',json_encode($raw,JSON_THROW_ON_ERROR));}
+    private function fingerprint($model): string
+    {
+        $raw=$model->getRawOriginal();
+        // Heartbeats, counters, balances and login activity do not change the
+        // reviewed identity/configuration and must not expire confirmation cards.
+        $live=['updated_at','u','d','last_seen_at','load_status','last_check_at','last_push_at','online','online_conn','metrics'];
+        if($model instanceof User)$live=array_merge($live,['balance','commission_balance','last_login_at','last_login_ip','last_checkin_at','last_checkin_time','next_reset_at','last_reset_at','reset_count']);
+        foreach($live as $key)unset($raw[$key]);ksort($raw);return hash('sha256',json_encode($raw,JSON_THROW_ON_ERROR));
+    }
+    private function trialConfig(): array{return ['plan_id'=>(int)admin_setting('try_out_plan_id',0),'hours'=>(int)admin_setting('try_out_hour',1)];}
     private function date($timestamp): ?string{return $timestamp===null?null:CarbonImmutable::createFromTimestamp((int)$timestamp,config('app.timezone','UTC'))->format('Y-m-d H:i:s T (P)');}
     private function only(array $args,array $keys): void{if(array_diff(array_keys($args),$keys))$this->invalid('args','Unknown or forbidden operation arguments.');}
     private function invalid(string $field,string $message): never{throw ValidationException::withMessages([$field=>$message]);}
