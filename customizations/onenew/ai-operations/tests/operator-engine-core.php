@@ -51,5 +51,6 @@ check($result['trace'][0]['status']==='rejected','Read byte budget not enforced'
 [$result]=run(['Plain text answer fixture-api-key']);check($result['actions']===[]&&$result['answer']==='Plain text answer [REDACTED]','Plain text fallback unsafe');
 [$result,$client,$actions,$source]=run([['patches'=>[['path'=>'secret.php','old_text'=>'old','new_text'=>'new']]]]);check($result['code_changes']===[]&&count($source->proposed)===1,'Existing source credentials reached a proposal card');
 [$result,$client,$actions,$source]=run([['patches'=>[['path'=>'safe.php','old_text'=>'old','new_text'=>'fixture-api-key']]]]);check($result['code_changes']===[]&&$source->proposed===[],'Model credential reached proposal tool');
+[$result,$client]=run(['safe'],'Create target@example.com password natural-secret 密码是中文口令');check(!str_contains(json_encode($client->messages,JSON_UNESCAPED_UNICODE),'natural-secret')&&!str_contains(json_encode($client->messages,JSON_UNESCAPED_UNICODE),'中文口令'),'Natural-language password reached provider');
 try{run([new \RuntimeException('fixture provider error')]);check(false,'Provider exception swallowed');}catch(\RuntimeException $e){check($e->getMessage()==='fixture provider error','Unexpected provider failure');}
 echo "Operator engine alias isolation, proposal boundary, unknown tools, budgets, redaction and plain-text tests passed\n";

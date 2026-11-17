@@ -16,6 +16,9 @@ final class OperatorEngine
     private function aliasText(string $text):string
     {
         foreach($this->aliases as $alias=>$email)$text=preg_replace('~'.preg_quote($email,'~').'~i',$alias,$text)??'';
+        // Credentials pasted as prose are local-only too; generated account passwords never enter history.
+        $text=preg_replace('~\b(?:password|passwd|pwd|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|secret)\s*(?:(?:is|为|是)\s*|[:=：]\s*|\s+)["\x27]?[^\s"\x27,;，。；]+~iu','[REDACTED credential]',$text)??'';
+        $text=preg_replace('~(?:密码|口令|密钥|令牌)\s*(?:是|为|[:=：])?\s*["\x27]?[^\s"\x27,;，。；]+~u','[REDACTED credential]',$text)??'';
         return Redactor::text($text,$this->secrets);
     }
     private function containsSecret(mixed $value):bool
