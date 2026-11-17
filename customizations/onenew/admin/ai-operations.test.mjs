@@ -61,3 +61,9 @@ test('long model replies remain visible but bounded UTF-8 history permits the ne
  const s=createAiSession();s.history=[{role:'assistant',content:'🍂'.repeat(4001)}];
  const payload=previewPayload(s);assert.equal(Array.from(payload.history[0].content).length,4000);assert.equal(s.history[0].content,'🍂'.repeat(4001));assert.doesNotThrow(()=>JSON.stringify(payload));
 });
+test('settings compatibility selector saves explicit token parameter and defaults older config safely',async()=>{
+ let state=[],cursor=0;const effects=[],calls=[];const R={createElement:(type,props,...children)=>({type,props:props||{},children}),useState:v=>{const i=cursor++;if(!(i in state))state[i]=v;return [state[i],v=>state[i]=v]},useEffect:fn=>effects.push(fn)};
+ const get=async()=>({config:{enabled:true,endpoint:'https://provider.example/v1',model:'model',key_configured:true}}),post=async(url,body)=>{calls.push({url,body});return {config:body}};
+ function render(){cursor=0;return AiSettings({react:R,get,post})}let tree=render();effects[0]();await new Promise(resolve=>setTimeout(resolve,0));tree=render();let select=all(tree).find(n=>n.type==='select');assert.ok(select);assert.equal(select.props.value,'max_tokens');assert.equal(calls.length,0);
+ select.props.onChange({target:{value:'max_completion_tokens'}});tree=render();await all(tree).find(n=>n.children[0]==='保存配置').props.onClick();assert.equal(calls.length,1);assert.ok(calls[0].url.endsWith('/config'));assert.equal(calls[0].body.token_parameter,'max_completion_tokens');assert.equal(calls[0].body.api_key,'');assert.ok(!('key_configured' in calls[0].body));
+});
