@@ -3,11 +3,15 @@ namespace App\Onenew\AiOperations;
 
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class Config
 {
     public function row():array
     {
+        if(!Schema::hasTable('onenew_ai_config')||!Schema::hasColumn('onenew_ai_config','token_parameter')) {
+            abort(response()->json(['message'=>'AI 配置尚未初始化，请先完成数据库迁移。','code'=>'ai_schema_missing'],503)->header('Cache-Control','no-store'));
+        }
         DB::table('onenew_ai_config')->insertOrIgnore(['id'=>1]);
         return (array)DB::table('onenew_ai_config')->where('id',1)->first();
     }

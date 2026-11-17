@@ -171,8 +171,11 @@ $entry = str_replace('chown redis:redis /data 2>/dev/null || true',
     'chown redis:www /data && chmod 0750 /data', $entry);
 $entry = str_replace("set -e\n", "set -e\nphp /opt/onenew/web-restore/agent.php --recover\n", $entry);
 $entry = str_replace('exec "$@"', 'php /opt/onenew/seed-plugins.php /www' . "\n" . 'exec "$@"', $entry);
-// Seeding precedes the startup migration/plugin check as well as the first install.
-$entry = str_replace('php /www/artisan onenew:update --no-interaction', 'php /opt/onenew/seed-plugins.php /www && php /www/artisan onenew:update --no-interaction', $entry);
+// A single wrapper preserves the entrypoint's temporary fallback environment for
+// BOTH seed and Artisan. A shell "seed && artisan" only scoped it to seed.
+$updateCommand='php /www/artisan onenew:update --no-interaction';
+if(substr_count($entry,$updateCommand)!==2)throw new RuntimeException('Pinned startup update anchors changed');
+$entry = str_replace($updateCommand,'php /opt/onenew/startup-update.php /www',$entry);
 file_put_contents($entrypoint, $entry);
 
 $supervisor = $root === '/www' ? '/etc/supervisor/conf.d/supervisord.conf' : $root . '/supervisord.conf';

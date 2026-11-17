@@ -53,6 +53,7 @@ jobs:
           bash customizations/onenew/migration/tests/version-pin.sh
           bash customizations/onenew/migration/tests/upgrade-restored.sh
           python3 customizations/onenew/migration/tests/bootstrap_success.py
+          python3 customizations/onenew/runtime/tests/startup-update.py
           docker run --rm --entrypoint sh onenew:local -c '
             set -eu
             cd /www
@@ -85,6 +86,15 @@ jobs:
           test "$(curl --silent -o /dev/null -w '%{http_code}' 'http://127.0.0.1:7001/api/v3/server/probes?machine_id=1')" = 403
           docker compose top onenew > /tmp/onenew-processes
           if grep -Ei 'xboard' /tmp/onenew-processes; then exit 1; fi
+      - name: Verify pending migration on installed database before Redis starts
+        run: |
+          BEFORE=$(docker compose exec -T -e ONENEW_CI_FIXTURE=isolated-only onenew php /opt/onenew/runtime/tests/startup-schema.php prepare)
+          docker compose stop onenew
+          docker compose up -d --force-recreate --wait onenew
+          AFTER=$(docker compose exec -T -e ONENEW_CI_FIXTURE=isolated-only onenew php /opt/onenew/runtime/tests/startup-schema.php check)
+          test "$BEFORE" = "$AFTER"
+          docker compose logs --no-color onenew > /tmp/onenew-startup-schema.log
+          python3 -c 'from pathlib import Path; s=Path("/tmp/onenew-startup-schema.log").read_text(); fallback=s.index("redis not yet up, using array/sync drivers"); migration=s.index("2026_11_18_000001_create_onenew_ai_config",fallback); services=s.index("[entrypoint] Starting services",fallback); assert fallback < migration < services; assert "WARNING: onenew:update failed" not in s'
       - name: Export encrypted migration and restore into a fresh instance
         run: ONENEW_MIGRATION_CI=isolated-only bash customizations/onenew/migration/tests/ci-smoke.sh
       - name: Exercise browser upload validation and live restore
