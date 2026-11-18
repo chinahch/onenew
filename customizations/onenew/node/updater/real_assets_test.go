@@ -11,11 +11,11 @@ import (
 	"testing"
 )
 
-// Exercises shipped v11 and newly built v13 ELF binaries in a disposable
+// Exercises shipped v13 and newly built v14 ELF binaries in a disposable
 // filesystem. Service-manager calls are simulated; version probes execute real
 // binaries. The native kernel suite separately verifies real process health.
-func TestRealV11ToV13Assets(t *testing.T) {
-	oldPkg, newPkg := os.Getenv("ONENEW_TEST_V11_PACKAGE"), os.Getenv("ONENEW_TEST_V13_PACKAGE")
+func TestRealV13ToV14Assets(t *testing.T) {
+	oldPkg, newPkg := os.Getenv("ONENEW_TEST_V13_PACKAGE"), os.Getenv("ONENEW_TEST_V14_PACKAGE")
 	if oldPkg == "" || newPkg == "" {
 		t.Skip("Linux release asset integration runs in CI")
 	}
@@ -40,7 +40,7 @@ func TestRealV11ToV13Assets(t *testing.T) {
 				}
 				return originalCommand(ctx, n, a...)
 			}
-			if h.u.version() != "v0.1.11" {
+			if h.u.version() != "v0.1.13" {
 				t.Fatal("old asset version mismatch")
 			}
 			var e error
@@ -52,13 +52,13 @@ func TestRealV11ToV13Assets(t *testing.T) {
 			h.sum = hex.EncodeToString(sum[:])
 			writeTest(t, filepath.Join(h.u.Root, "config.yml"), "preserve-config-and-certificates")
 			h.unhealthy = rollback
-			if e = h.u.execute(h.job("v0.1.13")); e != nil {
+			if e = h.u.execute(h.job("v0.1.14")); e != nil {
 				t.Fatal(e)
 			}
-			expected := "v0.1.13"
+			expected := "v0.1.14"
 			state := "succeeded"
 			if rollback {
-				expected = "v0.1.11"
+				expected = "v0.1.13"
 				state = "rolled_back"
 			}
 			if h.u.version() != expected || h.states[len(h.states)-1] != state {

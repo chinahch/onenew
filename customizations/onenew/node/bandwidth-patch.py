@@ -42,7 +42,9 @@ def apply(source,core=None):
             patch('internal/kernel/singbox/conntracker.go',f'func (c *{cls}) {direction}Replaceable() bool {{ return true }}',f'func (c *{cls}) {direction}Replaceable() bool {{ return c.tracker == nil || c.tracker.nodeBandwidth == nil }}')
     for method,rettype in [('UnwrapReader','io.Reader'),('UnwrapWriter','io.Writer'),('UnwrapPacketReader','N.PacketReader'),('UnwrapPacketWriter','N.PacketWriter')]:
         cls='trackedPacketConn' if 'Packet' in method else 'trackedConn';old=f'func (c *{cls}) {method}() ({rettype}, []N.CountFunc) {{'
-        patch('internal/kernel/singbox/conntracker.go',old,old+f'\n\tif c.tracker != nil && c.tracker.nodeBandwidth != nil {{ return struct{{{rettype}}}{{c}},nil }}')
+        writer='newBandwidthPacketWriter(c)' if method=='UnwrapPacketWriter' else f'struct{{{rettype}}}{{c}}'
+        patch('internal/kernel/singbox/conntracker.go',old,old+f'\n\tif c.tracker != nil && c.tracker.nodeBandwidth != nil {{ return {writer}, nil }}')
+    for name in ['udp_headroom.go','udp_headroom_test.go']:(source/'internal/kernel/singbox'/('onenew_'+name)).write_bytes((here/name).read_bytes())
     patch('internal/service/service.go','m["onenew_runtime"] = true','m["onenew_runtime"] = true\n\tm["onenew_node_bandwidth_v1"] = s.kernel.Name()=="xray" || s.kernel.Name()=="sing-box"')
     local_core=source/'.onenew-xray-core'
     if core is None and local_core.exists():core=local_core
@@ -72,7 +74,8 @@ def apply(source,core=None):
     for name,text in files.items():(core/name).write_text(text,encoding='utf-8',newline='\n')
     manifest.setdefault('features',[])
     if FEATURE not in manifest['features']:manifest['features'].append(FEATURE)
-    for path in [Path(__file__),here/'node_bandwidth.go',here/'node_bandwidth_test.go',here/'bandwidth_xray_test.go',here/'bandwidth_singbox_test.go']:
+    if 'onenew-udp-headroom-v1' not in manifest['features']:manifest['features'].append('onenew-udp-headroom-v1')
+    for path in [Path(__file__),here/'node_bandwidth.go',here/'node_bandwidth_test.go',here/'bandwidth_xray_test.go',here/'bandwidth_singbox_test.go',here/'udp_headroom.go',here/'udp_headroom_test.go']:
         manifest.setdefault('customization_sha256',{})['onenew/'+path.name]=hashlib.sha256(path.read_bytes()).hexdigest()
     (source/'build-source.json').write_text(json.dumps(manifest,indent=2)+'\n')
 if __name__=='__main__':

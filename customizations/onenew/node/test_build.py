@@ -24,4 +24,23 @@ class BuildTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'pinned'):
                 builder.validate_source(root)
 
+    def test_v14_rejects_source_without_udp_headroom_fix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            features = ['landing-v1', 'proxy-probes-v1', 'certificate-lifecycle-v1',
+                        'onenew-domain-metadata-v1', 'onenew-hot-apply-v1',
+                        'onenew-exit-probe-v1', 'onenew-panel-egress-v1',
+                        'onenew-node-bandwidth-v1', 'onenew-argo-offload-v1',
+                        'onenew-health-cloudflare-v1', 'onenew-health-https-v1',
+                        'onenew-ss-ws-tls-v1', 'onenew-staged-health-v1',
+                        'onenew-runtime-logs-v1']
+            manifest = {'upstream_commit': builder.UPSTREAM, 'features': features}
+            path = root / 'build-source.json'
+            path.write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, 'overlays'):
+                builder.validate_source(root)
+            features.append('onenew-udp-headroom-v1')
+            path.write_text(json.dumps(manifest))
+            self.assertEqual(builder.validate_source(root), manifest)
+
 if __name__ == '__main__': unittest.main()
