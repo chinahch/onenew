@@ -61,6 +61,10 @@ check(count($client->messages)===4&&count($actions->reads)===3&&$actions->prepar
 [$result,$client,$actions,$source]=run([['reads'=>[['tool'=>'source.read','args'=>['path'=>'customizations/onenew/test/app/file.php']]]],['answer'=>'bounded']]);
 check(count(array_filter($result['trace'],fn($item)=>$item['status']==='rejected'))===1,'Read byte budget not enforced');
 [$result]=run(['Plain text answer fixture-api-key']);check($result['actions']===[]&&$result['answer']==='Plain text answer [REDACTED]','Plain text fallback unsafe');
+foreach(["{\"answer\":\"reading\nliteral newline\",\"reads\":[{\"tool\":\"nodes.lookup\",\"args\":{\"node_id\":45}}]}",'{"answer":"reading","reads":[',"```json\n{\"answer\":\"broken\nline\"}\n```"] as $malformed){
+    try{run([$malformed]);check(false,'Malformed JSON envelope displayed as an answer');}catch(\RuntimeException $e){check($e->getMessage()==='invalid_response','Malformed envelope must return safe invalid_response');}
+}
+[$result]=run(["```json\n{\"answer\":\"valid fenced answer\",\"reads\":[]}\n```"]);check($result['answer']==='valid fenced answer'&&$result['actions']===[],'Valid JSON fence parsing changed');
 [$result,$client,$actions,$source]=run([['patches'=>[['path'=>'secret.php','old_text'=>'old','new_text'=>'new']]]]);check($result['code_changes']===[]&&count($source->proposed)===1,'Existing source credentials reached a proposal card');
 [$result,$client,$actions,$source]=run([['patches'=>[['path'=>'safe.php','old_text'=>'old','new_text'=>'fixture-api-key']]]]);check($result['code_changes']===[]&&$source->proposed===[],'Model credential reached proposal tool');
 [$result,$client]=run(['safe'],'Create target@example.com password natural-secret 密码是中文口令');check(!str_contains(json_encode($client->messages,JSON_UNESCAPED_UNICODE),'natural-secret')&&!str_contains(json_encode($client->messages,JSON_UNESCAPED_UNICODE),'中文口令'),'Natural-language password reached provider');

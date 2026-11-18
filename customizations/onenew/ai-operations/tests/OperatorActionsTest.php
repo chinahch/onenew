@@ -105,6 +105,39 @@ final class OperatorActionsTest extends TestCase
         DB::table('v2_server')->where('id',$node->id)->update(['custom_routes'=>json_encode([['outbound'=>'template-exit']]),'custom_outbounds'=>json_encode([['tag'=>'template-exit','protocol'=>'direct']]),'onenew_landing_bindings'=>json_encode([['landing_id'=>7,'global'=>true,'domains'=>[]]])]);
         return $node->fresh();
     }
+    public function test_node_lookup_returns_safe_ipv6_address_and_ports_without_protocol_secrets():void
+    {
+        $node=$this->realityTemplate();DB::table('v2_server')->where('id',$node->id)->update(['host'=>'2001:db8::45']);
+        $result=app(OperatorActions::class)->read('nodes.lookup',['node_id'=>$node->id]);$view=$result['nodes'][0];
+        self::assertSame('2001:db8::45',$view['host']);self::assertSame(25051,(int)$view['port']);self::assertSame(25051,(int)$view['server_port']);self::assertArrayHasKey('group_ids',$view);self::assertArrayNotHasKey('protocol_settings',$view);self::assertStringNotContainsString('template-private',json_encode($result));
+    }
+    public function test_template_only_copy_inherits_local_ipv6_machine_groups_and_allocates_unique_disabled_draft():void
+    {
+        $node=$this->realityTemplate();$group=\App\Models\ServerGroup::create(['name'=>'Copy group']);DB::table('v2_server')->where('id',$node->id)->update(['host'=>'2001:db8::45','group_ids'=>json_encode([$group->id]),'enabled'=>true,'show'=>true]);$node->refresh();$before=$node->getRawOriginal();
+        $a=app(OperatorActions::class);$card=$a->prepare(1,'node.create',['template_node_id'=>$node->id]);
+        self::assertSame('2001:db8::45',$card['after']['host']);self::assertSame($node->machine_id,$card['after']['machine_id']);self::assertSame([$group->id],$card['after']['group_ids']);self::assertSame(25052,(int)$card['after']['server_port']);self::assertSame(25052,(int)$card['after']['port']);self::assertFalse($card['after']['enabled']);self::assertFalse($card['after']['show']);self::assertSame('Node 45-副本',$card['after']['name']);
+        self::assertSame($before,$node->fresh()->getRawOriginal());self::assertSame(1,Server::count());self::assertStringNotContainsString('template-private',json_encode($card));
+        $r=$a->execute(1,$card['id'],(string)Str::uuid());$copy=Server::findOrFail($r['target_id']);self::assertFalse($copy->enabled);self::assertFalse($copy->show);self::assertSame('2001:db8::45',$copy->host);self::assertNotSame('template-private',$copy->protocol_settings['reality_settings']['private_key']);
+        foreach(['route_ids','custom_routes','custom_outbounds','onenew_landing_bindings'] as $field)self::assertEmpty($copy->$field);
+        $second=$a->prepare(1,'node.create',['template_node_id'=>$node->id]);self::assertSame('Node 45-副本 2',$second['after']['name']);self::assertSame(25053,(int)$second['after']['server_port']);self::assertSame($before,$node->fresh()->getRawOriginal());
+    }
+    public function test_template_copy_auto_allocation_is_frozen_and_rechecked_not_reselected_on_execute():void
+    {
+        $node=$this->realityTemplate();$a=app(OperatorActions::class);$card=$a->prepare(1,'node.create',['template_node_id'=>$node->id]);
+        $competitor=$a->prepare(1,'node.create',['template_node_id'=>$node->id,'name'=>'Explicit competitor','port'=>$card['after']['port'],'server_port'=>$card['after']['server_port']]);$a->execute(1,$competitor['id'],(string)Str::uuid());
+        try{$a->execute(1,$card['id'],(string)Str::uuid());self::fail('Reserved port was silently changed');}catch(\Illuminate\Validation\ValidationException $e){self::assertArrayHasKey('server_port',$e->errors());}
+        self::assertSame(2,Server::count());
+    }
+    public function test_template_partial_overrides_preserve_requested_values_and_reject_explicit_listen_port_collision():void
+    {
+        $node=$this->realityTemplate();$a=app(OperatorActions::class);$card=$a->prepare(1,'node.create',['template_node_id'=>$node->id,'name'=>'Partial override','server_port'=>25555]);self::assertSame('Partial override',$card['after']['name']);self::assertSame(25555,(int)$card['after']['server_port']);self::assertSame(25555,(int)$card['after']['port']);self::assertSame($node->host,$card['after']['host']);
+        $this->expectException(\Illuminate\Validation\ValidationException::class);$a->prepare(1,'node.create',['template_node_id'=>$node->id,'server_port'=>25051]);
+    }
+    public function test_template_copy_preserves_distinct_public_forwarding_port():void
+    {
+        $node=$this->realityTemplate();DB::table('v2_server')->where('id',$node->id)->update(['port'=>443]);$node->refresh();
+        $card=app(OperatorActions::class)->prepare(1,'node.create',['template_node_id'=>$node->id]);self::assertSame(443,(int)$card['after']['port']);self::assertSame(25052,(int)$card['after']['server_port']);self::assertStringContainsString('forwarding',$card['after']['effect']);
+    }
     public function test_reality_copy_generates_independent_keys_preserves_template_and_enables_only_explicitly(): void
     {
         $template=$this->realityTemplate();$before=$template->getRawOriginal();$a=app(OperatorActions::class);$keys=[];
