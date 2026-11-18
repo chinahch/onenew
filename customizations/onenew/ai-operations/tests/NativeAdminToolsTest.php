@@ -44,7 +44,7 @@ final class NativeAdminToolsTest extends TestCase
 
     private function capability(NativeAdminTools $tools,string $path): string
     {
-        $catalog=$tools->catalog(['keyword'=>'native-fixture','limit'=>30]);
+        $catalog=$tools->catalog(['keyword'=>$path,'limit'=>30]);
         foreach($catalog['items'] as $entry)if($entry['path']===$path)return $entry['capability'];
         self::fail('Fixture capability missing: '.$path);
     }
