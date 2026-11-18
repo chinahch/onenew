@@ -113,7 +113,7 @@ final class OperatorActionsTest extends TestCase
     }
     public function test_template_only_copy_inherits_local_ipv6_machine_groups_and_allocates_unique_disabled_draft():void
     {
-        $node=$this->realityTemplate();$group=\App\Models\ServerGroup::create(['name'=>'Copy group']);DB::table('v2_server')->where('id',$node->id)->update(['host'=>'2001:db8::45','group_ids'=>json_encode([$group->id]),'enabled'=>true,'show'=>true]);$node->refresh();$before=$node->getRawOriginal();
+        $node=$this->realityTemplate();$group=new \App\Models\ServerGroup;$group->name='Copy group';$group->saveOrFail();DB::table('v2_server')->where('id',$node->id)->update(['host'=>'2001:db8::45','group_ids'=>json_encode([$group->id]),'enabled'=>true,'show'=>true]);$node->refresh();$before=$node->getRawOriginal();
         $a=app(OperatorActions::class);$card=$a->prepare(1,'node.create',['template_node_id'=>$node->id]);
         self::assertSame('2001:db8::45',$card['after']['host']);self::assertSame($node->machine_id,$card['after']['machine_id']);self::assertSame([$group->id],$card['after']['group_ids']);self::assertSame(25052,(int)$card['after']['server_port']);self::assertSame(25052,(int)$card['after']['port']);self::assertFalse($card['after']['enabled']);self::assertFalse($card['after']['show']);self::assertSame('Node 45-副本',$card['after']['name']);
         self::assertSame($before,$node->fresh()->getRawOriginal());self::assertSame(1,Server::count());self::assertStringNotContainsString('template-private',json_encode($card));
