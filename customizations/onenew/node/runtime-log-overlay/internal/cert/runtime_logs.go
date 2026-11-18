@@ -5,7 +5,6 @@ import (
 	"github.com/cedar2025/xboard-node/internal/nlog"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"log/slog"
 )
 
 type runtimeCertificateCore struct{ fields []zapcore.Field }
@@ -40,7 +39,6 @@ func (c runtimeCertificateCore) Write(e zapcore.Entry, fields []zapcore.Field) e
 	default:
 		logger.Info(e.Message, args...)
 	}
-	_ = slog.LevelInfo
 	return nil
 }
 func (runtimeCertificateCore) Sync() error  { return nil }
