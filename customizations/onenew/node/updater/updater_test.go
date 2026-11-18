@@ -111,7 +111,7 @@ func newHarness(t *testing.T) *harness {
 			return os.ReadFile(n)
 		}
 		if filepath.Base(n) == "caddyctl" {
-			if h.unhealthy && h.u.version() == "v0.1.12" {
+			if h.unhealthy && newer(h.u.version(), "v0.1.11") {
 				return []byte("ID MODE PANEL TARGET SERVICE HEALTH\nx machine " + h.server.URL + " machine_id=7 running failed\n"), nil
 			}
 			return []byte("ID MODE PANEL TARGET SERVICE HEALTH\nx machine " + h.server.URL + " machine_id=7 running ok\n"), nil
@@ -124,6 +124,18 @@ func (h *harness) setPackage(t *testing.T, v string) {
 	h.pkg = archiveTest(t, map[string]string{"caddy": "caddy onenew-" + v + " (built fixture)", "caddyctl": "candidate-ctl"})
 	s := sha256.Sum256(h.pkg)
 	h.sum = hex.EncodeToString(s[:])
+}
+
+func TestUnhealthyV13CandidateRollsBack(t *testing.T) {
+	h := newHarness(t)
+	h.setPackage(t, "v0.1.13")
+	h.unhealthy = true
+	if e := h.u.execute(h.job("v0.1.13")); e != nil {
+		t.Fatal(e)
+	}
+	if h.u.version() != "v0.1.11" || h.states[len(h.states)-1] != "rolled_back" {
+		t.Fatalf("version=%s states=%v", h.u.version(), h.states)
+	}
 }
 func (h *harness) job(v string) Job {
 	return Job{ID: "74b860e8-212f-4d7b-a651-96b916831c8c", Lease: "lease-1234567890123456", Expires: h.u.Now().Unix() + 900, Release: Release{Version: v, Arch: runtime.GOARCH, SHA: h.sum, URL: officialBase + "node-" + v + "/onenew-node-linux-" + runtime.GOARCH + ".tar.gz"}}
