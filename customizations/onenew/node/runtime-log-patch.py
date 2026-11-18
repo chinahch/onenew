@@ -41,8 +41,7 @@ def patch(source):
    return
   }
   if r.URL.Path == "/api/v3/server/probes" {''')
- edit('internal/cert/cert.go','"go.uber.org/zap"','"go.uber.org/zap"\n\t"go.uber.org/zap/zapcore"')
- edit('internal/cert/cert.go','zap.NewNop()','zap.New(zapcore.NewCore(zapcore.NewConsoleEncoder(zapcore.EncoderConfig{MessageKey: "msg", LevelKey: "level", EncodeLevel: zapcore.CapitalLevelEncoder}), zapcore.AddSync(nlog.RuntimeWriter{}), zap.DebugLevel))')
+ edit('internal/cert/cert.go','zap.NewNop()','runtimeCertificateLogger()')
  # sing-box owns its factory; platform callbacks duplicate raw logs and are not
  # a safe sink. Inject our writer before that factory and disable observability
  # of raw messages. The dependency is copied from its immutable pinned module.
@@ -70,8 +69,6 @@ def patch(source):
   tag = ""
  }
  nowTime := time.Now()'''
-  if name=='internal/config/config.go' and 'slog.SetDefault(slog.New(nlog.RuntimeHandler{}))' in new:
-   s=s.replace('slog.SetDefault(slog.New(slog.NewTextHandler(nlog.RuntimeWriter{}, &slog.HandlerOptions{Level: slog.LevelDebug})))',old)
   if old not in s:raise ValueError('sing-box logging boundary changed')
   s=s.replace(old,new).replace('level, l.tag, F.ToString(args...)','level, tag, F.ToString(args...)')
   observable.write_text(s,encoding='utf-8',newline='\n')
