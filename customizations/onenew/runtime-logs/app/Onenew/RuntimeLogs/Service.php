@@ -1,7 +1,7 @@
 <?php
 namespace App\Onenew\RuntimeLogs;
 use App\Models\ServerMachine;
-use Illuminate\Support\Facades\{Cache,DB};
+use Illuminate\Support\Facades\{Cache,DB,Schema};
 final class Service
 {
  public function identity(ServerMachine $machine):string{return hash('sha256',$machine->id.'|'.$machine->onenew_identity.'|'.$machine->token);}
@@ -23,6 +23,9 @@ final class Service
   });});
  }
  public function query(ServerMachine $machine,array $filters,int $admin):array{
+  // Readers never create schema. Check the complete feature before any log query,
+  // including the batches table needed for the node to start reporting.
+  foreach(['entries','streams','batches','reads'] as $table)if(!Schema::hasTable('onenew_runtime_log_'.$table))abort(response()->json(['code'=>'runtime_logs_schema_missing','message'=>'运行日志数据库迁移尚未完成，请在面板容器内执行 php artisan migrate --force，完成后点击刷新重试。'],503)->header('Cache-Control','no-store')->header('X-Content-Type-Options','nosniff'));
   $identity=$this->identity($machine);$cutoff=time()-604800;$query=DB::table('onenew_runtime_log_entries')->where('machine_id',$machine->id)->where('machine_identity',$identity)->where('received_at','>=',$cutoff);
   foreach(['from'=>'>=','to'=>'<='] as $key=>$operator)if(isset($filters[$key]))$query->where('at',$operator,$filters[$key]);
   if(!empty($filters['level']))$query->where('level',$filters['level']);

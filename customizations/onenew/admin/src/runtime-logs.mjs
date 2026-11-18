@@ -13,6 +13,8 @@ export function fetchRuntimeLogs(get,machineId,filters){
  return get(`/api/onenew/admin/machines/${id}/runtime-logs`,{baseURL:'/',params:runtimeLogParams(filters)}).then(value=>value?.data??value);
 }
 const time=value=>{if(!value)return '—';const date=new Date(typeof value==='number'?value*1000:value);return Number.isNaN(date.getTime())?'—':date.toLocaleString()};
+// Only recognize public error codes; SQL errors and node log data stay out of alerts.
+const readError=error=>error?.response?.data?.code==='runtime_logs_schema_missing'?'运行日志数据库迁移尚未完成，请在面板容器内执行 php artisan migrate --force，完成后点击刷新重试。':'无法读取运行日志，请点击刷新重试；若仍失败，请检查面板服务状态。';
 export function RuntimeLogEntries({react:R,entries}){
  const h=R.createElement;
  return h('div',{className:'onenew-runtime-entries',role:'log','aria-label':'运行日志内容'},entries.slice(0,100).map(row=>h('div',{key:row.id,className:'onenew-runtime-entry'},h('span',{className:'onenew-runtime-meta'},`${time(row.at)} · ${levels.includes(row.level)?row.level:'info'}`),h('pre',null,String(row.message??'')))));
@@ -21,7 +23,7 @@ export function RuntimeLogs({react:R,get,machineId}){
  const h=R.createElement,[open,setOpen]=R.useState(false),[filters,setFilters]=R.useState({level:'',search:'',from:'',to:'',limit:50}),[page,setPage]=R.useState(0),[data,setData]=R.useState(null),[busy,setBusy]=R.useState(false),[error,setError]=R.useState(''),[auto,setAuto]=R.useState(false),[refresh,setRefresh]=R.useState(0),seq=R.useRef(0),dialog=R.useRef(null);
  const change=(key,value)=>{seq.current++;setFilters(old=>({...old,[key]:value}));setPage(0);setData(null)};
  R.useEffect(()=>{if(!open)return;dialog.current?.showModal();return()=>dialog.current?.close()},[open]);
- R.useEffect(()=>{if(!open)return;const token=++seq.current;let active=true;setBusy(true);setError('');const timer=setTimeout(()=>{if(filters.from&&filters.to&&Date.parse(filters.from)>Date.parse(filters.to)){setError('开始时间不能晚于结束时间');setBusy(false);return}fetchRuntimeLogs(get,machineId,{...filters,page:page+1}).then(value=>{if(active&&token===seq.current)setData(value)}).catch(()=>{if(active&&token===seq.current)setError('无法读取运行日志，请重试')}).finally(()=>{if(active&&token===seq.current)setBusy(false)})},200);return()=>{active=false;clearTimeout(timer);seq.current++}},[open,machineId,filters,page,refresh,get]);
+ R.useEffect(()=>{if(!open)return;const token=++seq.current;let active=true;setBusy(true);setError('');const timer=setTimeout(()=>{if(filters.from&&filters.to&&Date.parse(filters.from)>Date.parse(filters.to)){setError('开始时间不能晚于结束时间');setBusy(false);return}fetchRuntimeLogs(get,machineId,{...filters,page:page+1}).then(value=>{if(active&&token===seq.current)setData(value)}).catch(error=>{if(active&&token===seq.current){setData(null);setError(readError(error))}}).finally(()=>{if(active&&token===seq.current)setBusy(false)})},200);return()=>{active=false;clearTimeout(timer);seq.current++}},[open,machineId,filters,page,refresh,get]);
  R.useEffect(()=>{seq.current++;setData(null);setPage(0)},[machineId]);
  R.useEffect(()=>{if(!open||!auto||page!==0)return;const timer=setInterval(()=>setRefresh(value=>value+1),10000);return()=>clearInterval(timer)},[open,auto,page]);
  const button=(label,onClick,disabled=false)=>h('button',{type:'button',className:'onenew-resource-button',disabled,onClick},label);
