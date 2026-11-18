@@ -29,6 +29,7 @@ jobs:
           mkdir prepared
           tar -xzf baseline.tar.gz -C prepared
           python3 onenew/customizations/onenew/node/staged-health-patch.py --source prepared
+          python3 onenew/customizations/onenew/node/runtime-log-patch.py --source prepared
           gofmt -w prepared/internal/probe/probe.go prepared/internal/probe/stages.go prepared/internal/probe/stages_test.go
       - name: Verify panel health scheduling
         run: |
@@ -43,6 +44,7 @@ jobs:
         run: |
           python3 onenew/customizations/onenew/node/test_argo_patch.py
           python3 onenew/customizations/onenew/node/test_build.py
+          python3 onenew/customizations/onenew/node/test_runtime_log_patch.py
           python3 onenew/customizations/onenew/node/test_installer.py
           python3 onenew/customizations/onenew/node/test_token_validation.py
           python3 onenew/customizations/onenew/node/test_service_health.py
@@ -75,21 +77,21 @@ jobs:
       - name: Verify amd64 executable version and CLI configuration
         if: matrix.arch == 'amd64'
         run: |
-          dist/amd64/caddy -v | grep '^caddy onenew-v0.1.12 '
+          dist/amd64/caddy -v | grep '^caddy onenew-v0.1.13 '
           grep -aFq 'https://www.cloudflare.com/cdn-cgi/trace' dist/amd64/caddy
           mkdir -m 700 /tmp/onenew-fixture
-          dist/amd64/caddyctl config init --mode machine --panel-url https://panel.example.test --token fixture-disposable-token --machine-id 7 --kernel singbox --health-port 65530 --version onenew-v0.1.12 --output /tmp/onenew-fixture/config.yml --credentials-out /tmp/onenew-fixture/credentials.env --meta /tmp/onenew-fixture/install-meta.json --install-root /etc/caddy
+          dist/amd64/caddyctl config init --mode machine --panel-url https://panel.example.test --token fixture-disposable-token --machine-id 7 --kernel singbox --health-port 65530 --version onenew-v0.1.13 --output /tmp/onenew-fixture/config.yml --credentials-out /tmp/onenew-fixture/credentials.env --meta /tmp/onenew-fixture/install-meta.json --install-root /etc/caddy
           test -s /tmp/onenew-fixture/config.yml
           test -s /tmp/onenew-fixture/credentials.env
-      - name: Exercise real v11 to v12 asset upgrade and rollback
+      - name: Exercise real v11 to v13 asset upgrade and rollback
         if: matrix.arch == 'amd64'
         run: |
           curl --fail --location --retry 3 https://github.com/chinahch/onenew-releases/releases/download/node-v0.1.11/onenew-node-linux-amd64.tar.gz -o old-v11.tar.gz
           echo '44e97934cb095a4bc9e61756fa492a462866b039d8cb3aec2dedbed02a1b5435  old-v11.tar.gz' | sha256sum -c -
           export ONENEW_TEST_V11_PACKAGE="$PWD/old-v11.tar.gz"
-          export ONENEW_TEST_V12_PACKAGE="$PWD/dist/onenew-node-linux-amd64.tar.gz"
+          export ONENEW_TEST_V13_PACKAGE="$PWD/dist/onenew-node-linux-amd64.tar.gz"
           cd onenew/customizations/onenew/node/updater
-          go test -v -run TestRealV11ToV12Assets .
+          go test -v -run TestRealV11ToV13Assets .
       - name: Package corresponding native source and build instructions
         if: matrix.arch == 'amd64'
         run: |
@@ -129,16 +131,16 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "$GH_TOKEN" ] || { echo 'Set ONENEW_RELEASE_TOKEN with Contents write access to chinahch/onenew-releases'; exit 1; }
-          if gh release view node-v0.1.12 >/dev/null 2>&1; then
+          if gh release view node-v0.1.13 >/dev/null 2>&1; then
             # Never replace binary assets. Source publication is additive only.
-            assets=$(gh release view node-v0.1.12 --json assets --jq '.assets[].name')
+            assets=$(gh release view node-v0.1.13 --json assets --jq '.assets[].name')
             for file in onenew-node-source.tar.gz SHA256SUMS-source; do
-              if ! printf '%s\n' "$assets" | grep -Fxq "$file"; then gh release upload node-v0.1.12 "dist/$file"; fi
+              if ! printf '%s\n' "$assets" | grep -Fxq "$file"; then gh release upload node-v0.1.13 "dist/$file"; fi
             done
             mkdir verify-source
-            gh release download node-v0.1.12 --dir verify-source --pattern onenew-node-source.tar.gz --pattern SHA256SUMS-source
+            gh release download node-v0.1.13 --dir verify-source --pattern onenew-node-source.tar.gz --pattern SHA256SUMS-source
             (cd verify-source && sha256sum -c SHA256SUMS-source)
           else
-            gh release create node-v0.1.12 dist/*.tar.gz dist/caddy-updater-linux-* dist/SHA256SUMS-* dist/build-info-*.json --target main --title 'Onenew native node v0.1.12' --prerelease --notes 'Native binary packages and corresponding source, with SHA256 checksums. Service and process name remain caddy. Panel source is not included.'
+            gh release create node-v0.1.13 dist/*.tar.gz dist/caddy-updater-linux-* dist/SHA256SUMS-* dist/build-info-*.json --target main --title 'Onenew native node v0.1.13' --prerelease --notes 'Native binary packages and corresponding source, with SHA256 checksums. Service and process name remain caddy. Panel source is not included.'
           fi
           python3 onenew/customizations/onenew/node/publish_distribution.py --root onenew
