@@ -77,7 +77,8 @@ final class OperatorEngine
         foreach(array_slice($payload['history']??[],-8) as $message)if(in_array($message['role']??'', ['user','assistant'],true)&&is_string($message['content']??null))$messages[]=['role'=>$message['role'],'content'=>$this->aliasText(mb_substr($message['content'],0,4000))];
         $messages[]=['role'=>'user','content'=>$question];$trace=[];$bytes=0;$files=[];$usage=[];$final=[];$model=$row['model'];$deadline=microtime(true)+540;
         for($round=0;$round<=3;$round++){
-            if(microtime(true)>$deadline)throw new \RuntimeException('time_budget');
+            // Reserve a complete provider wait window; do not let a late round outlive the engine/job.
+            if(microtime(true)>$deadline-120)throw new \RuntimeException('time_budget');
             $row=$this->tasks->current($payload['config_fingerprint']);$progress('等待模型响应，第'.($round+1).'轮');
             if($round===3)$messages[]=['role'=>'user','content'=>'Read budget exhausted. Return final answer and only fully supported proposal cards; no more reads.'];
             $modelStarted=hrtime(true);$reply=$this->client->completeRaw($row,$this->config->key($row),$messages);$final=$this->decode($reply['answer']);
@@ -119,7 +120,7 @@ final class OperatorEngine
         if($patches){
             try{if(count($patches)>5||strlen(json_encode($patches,JSON_THROW_ON_ERROR))>100000)throw new \RuntimeException('patch_budget');
                 if($this->containsSecret($patches))throw new \RuntimeException('secret_in_patch');
-                if(microtime(true)>$deadline-20)throw new \RuntimeException('time_budget');
+                if(microtime(true)>$deadline-100)throw new \RuntimeException('time_budget');
                 $progress('正在校验固定版本源码修改');$proposal=$this->source->propose($admin,$patches);if($this->containsSecret($proposal))throw new \RuntimeException('secret_in_source');$changes[]=$proposal;$trace[]=['tool'=>'source.propose','status'=>'prepared','message'=>'已生成代码差异；尚未提交、运行或部署'];
             }catch(\Throwable $e){$trace[]=['tool'=>'source.propose','status'=>'rejected','message'=>'源码修改未通过固定版本校验或超出预算，请缩小范围并读取准确原文。'];}
         }

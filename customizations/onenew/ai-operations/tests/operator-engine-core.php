@@ -32,13 +32,14 @@ class SourceTools {
 class Client {
     public array $messages=[];
     public function __construct(public array $responses){}
-    public function completeRaw($config,$key,$messages){$this->messages[]=$messages;$next=array_shift($this->responses);if($next instanceof \Throwable)throw $next;return ['answer'=>is_string($next)?$next:json_encode($next),'usage'=>['total_tokens'=>2]];}
+    public function completeRaw($config,$key,$messages){$this->messages[]=$messages;$next=array_shift($this->responses);if($next instanceof \Throwable)throw $next;return ['answer'=>is_string($next)?$next:json_encode($next),'usage'=>['total_tokens'=>2],'timings'=>['connect_ms'=>12,'starttransfer_ms'=>90000,'total_ms'=>91000,'url'=>'fixture-api-key','prompt'=>'private-prompt']];}
 }
 function check(bool $ok,string $message):void {if(!$ok)throw new \RuntimeException($message);}
 function run(array $responses,string $message='Extend target@example.com'):array {
     $client=new Client($responses);$actions=new OperatorActions;$source=new SourceTools;
     $engine=new OperatorEngine($client,new Config,new RepoSettings,$actions,$source,new Context,new Knowledge,new OperatorTasks);
-    $result=$engine->run(1,['message'=>$message,'history'=>[['role'=>'assistant','content'=>'password=fixture-password fixture-api-key unknown@example.com']],'config_fingerprint'=>'fixture'],fn($message)=>null);
+    $progress=[];$result=$engine->run(1,['message'=>$message,'history'=>[['role'=>'assistant','content'=>'password=fixture-password fixture-api-key unknown@example.com']],'config_fingerprint'=>'fixture'],function($message)use(&$progress){$progress[]=$message;});
+    check(str_contains($progress[0],'等待模型响应'),'Model waiting progress missing');
     return [$result,$client,$actions,$source];
 }
 [$result,$client,$actions]=run([
@@ -48,6 +49,9 @@ function run(array $responses,string $message='Extend target@example.com'):array
 check(count($client->messages)===2,'Expected read then final calls');
 check($actions->reads===[['users.lookup',['email'=>'target@example.com']]],'Alias must resolve locally');
 check(count($actions->prepared)===1&&count($result['actions'])===1,'Expected prepared card only');
+check($result['trace'][0]['timings']===['connect_ms'=>12,'starttransfer_ms'=>90000,'total_ms'=>91000],'Model timing allowlist missing');
+check(is_int($result['trace'][0]['duration_ms'])&&$result['trace'][1]['tool']==='users.lookup'&&is_int($result['trace'][1]['duration_ms']),'Provider and tool duration missing');
+check(!str_contains(json_encode($result['trace']),'fixture-api-key')&&!str_contains(json_encode($result['trace']),'private-prompt'),'Timing trace leaked metadata');
 foreach(['target@example.com','unknown@example.com','fixture-api-key','fixture-repo-key','fixture-password'] as $secret)check(!str_contains(json_encode($client->messages),$secret),'Outbound leaked '.$secret);
 check(!str_contains($result['answer'],'fixture-api-key')&&!str_contains($result['answer'],'fixture-repo-key'),'Answer leaked key');
 [$result,$client,$actions]=run([['reads'=>[['tool'=>'shell.exec','args'=>['command'=>'touch unsafe']]]],['operations'=>[['kind'=>'user.create','args'=>['email'=>'invented@example.com']],['kind'=>'user.create','args'=>['email'=>'email_ref_1','password'=>'injected']]]]]);

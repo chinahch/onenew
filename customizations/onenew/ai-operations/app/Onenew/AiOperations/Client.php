@@ -31,7 +31,8 @@ class Client
                 'on_headers'=>function($response){$length=$response->getHeaderLine('Content-Length');if($length!==''&&((int)$length>131072))throw new \RuntimeException('response_too_large');},
                 'progress'=>function($total,$downloaded){if($downloaded>131072)throw new \RuntimeException('response_too_large');},
                 'on_stats'=>function(\GuzzleHttp\TransferStats $stats)use(&$timings,&$connectionEstablished){
-                    $values=$stats->getHandlerStats();$safe=[];foreach(['connect_time'=>'connect_ms','starttransfer_time'=>'starttransfer_ms','total_time'=>'total_ms'] as $source=>$target)if(isset($values[$source])&&(is_int($values[$source])||is_float($values[$source])))$safe[$target]=$values[$source]*1000;
+                    $values=$stats->getHandlerStats();if(!$values&&$timings)return;
+                    $safe=[];foreach(['connect_time'=>'connect_ms','starttransfer_time'=>'starttransfer_ms','total_time'=>'total_ms'] as $source=>$target)if(isset($values[$source])&&(is_int($values[$source])||is_float($values[$source])))$safe[$target]=$values[$source]*1000;
                     if(!isset($safe['total_ms']))$safe['total_ms']=$stats->getTransferTime()*1000;$timings=ProviderFailure::timings($safe);
                     $connected=$values['appconnect_time']??$values['connect_time']??null;
                     if((is_int($connected)||is_float($connected))&&is_finite((float)$connected)&&$connected>=0)$connectionEstablished=$connected>0;
