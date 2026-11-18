@@ -33,9 +33,15 @@ final class OpenCodeIntegrationTest extends TestCase
         Http::swap(new \Illuminate\Http\Client\Factory);Http::fake(['*'=>Http::response(['healthy'=>true,'version'=>'1.19.6'],200)]);self::assertFalse(app(Service::class)->test());Http::assertSentCount(1);
     }
     public function test_opencode_refuses_legacy_preview_and_scopes_persistent_history_by_admin():void {
-        $this->ready();Http::preventStrayRequests();$a=$this->auth();$b=$this->auth();
+        $this->ready();Http::preventStrayRequests();$a=$this->auth();
         $this->postJson(self::ROOT.'/preview',['question'=>'help','scope'=>'panel'],$a['headers'])->assertStatus(422);Http::assertNothingSent();
-        $scope=$this->getJson(self::ROOT.'/config',$a['headers'])->assertOk()->json('storage_scope');self::assertIsString($scope);self::assertSame($scope,$this->getJson(self::ROOT.'/config',$a['headers'])->assertOk()->json('storage_scope'));self::assertNotSame($scope,$this->getJson(self::ROOT.'/config',$b['headers'])->assertOk()->json('storage_scope'));
+        $scope=$this->getJson(self::ROOT.'/config',$a['headers'])->assertOk()->json('storage_scope');self::assertIsString($scope);self::assertSame($scope,$this->getJson(self::ROOT.'/config',$a['headers'])->assertOk()->json('storage_scope'));
+        self::assertSame((int)$a['id'],(int)$this->app['auth']->guard('sanctum')->id());
+        // A Laravel test application retains resolved guards across requests. Create B
+        // after A's requests so auth() clears that guard before B is authenticated.
+        $b=$this->auth();$otherScope=$this->getJson(self::ROOT.'/config',$b['headers'])->assertOk()->json('storage_scope');
+        self::assertSame((int)$b['id'],(int)$this->app['auth']->guard('sanctum')->id());
+        self::assertSame(hash_hmac('sha256','ai-chat:'.$b['id'],(string)config('app.key')),$otherScope);self::assertNotSame($scope,$otherScope);
     }
     public function test_real_task_persists_dispatch_before_network_and_deduplicates_lost_acknowledgement():void {
         if(!extension_loaded('curl'))$this->markTestSkipped('Pinned transport requires curl.');$this->ready();$a=$this->auth();$input=['message'=>'edit file','request_id'=>(string)Str::uuid()];$tasks=app(OperatorTasks::class);$task=$tasks->create($a['id'],$input);$id=$task['id'];$session=null;

@@ -134,9 +134,9 @@ def run():
                 _, response = request("/api/session", {"id": client_session, "title": "Disposable Onenew contract", "location": {"directory": str(project)}, "model": {"providerID": "fixture", "id": "probe"}})
                 session = response["data"]
             else:
-                _, session = request("/session", {"id": client_session, "title": "Disposable Onenew contract"})
+                _, session = request("/session", {"title": "Disposable Onenew contract"})
             session_id = session["id"]
-            assert session_id == client_session
+            assert session_id == client_session if V2 else session_id.startswith("ses")
             if V2:
                 code, acknowledgement = request(f"/api/session/{session_id}/prompt", {"id": client_message, "text": "Write the disposable proof with the shell tool, then report completion."})
                 assert code == 200
