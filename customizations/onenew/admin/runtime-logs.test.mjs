@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {runtimeLogParams,fetchRuntimeLogs,RuntimeLogEntries,RuntimeLogs} from './src/runtime-logs.mjs';
+import {formatRuntimeLogTime,runtimeLogParams,fetchRuntimeLogs,RuntimeLogEntries,RuntimeLogs} from './src/runtime-logs.mjs';
 test('bounded filtered cursor requests use the machine endpoint',async()=>{
  const calls=[];await fetchRuntimeLogs(async(...args)=>{calls.push(args);return {status:'collecting',entries:[]}},7,{level:'error',search:'x'.repeat(120),from:'2026-11-18T08:00',to:'2026-11-18T09:00',before_id:80,limit:500});
  assert.equal(calls[0][0],'/api/onenew/admin/machines/7/runtime-logs');
@@ -52,4 +52,14 @@ test('machine status has an adjacent runtime log modal entry and detail retains 
  const patched=patchBundle(source,'');
  assert.ok(patched.includes('children:[Q.jsx(s3t,{machine:e.original,t:t}),Q.jsx(OnenewAdmin.RuntimeLogs,{react:H,get:IL,machineId:e.original.id})]'));
  assert.ok(patched.includes('Q.jsx(OnenewAdmin.RuntimeLogs,{react:H,get:IL,machineId:e.id})'));
+});
+
+test('runtime log times and datetime filters use Beijing regardless of browser timezone',()=>{
+ const previous=process.env.TZ;
+ try{for(const tz of ['UTC','America/Los_Angeles','Asia/Shanghai']){
+  process.env.TZ=tz;
+  assert.equal(formatRuntimeLogTime(Date.parse('2026-11-17T21:41:57Z')/1000),'2026/11/18 05:41:57');
+  assert.equal(runtimeLogParams({from:'2026-11-18T05:41',to:'2026-11-18T05:42:30'}).from,Date.parse('2026-11-17T21:41:00Z')/1000);
+  assert.equal(runtimeLogParams({to:'2026-11-18T05:42:30'}).to,Date.parse('2026-11-17T21:42:30Z')/1000);
+ }}finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous}
 });
