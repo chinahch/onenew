@@ -164,10 +164,11 @@ final class NativeAdminToolsTest extends TestCase
         $card=$tools->prepare($admin->id,['capability'=>$capability,'params'=>['id'=>$id,'decision'=>'approved','note'=>'verified']]);
         self::assertSame('native.admin',$card['kind']);
         self::assertSame(0,(int)$owner->fresh()->balance);
-        $first=$tools->execute($admin->id,$card['id'],(string)Str::uuid());
+        $requestId=(string)Str::uuid();
+        $first=$tools->execute($admin->id,$card['id'],$requestId);
         self::assertSame('succeeded',$first['status']);
         self::assertSame(1200,(int)$owner->fresh()->balance);
-        $second=$tools->execute($admin->id,$card['id'],(string)Str::uuid());
+        $second=$tools->execute($admin->id,$card['id'],$requestId);
         self::assertSame($first,$second);
         self::assertSame(1200,(int)$owner->fresh()->balance);
         self::assertSame('approved',DB::table('onenew_energy_requests')->where('id',$id)->value('status'));
