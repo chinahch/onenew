@@ -7,6 +7,20 @@ on:
 permissions:
   contents: read
 jobs:
+  opencode-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify real OpenCode 2.3.2 server and actual command tool
+        run: python3 customizations/onenew/ai-operations/tests/opencode-contract.py
+      - name: Verify OpenCode 1.x compatibility against real server
+        env:
+          ONENEW_OPENCODE_TEST_VERSION: '1.19.6'
+        run: python3 customizations/onenew/ai-operations/tests/opencode-contract.py
   container:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -67,6 +81,9 @@ jobs:
             php /opt/onenew/geoip/tests/regions.php
             php /opt/onenew/web-restore/tests/core.php
             php /opt/onenew/ai-operations/tests/operator-engine-core.php
+            php /opt/onenew/ai-operations/tests/opencode-core.php
+            php /opt/onenew/ai-operations/tests/opencode-v2-core.php
+            php /opt/onenew/ai-operations/tests/opencode-config-core.php
             php /opt/onenew/runtime-logs/tests/filter.php
             APP_ENV=testing APP_KEY=base64:aGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGg= DB_CONNECTION=sqlite DB_DATABASE=:memory: CACHE_DRIVER=array QUEUE_CONNECTION=sync SESSION_DRIVER=array vendor/bin/phpunit --bootstrap /opt/onenew/testing/ci-bootstrap.php /opt/onenew/health/tests /opt/onenew/user-portal/tests /opt/onenew/traffic/tests /opt/onenew/plugins/tests /opt/onenew/protocols/tests /opt/onenew/exit-probe/tests /opt/onenew/remote-upgrade/tests /opt/onenew/external/tests /opt/onenew/egress/tests /opt/onenew/migration/tests /opt/onenew/energy/tests /opt/onenew/bandwidth/tests /opt/onenew/landing-library/tests /opt/onenew/domains/tests /opt/onenew/cloud-backup/tests /opt/onenew/web-restore/tests /opt/onenew/ai-operations/tests /opt/onenew/runtime-logs/tests
           '

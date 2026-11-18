@@ -17,6 +17,7 @@ final class Service
     public function preview(int $admin,array $data):array
     {
         $config=$this->config->row();
+        abort_unless(($config['backend']??'chat_completions')==='chat_completions',422,'OpenCode 请使用异步操作聊天；此预览仅支持 Chat Completions。');
         try{$secrets=[$this->config->key($config)];}catch(\Illuminate\Contracts\Encryption\DecryptException $e){abort(422,'AI 密钥无法读取，请重新保存密钥。');}
         $question=Redactor::text($data['question'],$secrets);$scope=$data['scope'];
         $knowledge=$this->clean($this->knowledge->entries($scope,$question),$secrets);$context=$this->clean($this->context->snapshot($scope,$data['node_id']??null),$secrets);
@@ -38,6 +39,7 @@ final class Service
                 abort(409,'此请求已提交或结果未知，请检查后生成新预览。');
             }
             $config=$this->config->row();
+            abort_unless(($config['backend']??'chat_completions')==='chat_completions',422,'OpenCode 请使用异步操作聊天。');
             abort_unless(hash_equals($snapshot['config_fingerprint'],hash('sha256',json_encode($config,JSON_THROW_ON_ERROR))),409,'AI 服务设置已变化，请重新预览并确认。');
             $secret=$this->config->key($config);
             abort_unless($config['enabled']&&$secret!==''&&$config['endpoint']!==''&&$config['model']!=='',422,'请先启用并配置 AI 服务。');
@@ -53,7 +55,9 @@ final class Service
     }
     public function test():bool
     {
-        try{$config=$this->config->row();$key=$this->config->key($config);if(!$config['enabled']||$key===''||$config['model']===''||$config['endpoint']==='')return false;
+        try{$config=$this->config->row();if(!$this->config->ready($config))return false;
+            if(($config['backend']??'chat_completions')==='opencode'){app(OpenCodeClient::class)->health($config,$this->config->opencodePassword($config));return true;}
+            $key=$this->config->key($config);
             $this->client->complete($config,$key,[['role'=>'user','content'=>'Reply only with OK.']]);return true;
         }catch(\Throwable $e){return false;}
     }
