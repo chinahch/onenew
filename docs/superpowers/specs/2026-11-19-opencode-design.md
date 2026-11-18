@@ -1,0 +1,18 @@
+# OpenCode execution backend
+
+The owner requests OpenCode support and publishing, and has already opted out of repeated planning questions. Reuse the current checkout on a feature branch.
+
+## Approach
+Keep existing Chat Completions coordinator unchanged. Add an explicit OpenCode server backend for the 2.3.2 HTTP session API by default, plus explicit 1.x compatibility, verified against an actual published CLI; fail clearly on incompatible servers rather than interpreting arbitrary JSON as success. Verified actual npm packages: @opencode/cli@2.3.2 and opencode-ai@1.19.6 (these are separate distribution lines). Use its real project agent execution, not an LLM wrapper. Server policy controls tools, file writes and commands; the panel never silently overrides permissions. Existing panel data tools are available only in the existing coordinator unless the OpenCode project itself is configured to access them; document this distinction.
+
+## Configuration
+`backend` enum `chat_completions` (default), `opencode`. `opencode_protocol` enum `v2` (default), `v1`. Separate `opencode_endpoint` HTTPS public base URL, `opencode_directory` absolute Linux project directory, `opencode_username` default opencode, encrypted `opencode_password` (blank retains; explicit clear), `opencode_agent` optional, `opencode_model` optional provider/model string. Keep model/API credentials independently on switching. Never return passwords. Config readiness and task fingerprints branch by backend and include all OpenCode fields.
+
+## Task execution
+Reuse owner-scoped async operator jobs and request UUID dedup. Each task creates an isolated remote session in the configured project, sends one prompt and polls messages/status. Persist remote session/message IDs and dispatch stage BEFORE mutations; uncertain send is never retried. Show bounded sanitized step/tool progress, plain-text final answer, real tool failures and explicit unknown outcomes. Do not execute remote output as panel confirmation cards. Session isolation avoids cross-admin data. History forwarded as quoted conversation data only, with the current request authoritative. Fail configuration changes before further remote mutations. A pending permission/question must be reported explicitly, never auto-approved. Timeout does not claim rollback or no side effects; abort session best effort and report uncertain remote execution. Auth uses OpenCode HTTP Basic. TLS verified, DNS pinned, redirects/proxies disabled, bounded bodies/timeouts.
+
+## UI and deployment
+Settings backend selector with relevant fields; chat indicates backend and that OpenCode can directly execute its project permissions, unlike local confirmation-card mode. Connection test uses a health endpoint only and creates no session. Document pinned tested version, isolated project checkout, service setup/auth/reverse proxy, actual tool permissions, no automatic credentials/root/production data access. Provide real-server smoke tests with a fake deterministic model for file edit and command tool execution where possible. Container regressions, frontend tests/build, review and green CI before merge/release.
+
+## Additional owner request
+The floating launcher and chat window must be movable, viewport-safe and usable without blocking native controls. Refresh retains chat until manual clear. Persist bounded transcript/draft and existing task identity per opaque authenticated-admin/deployment storage_scope; never persist credentials from cards or API settings. Restore must poll the same task, never auto-submit a new mutation. Export human-readable Markdown/plain text transcript only. Preserve Escape/focus restore accessibility with a nonmodal draggable window.

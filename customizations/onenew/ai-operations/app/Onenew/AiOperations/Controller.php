@@ -8,10 +8,10 @@ final class Controller
 {
     private function response(array $data){return response()->json($data)->header('Cache-Control','no-store')->header('X-Content-Type-Options','nosniff');}
     private function admin(Request $request):int{return (int)\Illuminate\Support\Facades\Auth::guard('sanctum')->id();}
-    public function config(Config $config){return $this->response(['config'=>$config->view()]);}
+    public function config(Request $request,Config $config){return $this->response(['config'=>$config->view(),'storage_scope'=>hash_hmac('sha256','ai-chat:'.$this->admin($request),(string)config('app.key'))]);}
     public function save(Request $request,Config $config)
     {
-        $data=$request->validate(['enabled'=>'sometimes|boolean','endpoint'=>'sometimes|required|string|max:512','model'=>['sometimes','required','string','max:200','regex:/^[^\x00-\x20\x7f]+$/D'],'token_parameter'=>'sometimes|required|in:max_tokens,max_completion_tokens','api_key'=>['sometimes','nullable','string','max:16384','regex:/^[^\x00-\x20\x7f]*$/D'],'clear_key'=>'sometimes|boolean']);
+        $data=$request->validate(['enabled'=>'sometimes|boolean','backend'=>'sometimes|required|in:chat_completions,opencode','opencode_protocol'=>'sometimes|required|in:v1,v2','endpoint'=>'sometimes|nullable|string|max:512','model'=>['sometimes','nullable','string','max:200','regex:/^[^\x00-\x20\x7f]*$/D'],'token_parameter'=>'sometimes|required|in:max_tokens,max_completion_tokens','api_key'=>['sometimes','nullable','string','max:16384','regex:/^[^\x00-\x20\x7f]*$/D'],'clear_key'=>'sometimes|boolean','opencode_endpoint'=>'sometimes|nullable|string|max:512','opencode_directory'=>'sometimes|nullable|string|max:1024','opencode_username'=>'sometimes|required|string|max:100','opencode_agent'=>'sometimes|nullable|string|max:100','opencode_model'=>'sometimes|nullable|string|max:300','opencode_password'=>['sometimes','nullable','string','max:16384','regex:/^[^\x00-\x1f\x7f]*$/D'],'clear_opencode_password'=>'sometimes|boolean']);
         return $this->response(['config'=>$config->save($data)]);
     }
     public function preview(Request $request,Service $service)
