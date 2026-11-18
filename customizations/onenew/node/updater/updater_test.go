@@ -43,19 +43,20 @@ func archiveTest(t *testing.T, entries map[string]string) []byte {
 }
 
 type harness struct {
-	u         *Updater
-	server    *httptest.Server
-	pkg       []byte
-	sum       string
-	states    []string
-	stops     int
-	unhealthy bool
-	reject    bool
+	u              *Updater
+	server         *httptest.Server
+	pkg            []byte
+	sum            string
+	states         []string
+	stops          int
+	unhealthy      bool
+	healthyVersion string
+	reject         bool
 }
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	h := &harness{}
+	h := &harness{healthyVersion: "v0.1.11"}
 	root := t.TempDir()
 	bin := filepath.Join(root, "bin")
 	os.Mkdir(bin, 0700)
@@ -111,7 +112,7 @@ func newHarness(t *testing.T) *harness {
 			return os.ReadFile(n)
 		}
 		if filepath.Base(n) == "caddyctl" {
-			if h.unhealthy && newer(h.u.version(), "v0.1.11") {
+			if h.unhealthy && newer(h.u.version(), h.healthyVersion) {
 				return []byte("ID MODE PANEL TARGET SERVICE HEALTH\nx machine " + h.server.URL + " machine_id=7 running failed\n"), nil
 			}
 			return []byte("ID MODE PANEL TARGET SERVICE HEALTH\nx machine " + h.server.URL + " machine_id=7 running ok\n"), nil

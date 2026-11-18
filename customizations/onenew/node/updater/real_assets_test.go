@@ -43,6 +43,7 @@ func TestRealV13ToV14Assets(t *testing.T) {
 			if h.u.version() != "v0.1.13" {
 				t.Fatal("old asset version mismatch")
 			}
+			h.healthyVersion = "v0.1.13"
 			var e error
 			h.pkg, e = os.ReadFile(newPkg)
 			if e != nil {
