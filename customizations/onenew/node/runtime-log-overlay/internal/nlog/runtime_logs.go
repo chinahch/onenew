@@ -78,12 +78,17 @@ func SanitizeRuntime(message string) string {
 }
 func runtimeMessage(level slog.Level, msg string, args []any) (string, bool) {
 	failure := runtimeFailure.MatchString(msg)
+	configuration := runtimeSuccess.MatchString(msg)
 	for i := 0; i+1 < len(args); i += 2 {
-		if fmt.Sprint(args[i]) == "error" && args[i+1] != nil {
+		key := strings.ToLower(fmt.Sprint(args[i]))
+		if runtimeSuccess.MatchString(key) || key == "port" || key == "ports" || key == "server_port" {
+			configuration = true
+		}
+		if key == "error" && args[i+1] != nil || key == "reason" && runtimeFailure.MatchString(fmt.Sprint(args[i+1])) {
 			failure = true
 		}
 	}
-	if !failure && runtimeSuccess.MatchString(msg) {
+	if !failure && configuration {
 		return "", false
 	}
 	var b strings.Builder

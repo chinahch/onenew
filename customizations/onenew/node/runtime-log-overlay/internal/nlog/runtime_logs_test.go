@@ -93,6 +93,22 @@ func TestRuntimeStructuredHandlerKeepsReasons(t *testing.T) {
 	}
 }
 
+func TestRuntimeSuccessSubjectsInFieldsNeverReachLocalOrUpload(t *testing.T) {
+	var out bytes.Buffer
+	Init(&out, slog.LevelDebug, false)
+	ResetRuntime()
+	Core().Info("initial snapshot ready", "users", 8, "local_nodes", 3)
+	Core().Info("xray started", "ports", []int{443, 25051}, "users", 8)
+	Core().Warn("snapshot ready", "users", 8)
+	if out.Len() != 0 || len(PendingRuntime().Entries) != 0 {
+		t.Fatal("structured configuration success leaked", out.String())
+	}
+	Core().Error("runtime check", "users", 8, "error", "connection refused")
+	if !strings.Contains(out.String(), "connection refused") {
+		t.Fatal("diagnostic reason lost")
+	}
+}
+
 func TestRuntimeLibrarySuccessSeverityDoesNotBypassSuppression(t *testing.T) {
 	var out bytes.Buffer
 	Init(&out, slog.LevelDebug, false)
