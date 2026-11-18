@@ -21,6 +21,7 @@ class RuntimePatchTests(unittest.TestCase):
    }
    for name,text in files.items():p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(text,encoding='utf-8')
    module.patch(root)
+   self.assertNotIn('"go.uber.org/zap"',(root/'internal/cert/cert.go').read_text())
    self.assertIn('OnenewSanitizeBoundary',(root/'onenew-dependencies/sing-box/log/observable.go').read_text())
    self.assertIn('onenew-runtime-logs-v1',json.loads((root/'build-source.json').read_text())['features'])
  def test_downloads_exact_named_pinned_replacement_in_clean_cache(self):

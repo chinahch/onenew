@@ -42,6 +42,8 @@ def patch(source):
   }
   if r.URL.Path == "/api/v3/server/probes" {''')
  edit('internal/cert/cert.go','zap.NewNop()','runtimeCertificateLogger()')
+ cert=source/'internal/cert/cert.go';text=cert.read_text(encoding='utf-8')
+ if 'zap.' not in text:cert.write_text(text.replace('"go.uber.org/zap"\n',''),encoding='utf-8',newline='\n')
  # sing-box owns its factory; platform callbacks duplicate raw logs and are not
  # a safe sink. Inject our writer before that factory and disable observability
  # of raw messages. The dependency is copied from its immutable pinned module.
