@@ -44,6 +44,7 @@ jobs:
         run: |
           python3 onenew/customizations/onenew/node/test_argo_patch.py
           python3 onenew/customizations/onenew/node/test_build.py
+          python3 onenew/customizations/onenew/node/test_runtime_log_patch.py
           python3 onenew/customizations/onenew/node/test_installer.py
           python3 onenew/customizations/onenew/node/test_token_validation.py
           python3 onenew/customizations/onenew/node/test_service_health.py
