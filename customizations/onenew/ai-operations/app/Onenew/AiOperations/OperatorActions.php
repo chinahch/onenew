@@ -18,7 +18,7 @@ final class OperatorActions
         return [
             ['kind'=>'user.create','args'=>['email'=>'explicit administrator email alias resolved locally','plan_id'=>'optional integer','days'=>'optional 1..3650','expired_at'=>'optional Unix timestamp; mutually exclusive with days']],
             ['kind'=>'user.extend','args'=>['user_id'=>'integer','amount'=>'1..3650','unit'=>'hours|days|months'],'description'=>'Free administrator duration adjustment; unlimited expiry needs clarification.'],
-            ['kind'=>'node.create','args'=>['template_node_id'=>'required integer','name'=>'required','host'=>'required','port'=>'required 1..65535','server_port'=>'required 1..65535','machine_id'=>'optional','group_ids'=>'optional integer array','enabled'=>'optional boolean; default false','regenerate_reality'=>'optional boolean; default true for REALITY']],
+            ['kind'=>'node.create','args'=>['template_node_id'=>'only required field: existing node integer ID','name'=>'optional; unique template name + -副本 suffix by default','host'=>'optional; inherit template host locally including IPv6','port'=>'optional 1..65535; follows new listener when template public/listener match, otherwise preserves public forwarding port','server_port'=>'optional 1..65535; next unused listener on target machine/host by default','machine_id'=>'optional; inherits template machine','group_ids'=>'optional integer array; inherits template groups','enabled'=>'optional boolean; default false and hidden from subscriptions','regenerate_reality'=>'optional boolean; default true for REALITY'],'description'=>'Template ID alone creates a disabled hidden draft with fresh REALITY keys. Missing optional fields are resolved locally, not guessed by the model. Explicit listener collisions are rejected.'],
             ['kind'=>'node.update','args'=>array_merge(['node_id'],self::NODE_FIELDS)],
             ['kind'=>'node.delete','args'=>['node_id'=>'integer'],'description'=>'Remove this exact node from subscriptions; never delete its machine.'],
         ];
@@ -33,7 +33,7 @@ final class OperatorActions
         if ($tool==='nodes.lookup') {
             $this->only($args,['node_id','name','query']);Validator::make($args,['node_id'=>'nullable|integer|min:1','name'=>'nullable|string|max:100','query'=>'nullable|string|max:100'])->validate();
             $q=Server::query();if(isset($args['node_id']))$q->where('id',$args['node_id']);if(isset($args['name'])||isset($args['query']))$q->where('name',$args['name']??$args['query']);
-            return ['nodes'=>$q->orderBy('id')->limit(30)->get(['id','name','type','machine_id','show','enabled'])->toArray()];
+            return ['nodes'=>$q->orderBy('id')->limit(30)->get(['id','name','type','machine_id','host','port','server_port','group_ids','show','enabled'])->toArray()];
         }
         if($tool==='inventory'){
             $this->only($args,['kind']);Validator::make($args,['kind'=>'required|in:plans,machines,groups'])->validate();
@@ -69,13 +69,19 @@ final class OperatorActions
             Validator::make($args,[$idKey=>'required|integer|min:1'])->validate();$node=Server::findOrFail($args[$idKey]);$snapshot[]=$this->snapshot($node);
             $before=$this->nodeView($node);$before['effect']=$delete?'This exact node will be removed from subscriptions. Its machine remains.':'Current node';
             if(!$delete){
-                $rules=['regenerate_reality'=>'sometimes|boolean','name'=>($create?'required':'sometimes').'|string|max:255','host'=>($create?'required':'sometimes').'|string|max:255','port'=>($create?'required':'sometimes').'|integer|between:1,65535','server_port'=>($create?'required':'sometimes').'|integer|between:1,65535','show'=>'sometimes|boolean','enabled'=>'sometimes|boolean','machine_id'=>'nullable|integer|exists:v2_server_machine,id','group_ids'=>'sometimes|array|max:50','group_ids.*'=>'integer|distinct|exists:v2_server_group,id','node_speed_limit_mbps'=>'nullable|numeric|min:0|max:1000000'];Validator::make($args,$rules)->validate();
+                $rules=['regenerate_reality'=>'sometimes|boolean','name'=>'sometimes|string|max:255','host'=>'sometimes|string|max:255','port'=>'sometimes|integer|between:1,65535','server_port'=>'sometimes|integer|between:1,65535','show'=>'sometimes|boolean','enabled'=>'sometimes|boolean','machine_id'=>'nullable|integer|exists:v2_server_machine,id','group_ids'=>'sometimes|array|max:50','group_ids.*'=>'integer|distinct|exists:v2_server_group,id','node_speed_limit_mbps'=>'nullable|numeric|min:0|max:1000000'];Validator::make($args,$rules)->validate();
                 $machineId=array_key_exists('machine_id',$args)?$args['machine_id']:$node->machine_id;
                 if($machineId)$snapshot[]=$this->snapshot(ServerMachine::findOrFail($machineId));
                 foreach($args['group_ids']??$node->group_ids??[] as $id)$snapshot[]=$this->snapshot(ServerGroup::findOrFail($id));
                 $data=$node->attributesToArray();unset($data['id'],$data['created_at'],$data['updated_at']);
                 if($create){foreach(['onenew_identity','code','spectific_key'] as $key)unset($data[$key]);foreach(['u','d'] as $key)$data[$key]=0;foreach(['last_check_at','last_push_at'] as $key)unset($data[$key]);$data['parent_id']=null;$data['enabled']=false;foreach(['onenew_landing_bindings','custom_routes','custom_outbounds','route_ids'] as $key)$data[$key]=[];}
                 foreach(self::NODE_FIELDS as $key)if(array_key_exists($key,$args))$data[$key]=$args[$key];
+                if($create){
+                    if(!isset($args['name'])){$data['name']=$this->copyName($node->name);$args['generated_name']=true;}
+                    if(!isset($args['server_port']))$data['server_port']=$this->copyPort($data,(int)($node->server_port?:$node->port));
+                    if(!isset($args['port'])&&(string)$node->port===(string)($node->server_port?:$node->port))$data['port']=$data['server_port'];
+                    if(!$data['enabled'])$data['show']=false;
+                }
                 if($create && (int)($data['protocol_settings']['tls']??0)===2){
                     if($args['regenerate_reality']??true){
                         $private=random_bytes(32);$private[0]=chr(ord($private[0])&248);$private[31]=chr((ord($private[31])&127)|64);
@@ -87,6 +93,7 @@ final class OperatorActions
                 $request=ServerSave::create('/','POST',$data);Validator::make($data,$request->rules(),$request->messages())->validate();
                 $args['data']=$data;$after=array_intersect_key($data,array_flip(self::NODE_FIELDS));if($create){
                     $after['effect']=$data['enabled']?(!empty($data['machine_id'])?'Save enabled node and queue native configuration; runtime listening is not verified.':'Save enabled node without an assigned machine; runtime listening is not verified.'):'Create a disabled draft; review and enable the node separately.';
+                    if((string)$data['port']!==(string)$data['server_port'])$after['effect'].=' Public forwarding/CDN port is preserved; verify its mapping before enabling.';
                     if((int)($data['protocol_settings']['tls']??0)===2)$after['reality']=array_intersect_key($data['protocol_settings']['reality_settings']??[],array_flip(['public_key','short_id']));
                 }
             }else $after=['deleted'=>true,'machine_deleted'=>false];
@@ -101,10 +108,11 @@ final class OperatorActions
         return Cache::lock('onenew:ai:action-lock:'.$id,60)->block(5,function()use($admin,$id,$requestId){
             // The listener reservation lock wraps the whole transaction, including
             // commit. Different templates on the same unassigned host must serialize.
-            $cached=Cache::get($this->key($admin,$id));$listenerKey=null;
+            $cached=Cache::get($this->key($admin,$id));$listenerKey=null;$nameKey=null;
             if(is_string($cached)){
                 $prepared=json_decode(Crypt::decryptString($cached),true,512,JSON_THROW_ON_ERROR);
                 if(in_array($prepared['card']['kind'],['node.create','node.update'],true))$listenerKey=$this->listenerLockKey($prepared['args']['data']);
+                if($prepared['card']['kind']==='node.create'&&!empty($prepared['args']['generated_name']))$nameKey='onenew:ai:copy-name:'.hash('sha256',$prepared['args']['data']['name']);
             }
             $dispatch=function()use($admin,$id,$requestId){return DB::transaction(function()use($admin,$id,$requestId){
                 $prior=DB::table('onenew_ai_action_audit')->where('action_id',$id)->first();
@@ -119,20 +127,34 @@ final class OperatorActions
                     // Trial defaults must not override an explicit administrator expiry.
                     if(isset($a['expired_at']))$user->expired_at=$a['expired_at'];$user->saveOrFail();$result['target_id']=$user->id;$result['credentials']=['password'=>$password];
                 }elseif($kind==='user.extend'){$user=$targets[User::class.':'.$a['user_id']];$user->expired_at=$a['new_expired_at'];$user->saveOrFail();$result['target_id']=$user->id;$result['expired_at']=$user->expired_at;
-                }elseif($kind==='node.create'){$this->validateNodePort($a['data']);$node=new Server();$node->fill($a['data']);$node->saveOrFail();$result['target_id']=$node->id;$result['deployment_status']=$node->enabled&&$node->machine_id?'saved_configuration_queued':'saved_disabled_or_unassigned';
+                }elseif($kind==='node.create'){$this->validateNodePort($a['data']);if(!empty($a['generated_name'])&&Server::where('name',$a['data']['name'])->exists())$this->invalid('name','Generated copy name is now in use; prepare a new action.');$node=new Server();$node->fill($a['data']);$node->saveOrFail();$result['target_id']=$node->id;$result['deployment_status']=$node->enabled&&$node->machine_id?'saved_configuration_queued':'saved_disabled_or_unassigned';
                 }else{$node=$targets[Server::class.':'.$a['node_id']];$result['target_id']=$node->id;if($kind==='node.delete'){if(!$node->delete())throw new \RuntimeException('Node delete failed.');}else{$this->validateNodePort($a['data'],$node->id);$node->fill(array_intersect_key($a['data'],array_flip(self::NODE_FIELDS)));$node->saveOrFail();}}
                 $auditResult=$result;unset($auditResult['credentials']);
                 DB::table('onenew_ai_action_audit')->insert(['admin_id'=>$admin,'action_id'=>$id,'request_id'=>$requestId,'kind'=>$kind,'target_id'=>$result['target_id'],'result_code'=>'succeeded','encrypted_result'=>Crypt::encryptString(json_encode($auditResult,JSON_THROW_ON_ERROR)),'credential_expires_at'=>time()+600,'created_at'=>time()]);
                 if(isset($result['credentials']))Cache::put($this->key($admin,$id).':credentials',Crypt::encryptString(json_encode($result['credentials'],JSON_THROW_ON_ERROR)),600);
                 return $result;
             });};
-            return $listenerKey===null?$dispatch():Cache::lock($listenerKey,60)->block(5,$dispatch);
+            $save=fn()=>$listenerKey===null?$dispatch():Cache::lock($listenerKey,60)->block(5,$dispatch);
+            return $nameKey===null?$save():Cache::lock($nameKey,60)->block(5,$save);
         });
     }
     private function listenerLockKey(array $data): string
     {
         $scope=!empty($data['machine_id'])?'machine:'.(int)$data['machine_id']:'host:'.strtolower(trim((string)$data['host']));
         return 'onenew:ai:listener:'.hash('sha256',$scope.':'.(int)$data['server_port']);
+    }
+    private function copyName(string $name): string
+    {
+        $base=mb_substr($name,0,230).'-副本';
+        for($i=1;$i<=1000;$i++){$candidate=$base.($i===1?'':' '.$i);if(!Server::where('name',$candidate)->exists())return $candidate;}
+        $this->invalid('name','No unused copy name found; provide an explicit name.');
+    }
+    private function copyPort(array $data,int $base): int
+    {
+        $query=Server::query();if(!empty($data['machine_id']))$query->where('machine_id',$data['machine_id']);else $query->whereNull('machine_id')->where('host',$data['host']);
+        $used=array_fill_keys(array_map('intval',$query->pluck('server_port')->all()),true);$start=max(1,min(65535,$base));
+        for($offset=1;$offset<=65535;$offset++){$candidate=(($start+$offset-1)%65535)+1;if(!isset($used[$candidate]))return $candidate;}
+        $this->invalid('server_port','No unused listener port remains on this machine/host.');
     }
     /** Drafts reserve listener ports too. The outer listener lock serializes AI saves. */
     private function validateNodePort(array $data,?int $except=null): void
