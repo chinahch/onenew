@@ -65,6 +65,7 @@ foreach(["{\"answer\":\"reading\nliteral newline\",\"reads\":[{\"tool\":\"nodes.
     try{run([$malformed]);check(false,'Malformed JSON envelope displayed as an answer');}catch(\RuntimeException $e){check($e->getMessage()==='invalid_response','Malformed envelope must return safe invalid_response');}
 }
 [$result]=run(["```json\n{\"answer\":\"valid fenced answer\",\"reads\":[]}\n```"]);check($result['answer']==='valid fenced answer'&&$result['actions']===[],'Valid JSON fence parsing changed');
+[$result]=run(["```php\necho 'ordinary code';\n```"]);check($result['answer']==="```php\necho 'ordinary code';\n```"&&$result['actions']===[],'Ordinary non-JSON fenced text changed');
 [$result,$client,$actions,$source]=run([['patches'=>[['path'=>'secret.php','old_text'=>'old','new_text'=>'new']]]]);check($result['code_changes']===[]&&count($source->proposed)===1,'Existing source credentials reached a proposal card');
 [$result,$client,$actions,$source]=run([['patches'=>[['path'=>'safe.php','old_text'=>'old','new_text'=>'fixture-api-key']]]]);check($result['code_changes']===[]&&$source->proposed===[],'Model credential reached proposal tool');
 [$result,$client]=run(['safe'],'Create target@example.com password natural-secret 密码是中文口令');check(!str_contains(json_encode($client->messages,JSON_UNESCAPED_UNICODE),'natural-secret')&&!str_contains(json_encode($client->messages,JSON_UNESCAPED_UNICODE),'中文口令'),'Natural-language password reached provider');

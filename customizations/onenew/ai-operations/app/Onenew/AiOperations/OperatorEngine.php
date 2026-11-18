@@ -52,7 +52,7 @@ final class OperatorEngine
     }
     private function decode(string $raw):array
     {
-        $text=trim($raw);$fenced=preg_match('/^```(?:json)?\s*([\s\S]*?)\s*```$/D',$text,$match)===1;if($fenced)$text=$match[1];
+        $text=trim($raw);$fenced=preg_match('/^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```$/iD',$text,$match)===1;if($fenced)$text=$match[1];
         try{$envelope=json_decode($text,true,32,JSON_THROW_ON_ERROR);}catch(\Throwable $e){
             if($fenced||preg_match('/^(?:\{|\[|```json\b)/i',ltrim($text))||preg_match('/"(?:answer|reads|operations|patches)"\s*:/',$text))throw new \RuntimeException('invalid_response');
             return ['answer'=>$this->clean($raw)];
