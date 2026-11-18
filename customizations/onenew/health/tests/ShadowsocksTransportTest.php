@@ -72,4 +72,23 @@ final class ShadowsocksTransportTest extends TestCase
         $this->assertSame(0, (int)($node->protocol_settings['tls'] ?? 0));
         $this->assertEmpty($node->protocol_settings['plugin']);
     }
+    public function test_plain_ss_probes_local_listener_with_native_account_and_local_source(): void
+    {
+        $user=new User(['uuid'=>'00000000-0000-4000-8000-000000000001']);
+        foreach(['2022-blake3-aes-256-gcm'=>32,'2022-blake3-aes-128-gcm'=>16,'aes-128-gcm'=>null] as $cipher=>$size){
+            $node=Server::create(['name'=>'plain SS','type'=>'shadowsocks','host'=>'8.138.255.100','port'=>'30001','server_port'=>40558,'rate'=>1,'enabled'=>true,'protocol_settings'=>['cipher'=>$cipher]])->fresh();
+            $before=$node->getRawOriginal();$payload=app(ProbeOutboundBuilder::class)->build($node,$user);$out=$payload['outbound']['settings'];
+            $this->assertSame('127.0.0.1',$out['server']);$this->assertSame(40558,$out['server_port']);
+            $this->assertSame($node->generateServerPassword($user),$out['password']);
+            if($size!==null)foreach(explode(':',$out['password']) as $key)$this->assertSame($size,strlen(base64_decode($key)));
+            $this->assertSame(ProbeOutboundBuilder::TARGET,$payload['target']);
+            $this->assertSame('local_listener_roundtrip',\App\Onenew\ProbeStages::payload($node,'singbox',$payload)['entry_source']);
+            $this->assertSame($before,$node->fresh()->getRawOriginal());$this->assertSame('8.138.255.100',$node->host);$this->assertSame(30001,(int)$node->port);
+            foreach([null,0,-1,65536] as $invalid){
+                $node->server_port=$invalid;$fallback=app(ProbeOutboundBuilder::class)->build($node,$user)['outbound']['settings'];
+                $this->assertSame('8.138.255.100',$fallback['server']);$this->assertSame(30001,$fallback['server_port']);
+            }
+        }
+    }
+
 }

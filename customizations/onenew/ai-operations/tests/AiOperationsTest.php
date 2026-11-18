@@ -101,7 +101,7 @@ final class AiOperationsTest extends TestCase
             }
             return Http::response(str_repeat('x',131073),200);
         });
-        $this->expectException(\RuntimeException::class);$this->expectExceptionMessage('provider_failed');
+        $this->expectException(\RuntimeException::class);$this->expectExceptionMessage('invalid_response');
         app(\App\Onenew\AiOperations\Client::class)->complete(app(Config::class)->row(),'fixture-secret-key',[['role'=>'user','content'=>'hello']]);
     }
     public function test_preview_decryption_failure_is_generic_and_sends_nothing():void

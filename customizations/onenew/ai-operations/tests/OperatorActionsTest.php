@@ -96,4 +96,64 @@ final class OperatorActionsTest extends TestCase
         try {$a->execute(1,$delete['id'],(string)Str::uuid());self::fail();} catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {self::assertSame(409,$e->getStatusCode());}
         self::assertNotNull($copy->fresh());
     }
+    private function realityTemplate(): Server
+    {
+        $machine=\App\Models\ServerMachine::create(['name'=>'Reality machine','token'=>Str::random(32)]);
+        $node=Server::create(['name'=>'Node 45','type'=>'vless','machine_id'=>$machine->id,'host'=>'example.test','port'=>25051,'server_port'=>25051,'rate'=>1,'group_ids'=>[],'protocol_settings'=>['tls'=>2,'network'=>'tcp','flow'=>'xtls-rprx-vision','reality_settings'=>['server_name'=>'example.com','server_port'=>443,'private_key'=>'template-private','public_key'=>'template-public','short_id'=>'1122334455667788']]]);
+        // Seed an existing persisted legacy binding without fabricating a current
+        // kernel report or running landing compilation for this copy-only fixture.
+        DB::table('v2_server')->where('id',$node->id)->update(['custom_routes'=>json_encode([['outbound'=>'template-exit']]),'custom_outbounds'=>json_encode([['tag'=>'template-exit','protocol'=>'direct']]),'onenew_landing_bindings'=>json_encode([['landing_id'=>7,'global'=>true,'domains'=>[]]])]);
+        return $node->fresh();
+    }
+    public function test_reality_copy_generates_independent_keys_preserves_template_and_enables_only_explicitly(): void
+    {
+        $template=$this->realityTemplate();$before=$template->getRawOriginal();$a=app(OperatorActions::class);$keys=[];
+        foreach([25052,25053] as $port){
+            $card=$a->prepare(1,'node.create',['template_node_id'=>$template->id,'name'=>'Copy '.$port,'host'=>'copy.test','port'=>$port,'server_port'=>$port,'enabled'=>true]);
+            self::assertArrayNotHasKey('private_key',$card['after']['reality']);self::assertStringNotContainsString('template-private',json_encode($card));
+            $r=$a->execute(1,$card['id'],(string)Str::uuid());$copy=Server::findOrFail($r['target_id']);$settings=$copy->protocol_settings;$reality=$settings['reality_settings'];
+            self::assertTrue($copy->enabled);self::assertSame('saved_configuration_queued',$r['deployment_status']);
+            self::assertNotSame('template-private',$reality['private_key']);self::assertSame($card['after']['reality']['public_key'],$reality['public_key']);
+            $private=base64_decode(strtr($reality['private_key'],'-_','+/'));self::assertSame(32,strlen($private));
+            self::assertSame(rtrim(strtr(base64_encode(sodium_crypto_scalarmult_base($private)),'+/','-_'),'='),$reality['public_key']);
+            self::assertMatchesRegularExpression('/^[a-f0-9]{16}$/',$reality['short_id']);self::assertNotContains($reality['public_key'],$keys);$keys[]=$reality['public_key'];
+            self::assertStringNotContainsString($reality['private_key'],json_encode($card));self::assertStringNotContainsString($reality['private_key'],\Illuminate\Support\Facades\Cache::get('onenew:ai:action:1:'.$card['id']));self::assertSame('example.com',$reality['server_name']);self::assertSame('xtls-rprx-vision',$settings['flow']);
+            foreach(['route_ids','custom_routes','custom_outbounds','onenew_landing_bindings'] as $field)self::assertEmpty($copy->$field);
+        }
+        self::assertSame($before,$template->fresh()->getRawOriginal());
+    }
+    public function test_node_copy_rejects_conflicting_listen_port_on_machine_including_disabled_drafts(): void
+    {
+        $node=$this->realityTemplate();$this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(OperatorActions::class)->prepare(1,'node.create',['template_node_id'=>$node->id,'name'=>'Collision','host'=>'different.test','port'=>443,'server_port'=>25051]);
+    }
+    public function test_node_copy_rechecks_port_conflict_at_execution(): void
+    {
+        $node=$this->realityTemplate();$a=app(OperatorActions::class);$card=$a->prepare(1,'node.create',['template_node_id'=>$node->id,'name'=>'Copy','host'=>'copy.test','port'=>25052,'server_port'=>25052]);
+        $other=$node->replicate();$other->onenew_landing_bindings=[];$other->custom_routes=[];$other->custom_outbounds=[];$other->name='Draft competitor';$other->server_port=25052;$other->enabled=false;$other->saveOrFail();
+        try {$a->execute(1,$card['id'],(string)Str::uuid());self::fail('Port collision must fail');}catch(\Illuminate\Validation\ValidationException $e){self::assertArrayHasKey('server_port',$e->errors());}
+        self::assertFalse(Server::where('name','Copy')->exists());self::assertSame(0,DB::table('onenew_ai_action_audit')->count());
+    }
+
+    public function test_unassigned_copies_from_different_templates_share_listener_reservation_lock(): void
+    {
+        $a=app(OperatorActions::class);$cards=[];
+        foreach([443,444] as $port){
+            $template=Server::create(['name'=>'Source '.$port,'type'=>'shadowsocks','host'=>'source.test','port'=>$port,'server_port'=>$port,'rate'=>1,'group_ids'=>[],'protocol_settings'=>['cipher'=>'aes-128-gcm']]);
+            $cards[]=$a->prepare(1,'node.create',['template_node_id'=>$template->id,'name'=>'Copy '.$port,'host'=>'shared.test','port'=>8443,'server_port'=>8443]);
+        }
+        $listener='onenew:ai:listener:'.hash('sha256','host:shared.test:8443');$observed=false;
+        \Illuminate\Support\Facades\Event::listen('eloquent.created: '.Server::class,function(Server $node)use($listener,&$observed){
+            if($node->host!=='shared.test')return;
+            $competing=\Illuminate\Support\Facades\Cache::lock($listener,60);
+            $acquired=$competing->get();if($acquired)$competing->release();
+            self::assertFalse($acquired,'Listener lock must be held while native save runs');$observed=true;
+        });
+        $a->execute(1,$cards[0]['id'],(string)Str::uuid());self::assertTrue($observed);
+        $released=\Illuminate\Support\Facades\Cache::lock($listener,60);self::assertTrue($released->get());$released->release();
+        try{$a->execute(1,$cards[1]['id'],(string)Str::uuid());self::fail('Second template must observe committed reservation');}
+        catch(\Illuminate\Validation\ValidationException $e){self::assertArrayHasKey('server_port',$e->errors());}
+        self::assertSame(1,Server::where('host','shared.test')->count());
+    }
+
 }
