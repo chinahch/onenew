@@ -136,7 +136,7 @@ func PendingRuntime() RuntimeBatch {
 		if len(runtimeState.queue) > 0 {
 			first = runtimeState.queue[0].Seq
 		}
-		runtimeState.pending = &RuntimeBatch{DeploymentID: runtimeState.deployment, BatchID: runtimeUUID(), FirstSeq: first, Entries: runtimeState.queue, Dropped: runtimeState.dropped, Version: "v0.1.13"}
+		runtimeState.pending = &RuntimeBatch{DeploymentID: runtimeState.deployment, BatchID: runtimeUUID(), FirstSeq: first, Entries: runtimeState.queue, Dropped: runtimeState.dropped, Version: "v0.1.14"}
 		if runtimeState.pending.Entries == nil {
 			runtimeState.pending.Entries = []RuntimeEntry{}
 		}
