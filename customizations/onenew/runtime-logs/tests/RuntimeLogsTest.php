@@ -30,4 +30,12 @@ final class RuntimeLogsTest extends TestCase
   $m=$this->machine();$b=$this->batch($m);$b['entries'][1]['seq']=5;$this->postJson('/api/v3/server/runtime-logs',$b,['Authorization'=>'Bearer '.$m->token])->assertStatus(422);self::assertSame(0,DB::table('onenew_runtime_log_entries')->count());
   $b=$this->batch($m);$b['entries'][0]['message']=str_repeat('x',270000);$this->postJson('/api/v3/server/runtime-logs',$b,['Authorization'=>'Bearer '.$m->token])->assertStatus(413);
  }
+ public function test_offline_capable_node_is_waiting_after_retention_not_upgrade_required():void{
+  $m=$this->machine();$s=app(Service::class);$s->accept($m,$this->batch($m));DB::table('onenew_runtime_log_streams')->update(['last_received_at'=>time()-604801]);$s->prune();self::assertSame('waiting',$s->query($m,[],1)['status']);
+ }
+ public function test_ai_catalog_marks_only_exact_runtime_log_reader_as_read_and_audits_query():void{
+  $m=$this->machine();app(Service::class)->accept($m,$this->batch($m));$u=User::create(['email'=>Str::random(12).'@example.test','password'=>'hashed','uuid'=>(string)Str::uuid(),'token'=>Str::random(32),'is_admin'=>true]);
+  $tools=app(\App\Onenew\AiOperations\NativeAdminTools::class);$items=$tools->catalog(['search'=>'runtime-logs'])['items'];self::assertCount(1,$items);self::assertSame('read',$items[0]['mode']);
+  $tools->read($u->id,['capability'=>$items[0]['capability'],'params'=>['id'=>$m->id,'limit'=>10]]);self::assertSame(1,DB::table('onenew_runtime_log_reads')->where('admin_id',$u->id)->count());
+ }
 }

@@ -29,9 +29,14 @@ final class Service
   if(!empty($filters['search'])){$search=str_replace(['!','%','_'],['!!','!%','!_'],$filters['search']);$query->whereRaw("message LIKE ? ESCAPE '!'",['%'.$search.'%']);}
   $total=(clone $query)->count();$limit=(int)($filters['limit']??50);$page=(int)($filters['page']??1);if(isset($filters['before_id']))$query->where('id','<',$filters['before_id']);else $query->offset(($page-1)*$limit);
   $rows=$query->orderByDesc('id')->limit($limit+1)->get();$more=$rows->count()>$limit;$rows=$rows->take($limit);$entries=[];foreach($rows as $row)$entries[]=['id'=>(int)$row->id,'seq'=>(int)$row->seq,'level'=>$row->level,'at'=>(int)$row->at,'message'=>$row->message];
-  $streams=DB::table('onenew_runtime_log_streams')->where('machine_id',$machine->id)->where('machine_identity',$identity)->where('last_received_at','>=',$cutoff);$last=(clone $streams)->max('last_received_at');
+  $streams=DB::table('onenew_runtime_log_streams')->where('machine_id',$machine->id)->where('machine_identity',$identity);$last=(clone $streams)->max('last_received_at');$streams->where('last_received_at','>=',$cutoff);
   DB::table('onenew_runtime_log_reads')->insert(['admin_id'=>$admin,'machine_id'=>$machine->id,'machine_identity'=>$identity,'result_count'=>count($entries),'searched'=>!empty($filters['search']),'created_at'=>time()]);
   return ['machine_id'=>(int)$machine->id,'status'=>$last?($last>=time()-60?'collecting':'waiting'):'upgrade_required','last_received_at'=>$last?(int)$last:null,'dropped'=>(int)(clone $streams)->sum('dropped'),'filtered'=>(int)(clone $streams)->sum('filtered'),'retention_days'=>7,'entries'=>$entries,'next_before_id'=>$more&&$entries?$entries[array_key_last($entries)]['id']:null,'total'=>$total,'page'=>$page,'per_page'=>$limit,'pages'=>(int)ceil($total/$limit)];
  }
- public function prune():void{$cutoff=time()-604800;foreach(['entries'=>'received_at','batches'=>'received_at','reads'=>'created_at','streams'=>'last_received_at'] as $table=>$field)DB::table('onenew_runtime_log_'.$table)->where($field,'<',$cutoff)->delete();}
+ public function prune():void{
+  $cutoff=time()-604800;foreach(['entries'=>'received_at','batches'=>'received_at','reads'=>'created_at'] as $table=>$field)DB::table('onenew_runtime_log_'.$table)->where($field,'<',$cutoff)->delete();
+  // Keep only the newest capability marker for an offline current machine so it
+  // remains "waiting", rather than falsely claiming its installed node is old.
+  DB::table('onenew_runtime_log_streams')->where('last_received_at','<',$cutoff)->orderBy('id')->chunkById(100,function($rows){foreach($rows as $row){$machine=ServerMachine::find($row->machine_id);if(!$machine||!hash_equals($row->machine_identity,$this->identity($machine))||DB::table('onenew_runtime_log_streams')->where('machine_identity',$row->machine_identity)->where('id','>',$row->id)->exists())DB::table('onenew_runtime_log_streams')->where('id',$row->id)->delete();}});
+ }
 }

@@ -6,7 +6,7 @@ final class LogFilter
  public static function message(string $level,string $message,array $secrets=[]):?string{
   if(!preg_match('//u',$message))return null;
   $message=preg_replace('/\x1b\[[0-9;]*[A-Za-z]/','',$message)??'';
-  if(in_array($level,['debug','info'],true)&&preg_match('/(?:user(?:s|manager)?|listener|configuration|config\b|node\b|\[(?:vless|vmess|trojan|shadowsocks|ss|hysteria2?|tuic|anytls|socks|http):\d+\]|用户|下发|配置|端口)/i',$message))return null;
+  if(preg_match('/(?:user(?:s|manager)?|listener|configuration|config\b|node\b|\[(?:vless|vmess|trojan|shadowsocks|ss|hysteria2?|tuic|anytls|socks|http):\d+\]|用户|下发|配置|端口)/i',$message)&&!preg_match('/error|fail|refused|denied|reject|timeout|timed out|unavailable|unable|invalid|expired|already in use|not found|cannot|could not|panic|错误|失败|异常/i',$message))return null;
   foreach($secrets as $secret)if(is_string($secret)&&$secret!=='')$message=str_replace($secret,'[redacted]',$message);
   $patterns=[
    '~-----BEGIN .*?(?:PRIVATE KEY|CERTIFICATE)-----[\s\S]*?-----END .*?-----~i',
@@ -20,6 +20,7 @@ final class LogFilter
    '~\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?\b~i',
    '~\b(?:user|node|port|listener|用户|节点|端口)\s*#?\s*\d+\b~i',
    '~(?<![A-Za-z0-9]):\d{1,5}\b~',
+   '~\b\d+\b~',
   ];
   foreach($patterns as $pattern)$message=preg_replace($pattern,'[redacted]',$message)??'';
   $message=preg_replace('/[\x00-\x1f\x7f]+/',' ',$message)??'';
