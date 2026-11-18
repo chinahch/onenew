@@ -71,9 +71,24 @@ func TestRuntimeWriterSanitizesKernelAndMultiline(t *testing.T) {
 }
 
 func TestRuntimePreservesGenericStartupAndBraceError(t *testing.T) {
- var out bytes.Buffer;Init(&out,slog.LevelDebug,false);ResetRuntime()
- Core().Info("runtime starting")
- Core().Warn("users updated successfully")
- Core().Error(`certificate failed {"token":"private-sentinel"}: connection refused`)
- if !strings.Contains(out.String(),"runtime starting") || !strings.Contains(out.String(),"connection refused") || strings.Contains(out.String(),"private-sentinel") || strings.Contains(out.String(),"users updated") {t.Fatal(out.String())}
+	var out bytes.Buffer
+	Init(&out, slog.LevelDebug, false)
+	ResetRuntime()
+	Core().Info("runtime starting")
+	Core().Warn("users updated successfully")
+	Core().Error(`certificate failed {"token":"private-sentinel"}: connection refused`)
+	if !strings.Contains(out.String(), "runtime starting") || !strings.Contains(out.String(), "connection refused") || strings.Contains(out.String(), "private-sentinel") || strings.Contains(out.String(), "users updated") {
+		t.Fatal(out.String())
+	}
+}
+
+func TestRuntimeStructuredHandlerKeepsReasons(t *testing.T) {
+	var out bytes.Buffer
+	Init(&out, slog.LevelDebug, false)
+	ResetRuntime()
+	logger := slog.New(RuntimeHandler{})
+	logger.Error("certificate renewal failed", "error", "connection refused", "token", "private-sentinel")
+	if !strings.Contains(out.String(), "connection refused") || strings.Contains(out.String(), "private-sentinel") {
+		t.Fatal(out.String())
+	}
 }

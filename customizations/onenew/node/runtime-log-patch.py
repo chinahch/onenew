@@ -16,18 +16,33 @@ def patch(source):
  def edit(name,old,new):
   p=source/name;s=p.read_text(encoding='utf-8')
   if new in s or "".join(new.split()) in "".join(s.split()):return
+  if name=='internal/config/config.go' and 'slog.SetDefault(slog.New(nlog.RuntimeHandler{}))' in new:
+   s=s.replace('slog.SetDefault(slog.New(slog.NewTextHandler(nlog.RuntimeWriter{}, &slog.HandlerOptions{Level: slog.LevelDebug})))',old)
   if old not in s:raise ValueError('runtime logging anchor changed: '+name+' '+old[:70])
   p.write_text(s.replace(old,new),encoding='utf-8',newline='\n')
  for p in (HERE/'runtime-log-overlay').rglob('*'):
   if p.is_file():
    dest=source/p.relative_to(HERE/'runtime-log-overlay');dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(p,dest)
  edit('internal/nlog/nlog.go','fullMsg := formatMsg(msg, args)','fullMsg, allowed := runtimeMessage(level, msg, args)\n\tif !allowed { return }\n\tprefix = "runtime"\n\trecordRuntime(level, fullMsg)')
- edit('internal/config/config.go','slog.SetDefault(slog.New(slog.DiscardHandler))','slog.SetDefault(slog.New(slog.NewTextHandler(nlog.RuntimeWriter{}, &slog.HandlerOptions{Level: slog.LevelDebug})))')
+ edit('internal/config/config.go','slog.SetDefault(slog.New(slog.DiscardHandler))','slog.SetDefault(slog.New(nlog.RuntimeHandler{}))')
  edit('internal/config/config.go','fmt.Fprintf(os.Stderr, "failed to create log dir, falling back to stdout: %v\\n", err)','nlog.Core().Error("failed to create log directory", "error", err)')
  edit('internal/config/config.go','fmt.Fprintf(os.Stderr, "failed to open log file, falling back to stdout: %v\\n", err)','nlog.Core().Error("failed to open log file", "error", err)')
  edit('cmd/xboard-node/main.go','fmt.Fprintf(os.Stderr, "failed to load config: %v\\n", err)','nlog.Core().Error("failed to load config", "error", err)')
  edit('cmd/xboard-node/main.go','fmt.Fprintf(os.Stderr, "failed to normalize config: %v\\n", err)','nlog.Core().Error("failed to normalize config", "error", err)')
- edit('internal/machine/machine.go','o.runCtx = ctx','o.runCtx = ctx\n\tgo o.runRuntimeLogs(ctx)')
+ edit('internal/machine/machine.go','o.runCtx = ctx','o.runCtx = ctx\n\truntimeCtx, stopRuntimeLogs := context.WithCancel(ctx)\n\tdefer stopRuntimeLogs()\n\tgo o.runRuntimeLogs(runtimeCtx)')
+ # Remove the previous checkpoint worker when reapplying to prepared sources.
+ machine=source/'internal/machine/machine.go';text=machine.read_text(encoding='utf-8');machine.write_text(text.replace('\n\tgo o.runRuntimeLogs(ctx)',''),encoding='utf-8',newline='\n')
+ if (source/'internal/machine/caddy_enrollment_test.go').exists():
+  edit('internal/machine/caddy_enrollment_test.go','if r.URL.Path == "/api/v3/server/probes" {','''if r.URL.Path == "/api/v3/server/runtime-logs" {
+   var batch struct { MachineID int `json:"machine_id"`; Entries []struct { Seq int64 `json:"seq"` } `json:"entries"` }
+   if json.NewDecoder(r.Body).Decode(&batch)!=nil || batch.MachineID!=7 || r.Header.Get("Authorization")!="Bearer fixture-private-machine-token" || r.URL.RawQuery!="" { badAuth.Store(true) }
+   last:=int64(0);if len(batch.Entries)>0 {last=batch.Entries[len(batch.Entries)-1].Seq}
+   fmt.Fprintf(w, `{"accepted":true,"last_seq":%d}`,last)
+   return
+  }
+  if r.URL.Path == "/api/v3/server/probes" {''')
+ edit('internal/cert/cert.go','"go.uber.org/zap"','"go.uber.org/zap"\n\t"go.uber.org/zap/zapcore"')
+ edit('internal/cert/cert.go','zap.NewNop()','zap.New(zapcore.NewCore(zapcore.NewConsoleEncoder(zapcore.EncoderConfig{MessageKey: "msg", LevelKey: "level", EncodeLevel: zapcore.CapitalLevelEncoder}), zapcore.AddSync(nlog.RuntimeWriter{}), zap.DebugLevel))')
  # sing-box owns its factory; platform callbacks duplicate raw logs and are not
  # a safe sink. Inject our writer before that factory and disable observability
  # of raw messages. The dependency is copied from its immutable pinned module.
@@ -55,6 +70,8 @@ def patch(source):
   tag = ""
  }
  nowTime := time.Now()'''
+  if name=='internal/config/config.go' and 'slog.SetDefault(slog.New(nlog.RuntimeHandler{}))' in new:
+   s=s.replace('slog.SetDefault(slog.New(slog.NewTextHandler(nlog.RuntimeWriter{}, &slog.HandlerOptions{Level: slog.LevelDebug})))',old)
   if old not in s:raise ValueError('sing-box logging boundary changed')
   s=s.replace(old,new).replace('level, l.tag, F.ToString(args...)','level, tag, F.ToString(args...)')
   observable.write_text(s,encoding='utf-8',newline='\n')
