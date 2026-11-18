@@ -3,6 +3,7 @@
 namespace App\Onenew\AiOperations;
 require __DIR__.'/../app/Onenew/AiOperations/Redactor.php';
 require __DIR__.'/../app/Onenew/AiOperations/OperatorEngine.php';
+require __DIR__.'/../app/Onenew/AiOperations/ProviderFailure.php';
 if(!function_exists('mb_substr')){function mb_substr($s,$start,$length=null){return substr($s,$start,$length);}}
 class Config {public function key($row=null){return 'fixture-api-key';}}
 class RepoSettings {public function token(){return 'fixture-repo-key';}}
@@ -54,7 +55,7 @@ check($actions->reads===[]&&$actions->prepared===[]&&$result['actions']===[],'Un
 [$result,$client,$actions]=run(array_fill(0,4,['reads'=>[['tool'=>'inventory','args'=>['kind'=>'plans']]],'operations'=>[['kind'=>'node.delete','args'=>['node_id'=>12]]]]));
 check(count($client->messages)===4&&count($actions->reads)===3&&$actions->prepared===[],'Read rounds must be bounded and intermediate operations ignored');
 [$result,$client,$actions,$source]=run([['reads'=>[['tool'=>'source.read','args'=>['path'=>'customizations/onenew/test/app/file.php']]]],['answer'=>'bounded']]);
-check($result['trace'][0]['status']==='rejected','Read byte budget not enforced');
+check(count(array_filter($result['trace'],fn($item)=>$item['status']==='rejected'))===1,'Read byte budget not enforced');
 [$result]=run(['Plain text answer fixture-api-key']);check($result['actions']===[]&&$result['answer']==='Plain text answer [REDACTED]','Plain text fallback unsafe');
 [$result,$client,$actions,$source]=run([['patches'=>[['path'=>'secret.php','old_text'=>'old','new_text'=>'new']]]]);check($result['code_changes']===[]&&count($source->proposed)===1,'Existing source credentials reached a proposal card');
 [$result,$client,$actions,$source]=run([['patches'=>[['path'=>'safe.php','old_text'=>'old','new_text'=>'fixture-api-key']]]]);check($result['code_changes']===[]&&$source->proposed===[],'Model credential reached proposal tool');

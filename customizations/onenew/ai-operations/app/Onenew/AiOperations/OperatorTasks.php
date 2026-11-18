@@ -31,7 +31,7 @@ final class OperatorTasks
     public function view(int $admin,string $id):array
     {
         $this->schema();$row=DB::table(self::TABLE)->where('id',$id)->where('admin_id',$admin)->first();abort_unless($row&&$row->expires_at>time(),404,'任务不存在或已过期。');
-        if($row->state==='running'&&$row->started_at<time()-300){$this->fail($id,null,'task_timeout');$row=DB::table(self::TABLE)->where('id',$id)->first();}
+        if($row->state==='running'&&$row->started_at<time()-660){$this->fail($id,null,'task_timeout');$row=DB::table(self::TABLE)->where('id',$id)->first();}
         $out=['id'=>$row->id,'state'=>$row->state,'progress'=>$row->progress];
         if($row->state==='done'&&is_string($row->encrypted_result))$out['result']=json_decode(Crypt::decryptString($row->encrypted_result),true,64,JSON_THROW_ON_ERROR);
         if($row->state==='failed'){
@@ -43,7 +43,7 @@ final class OperatorTasks
     public function run(string $id):void
     {
         $row=DB::table(self::TABLE)->where('id',$id)->first();if(!$row)return;
-        if($row->state==='running'&&$row->started_at<time()-300){$this->fail($id,null,'task_timeout');return;}
+        if($row->state==='running'&&$row->started_at<time()-660){$this->fail($id,null,'task_timeout');return;}
         if($row->expires_at<=time()){$this->fail($id,null,'task_expired');return;}
         if(!DB::table(self::TABLE)->where('id',$id)->where('state','queued')->update(['state'=>'running','started_at'=>time(),'progress'=>'正在准备安全上下文']))return;
         try{
@@ -59,6 +59,8 @@ final class OperatorTasks
         'provider_request'=>['provider','AI 服务拒绝请求，请检查模型名称及参数兼容性。'],
         'provider_http'=>['provider','AI 服务返回异常状态，请稍后重试或检查服务状态。'],
         'provider_timeout'=>['provider','连接 AI 服务超时，请检查网络或稍后重试。'],
+        'provider_connect_timeout'=>['provider','建立 AI 服务连接超时，请检查域名、网络及证书后重试。'],
+        'provider_response_timeout'=>['provider','已连接 AI 服务，但等待模型响应超时；未自动重试。请稍后重新发送。'],
         'provider_transport'=>['provider','无法连接 AI 服务，请检查网络、域名及证书。'],
         'transport_unavailable'=>['provider','服务器缺少安全连接所需的 cURL 扩展，请联系管理员。'],
         'invalid_response'=>['response','AI 返回内容格式无效，请重新发送或检查模型兼容性。'],
@@ -78,7 +80,7 @@ final class OperatorTasks
         $code=isset(self::FAILURES[$fallback])?$fallback:'internal_error';
         if($exception){
             $tokens=['configuration_changed'=>'config_changed','context_too_large'=>'context_budget','file_budget'=>'read_budget','invalid_envelope'=>'invalid_response','invalid_answer'=>'invalid_response','invalid_token_parameter'=>'provider_request','response_too_large'=>'invalid_response','unsafe_endpoint'=>'provider_transport','unresolved_endpoint'=>'provider_transport','provider_failed'=>'provider_http'];
-            if(get_class($exception)===\RuntimeException::class){$token=$exception->getMessage();if(isset(self::FAILURES[$token]))$code=$token;elseif(isset($tokens[$token]))$code=$tokens[$token];}
+            if(get_class($exception)===\RuntimeException::class||$exception instanceof ProviderFailure){$token=$exception->getMessage();if(isset(self::FAILURES[$token]))$code=$token;elseif(isset($tokens[$token]))$code=$tokens[$token];}
             if($exception instanceof \JsonException)$code='invalid_response';
             if($exception instanceof \Illuminate\Database\QueryException && in_array($exception->errorInfo[0]??null,['42S02','42P01','42S22','42703'],true))$code='schema_missing';
             if($exception instanceof \Illuminate\Queue\TimeoutExceededException)$code='task_timeout';
@@ -88,13 +90,14 @@ final class OperatorTasks
     public function fail(string $id,?\Throwable $exception=null,string $fallback='internal_error'):void
     {
         $failure=self::failure($exception,$fallback);
+        $timings=$exception instanceof ProviderFailure?$exception->timings:[];
         $changed=DB::table(self::TABLE)->where('id',$id)->whereIn('state',['queued','running'])->update(['state'=>'failed','encrypted_payload'=>null,'encrypted_result'=>null,'error'=>$failure['message'],'progress'=>'任务已停止','finished_at'=>time()]);
-        if($changed)\Illuminate\Support\Facades\Log::warning('AI operator task failed',['task_id'=>$id,'reason'=>$failure['code'],'stage'=>$failure['stage']]);
+        if($changed)\Illuminate\Support\Facades\Log::warning('AI operator task failed',['task_id'=>$id,'reason'=>$failure['code'],'stage'=>$failure['stage'],'timings'=>$timings]);
     }
     public function prune():void
     {
         if(!Schema::hasTable(self::TABLE))return;
-        DB::table(self::TABLE)->where('state','running')->where('started_at','<',time()-300)->update(['state'=>'failed','encrypted_payload'=>null,'error'=>self::FAILURES['task_timeout'][1],'finished_at'=>time(),'progress'=>'任务已停止']);
+        DB::table(self::TABLE)->where('state','running')->where('started_at','<',time()-660)->update(['state'=>'failed','encrypted_payload'=>null,'error'=>self::FAILURES['task_timeout'][1],'finished_at'=>time(),'progress'=>'任务已停止']);
         DB::table(self::TABLE)->where('state','queued')->where('created_at','<',time()-900)->update(['state'=>'failed','encrypted_payload'=>null,'error'=>self::FAILURES['queue_timeout'][1],'finished_at'=>time(),'progress'=>'任务已停止']);
         DB::table(self::TABLE)->where('expires_at','<=',time())->delete();
     }
