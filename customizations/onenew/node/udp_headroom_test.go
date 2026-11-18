@@ -86,10 +86,10 @@ func TestTrackedUDPPooledCopyKeepsAggregateBandwidth(t *testing.T) {
 	buckets.SetRate(1)
 	payload := bytes.Repeat([]byte{0x5a}, 8192)
 	start := time.Now()
-	for i := 0; i < 2; i++ {
+	for _, address := range []string{"192.0.2.1:53", "[2001:db8::1]:53"} {
 		writer := &headroomPacketWriter{front: 16}
 		tracked := &trackedPacketConn{PacketConn: writer, tracker: &ConnTracker{nodeBandwidth: buckets}, us: &userStats{}, ctx: context.Background()}
-		reader := &headroomPackets{payload, singM.ParseSocksaddr("192.0.2.1:53"), 8}
+		reader := &headroomPackets{payload, singM.ParseSocksaddr(address), 8}
 		if n, err := bufio.CopyPacket(tracked, reader); err != io.EOF || n != 65536 {
 			t.Fatalf("copy=%d,%v", n, err)
 		}
