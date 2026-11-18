@@ -15,6 +15,7 @@ class RuntimePatchTests(unittest.TestCase):
     'internal/cert/cert.go':'"go.uber.org/zap"\nzap.NewNop()',
     'internal/kernel/singbox/singbox.go':'Context: ctx,',
     'onenew-dependencies/sing-box/box.go':'PlatformLogWriter log.PlatformWriter\nDefaultWriter:  defaultLogWriter,',
+    'onenew-dependencies/sing-box/log/log.go':'logOptions := options.Options',
     'onenew-dependencies/sing-box/log/observable.go':'nowTime := time.Now()\nlevel, l.tag, F.ToString(args...)',
     'go.mod':'replace github.com/sagernet/sing-box => pinned-module v1.0.0',
     'build-source.json':json.dumps({'features':[]}),

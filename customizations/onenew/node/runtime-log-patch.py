@@ -59,6 +59,9 @@ def patch(source):
  s=s.replace('DefaultWriter:  defaultLogWriter,','DefaultWriter:  func() io.Writer { if options.OnenewLogWriter != nil { return options.OnenewLogWriter }; return defaultLogWriter }(),')
  s=s.replace('Observable:     needClashAPI && options.OnenewLogWriter == nil,','Observable:     needClashAPI,')
  box.write_text(s,encoding='utf-8',newline='\n')
+ edit('onenew-dependencies/sing-box/log/log.go','logOptions := options.Options','''logOptions := options.Options
+ // Onenew routes every configured kernel output through the pre-sink boundary.
+ if _, safe := options.DefaultWriter.(interface { Sanitize(string) (string, bool) }); safe { logOptions.Output = "" }''')
  observable=dep/'log/observable.go';s=observable.read_text(encoding='utf-8')
  if 'OnenewSanitizeBoundary' not in s:
   old='nowTime := time.Now()'
