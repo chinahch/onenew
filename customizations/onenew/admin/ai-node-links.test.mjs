@@ -39,3 +39,15 @@ test('account switch discards credential result and blocks stale copy and in-fli
  ready();const h=harness(),calls=[];const props={post:async(url,body)=>{calls.push({url,body});return{node_link:result}}};input(h.render(props),'消息').props.onChange({target:{value:'给我节点45链接，用户ID12'}});await button(h.render(props),'发送消息').props.onClick();const oldTree=h.render(props);assert.equal(input(oldTree,'完整节点链接').props.value,result.uri);ai.activateAccount('different-admin-link-scope','opencode');assert.equal(input(h.render(props),'完整节点链接'),undefined);let copied=false;Object.defineProperty(globalThis,'navigator',{configurable:true,value:{clipboard:{writeText:async()=>{copied=true}}}});await button(oldTree,'复制链接').props.onClick();assert.equal(copied,false);await button(oldTree,'查询并生成链接').props.onClick();assert.equal(calls.length,1);
  ready();let resolve;props.post=()=>new Promise(r=>resolve=r);input(h.render(props),'消息').props.onChange({target:{value:'给我节点45链接，用户ID12'}});const pending=button(h.render(props),'发送消息').props.onClick();ai.activateAccount('another-admin-link-scope','opencode');resolve({node_link:result});await pending;assert.equal(input(h.render(props),'完整节点链接'),undefined);
 });
+
+test('editing either target removes old credential result and disables stale copy callbacks',async()=>{
+ for(const [field,next] of [['链接节点编号','46'],['链接用户编号或邮箱','13']]){
+  ready();const h=harness(),props={post:async()=>({node_link:result})};input(h.render(props),'消息').props.onChange({target:{value:'给我节点45链接，用户ID12'}});await button(h.render(props),'发送消息').props.onClick();const oldCopy=button(h.render(props),'复制链接').props.onClick;assert.equal(input(h.render(props),'完整节点链接').props.value,result.uri);input(h.render(props),field).props.onChange({target:{value:next}});assert.equal(input(h.render(props),'完整节点链接'),undefined);let copied=false;Object.defineProperty(globalThis,'navigator',{configurable:true,value:{clipboard:{writeText:async()=>{copied=true}}}});await oldCopy();assert.equal(copied,false);
+ }
+ ready();const h=harness(),props={post:async()=>{throw Error('fixture')}};input(h.render(props),'消息').props.onChange({target:{value:'给我节点45链接，用户ID12'}});await button(h.render(props),'发送消息').props.onClick();assert.ok(JSON.stringify(h.render(props)).includes('没有生成可用链接'));input(h.render(props),'链接节点编号').props.onChange({target:{value:'46'}});assert.ok(!JSON.stringify(h.render(props)).includes('没有生成可用链接'));
+});
+test('native SOCKS and HTTPS proxy links are displayed with the same evidence boundary',async()=>{
+ for(const uri of ['socks5://fixture:credential@host.example:1080#proxy','https://fixture:credential@host.example:443#proxy']){
+  ready();const h=harness(),props={post:async()=>({node_link:{...result,uri}})};input(h.render(props),'消息').props.onChange({target:{value:'给我节点45链接，用户ID12'}});await button(h.render(props),'发送消息').props.onClick();assert.equal(input(h.render(props),'完整节点链接').props.value,uri)
+ }
+});
