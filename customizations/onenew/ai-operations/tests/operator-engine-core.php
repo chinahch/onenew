@@ -3,6 +3,7 @@
 namespace App\Onenew\AiOperations;
 require __DIR__.'/../app/Onenew/AiOperations/Redactor.php';
 require __DIR__.'/../app/Onenew/AiOperations/OperatorEngine.php';
+require __DIR__.'/../app/Onenew/AiOperations/ProviderFailure.php';
 if(!function_exists('mb_substr')){function mb_substr($s,$start,$length=null){return substr($s,$start,$length);}}
 class Config {public function key($row=null){return 'fixture-api-key';}}
 class RepoSettings {public function token(){return 'fixture-repo-key';}}
@@ -31,13 +32,14 @@ class SourceTools {
 class Client {
     public array $messages=[];
     public function __construct(public array $responses){}
-    public function completeRaw($config,$key,$messages){$this->messages[]=$messages;$next=array_shift($this->responses);if($next instanceof \Throwable)throw $next;return ['answer'=>is_string($next)?$next:json_encode($next),'usage'=>['total_tokens'=>2]];}
+    public function completeRaw($config,$key,$messages){$this->messages[]=$messages;$next=array_shift($this->responses);if($next instanceof \Throwable)throw $next;return ['answer'=>is_string($next)?$next:json_encode($next),'usage'=>['total_tokens'=>2],'timings'=>['connect_ms'=>12,'starttransfer_ms'=>90000,'total_ms'=>91000,'url'=>'fixture-api-key','prompt'=>'private-prompt']];}
 }
 function check(bool $ok,string $message):void {if(!$ok)throw new \RuntimeException($message);}
 function run(array $responses,string $message='Extend target@example.com'):array {
     $client=new Client($responses);$actions=new OperatorActions;$source=new SourceTools;
     $engine=new OperatorEngine($client,new Config,new RepoSettings,$actions,$source,new Context,new Knowledge,new OperatorTasks);
-    $result=$engine->run(1,['message'=>$message,'history'=>[['role'=>'assistant','content'=>'password=fixture-password fixture-api-key unknown@example.com']],'config_fingerprint'=>'fixture'],fn($message)=>null);
+    $progress=[];$result=$engine->run(1,['message'=>$message,'history'=>[['role'=>'assistant','content'=>'password=fixture-password fixture-api-key unknown@example.com']],'config_fingerprint'=>'fixture'],function($message)use(&$progress){$progress[]=$message;});
+    check(str_contains($progress[0],'等待模型响应'),'Model waiting progress missing');
     return [$result,$client,$actions,$source];
 }
 [$result,$client,$actions]=run([
@@ -47,6 +49,9 @@ function run(array $responses,string $message='Extend target@example.com'):array
 check(count($client->messages)===2,'Expected read then final calls');
 check($actions->reads===[['users.lookup',['email'=>'target@example.com']]],'Alias must resolve locally');
 check(count($actions->prepared)===1&&count($result['actions'])===1,'Expected prepared card only');
+check($result['trace'][0]['timings']===['connect_ms'=>12,'starttransfer_ms'=>90000,'total_ms'=>91000],'Model timing allowlist missing');
+check(is_int($result['trace'][0]['duration_ms'])&&$result['trace'][1]['tool']==='users.lookup'&&is_int($result['trace'][1]['duration_ms']),'Provider and tool duration missing');
+check(!str_contains(json_encode($result['trace']),'fixture-api-key')&&!str_contains(json_encode($result['trace']),'private-prompt'),'Timing trace leaked metadata');
 foreach(['target@example.com','unknown@example.com','fixture-api-key','fixture-repo-key','fixture-password'] as $secret)check(!str_contains(json_encode($client->messages),$secret),'Outbound leaked '.$secret);
 check(!str_contains($result['answer'],'fixture-api-key')&&!str_contains($result['answer'],'fixture-repo-key'),'Answer leaked key');
 [$result,$client,$actions]=run([['reads'=>[['tool'=>'shell.exec','args'=>['command'=>'touch unsafe']]]],['operations'=>[['kind'=>'user.create','args'=>['email'=>'invented@example.com']],['kind'=>'user.create','args'=>['email'=>'email_ref_1','password'=>'injected']]]]]);
@@ -54,7 +59,7 @@ check($actions->reads===[]&&$actions->prepared===[]&&$result['actions']===[],'Un
 [$result,$client,$actions]=run(array_fill(0,4,['reads'=>[['tool'=>'inventory','args'=>['kind'=>'plans']]],'operations'=>[['kind'=>'node.delete','args'=>['node_id'=>12]]]]));
 check(count($client->messages)===4&&count($actions->reads)===3&&$actions->prepared===[],'Read rounds must be bounded and intermediate operations ignored');
 [$result,$client,$actions,$source]=run([['reads'=>[['tool'=>'source.read','args'=>['path'=>'customizations/onenew/test/app/file.php']]]],['answer'=>'bounded']]);
-check($result['trace'][0]['status']==='rejected','Read byte budget not enforced');
+check(count(array_filter($result['trace'],fn($item)=>$item['status']==='rejected'))===1,'Read byte budget not enforced');
 [$result]=run(['Plain text answer fixture-api-key']);check($result['actions']===[]&&$result['answer']==='Plain text answer [REDACTED]','Plain text fallback unsafe');
 [$result,$client,$actions,$source]=run([['patches'=>[['path'=>'secret.php','old_text'=>'old','new_text'=>'new']]]]);check($result['code_changes']===[]&&count($source->proposed)===1,'Existing source credentials reached a proposal card');
 [$result,$client,$actions,$source]=run([['patches'=>[['path'=>'safe.php','old_text'=>'old','new_text'=>'fixture-api-key']]]]);check($result['code_changes']===[]&&$source->proposed===[],'Model credential reached proposal tool');

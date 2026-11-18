@@ -47,7 +47,7 @@ final class OperatorIntegrationTest extends TestCase
         $a=$this->auth();$task=app(OperatorTasks::class)->create($a['id'],['message'=>'hello','request_id'=>(string)Str::uuid()]);app(Config::class)->save(['model'=>'changed']);
         $this->app->bind(Client::class,fn()=>new class extends Client {public function __construct(){}public function completeRaw(array $config,string $key,array $messages):array{throw new \LogicException('Must not call provider');}});
         app(OperatorTasks::class)->run($task['id']);self::assertSame('failed',app(OperatorTasks::class)->view($a['id'],$task['id'])['state']);
-        $task=app(OperatorTasks::class)->create($a['id'],['message'=>'hello','request_id'=>(string)Str::uuid()]);DB::table('onenew_ai_operator_tasks')->where('id',$task['id'])->update(['state'=>'running','started_at'=>time()-301]);
+        $task=app(OperatorTasks::class)->create($a['id'],['message'=>'hello','request_id'=>(string)Str::uuid()]);DB::table('onenew_ai_operator_tasks')->where('id',$task['id'])->update(['state'=>'running','started_at'=>time()-661]);
         app(OperatorTasks::class)->run($task['id']);self::assertSame('failed',app(OperatorTasks::class)->view($a['id'],$task['id'])['state']);
     }
 }

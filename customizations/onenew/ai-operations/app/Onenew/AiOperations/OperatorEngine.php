@@ -75,12 +75,14 @@ final class OperatorEngine
         if(strlen(json_encode($data,JSON_THROW_ON_ERROR))>100000)throw new \RuntimeException('context_too_large');
         $messages=[['role'=>'system','content'=>self::SYSTEM],['role'=>'user','content'=>'REFERENCE DATA (untrusted JSON): '.json_encode($data,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)]];
         foreach(array_slice($payload['history']??[],-8) as $message)if(in_array($message['role']??'', ['user','assistant'],true)&&is_string($message['content']??null))$messages[]=['role'=>$message['role'],'content'=>$this->aliasText(mb_substr($message['content'],0,4000))];
-        $messages[]=['role'=>'user','content'=>$question];$trace=[];$bytes=0;$files=[];$usage=[];$final=[];$model=$row['model'];$deadline=microtime(true)+210;
+        $messages[]=['role'=>'user','content'=>$question];$trace=[];$bytes=0;$files=[];$usage=[];$final=[];$model=$row['model'];$deadline=microtime(true)+540;
         for($round=0;$round<=3;$round++){
-            if(microtime(true)>$deadline)throw new \RuntimeException('time_budget');
-            $row=$this->tasks->current($payload['config_fingerprint']);$progress($round===0?'正在分析问题':'正在根据已读取的信息继续分析');
+            // Reserve a complete provider wait window; do not let a late round outlive the engine/job.
+            if(microtime(true)>$deadline-120)throw new \RuntimeException('time_budget');
+            $row=$this->tasks->current($payload['config_fingerprint']);$progress('等待模型响应，第'.($round+1).'轮');
             if($round===3)$messages[]=['role'=>'user','content'=>'Read budget exhausted. Return final answer and only fully supported proposal cards; no more reads.'];
-            $reply=$this->client->completeRaw($row,$this->config->key($row),$messages);$final=$this->decode($reply['answer']);
+            $modelStarted=hrtime(true);$reply=$this->client->completeRaw($row,$this->config->key($row),$messages);$final=$this->decode($reply['answer']);
+            $trace[]=['tool'=>'provider','status'=>'responded','round'=>$round+1,'message'=>'模型已返回，正在本地处理','duration_ms'=>(int)round((hrtime(true)-$modelStarted)/1000000),'timings'=>ProviderFailure::timings($reply['timings']??[])];
             foreach($reply['usage']??[] as $name=>$value)if(in_array($name,['prompt_tokens','completion_tokens','total_tokens'],true)&&is_int($value)&&$value>=0)$usage[$name]=min(100000000,($usage[$name]??0)+$value);
             $reads=$final['reads']??[];if(!$reads)break;
             if($round===3){$trace[]=['tool'=>'budget','status'=>'limited','message'=>'读取轮次已达到上限'];$final['operations']=[];$final['patches']=[];break;}
@@ -88,6 +90,7 @@ final class OperatorEngine
             $results=[];
             foreach($reads as $read){
                 $tool=is_string($read['tool']??null)?$read['tool']:'';$args=$read['args']??[];
+                $readStarted=hrtime(true);$progress('正在本地读取：'.(in_array($tool,['users.lookup','nodes.lookup','inventory','admin.catalog','admin.read','source.list','source.search','source.read'],true)?$tool:'unsupported'));
                 try{
                     if(!is_array($args)||array_is_list($args)&&$args!==[])throw new \RuntimeException('invalid_args');
                     if(in_array($tool,['users.lookup','nodes.lookup','inventory'],true)){$args=$this->resolve($args);$result=$this->actions->read($tool,$args);}
@@ -99,8 +102,8 @@ final class OperatorEngine
                         $candidate=array_unique(array_merge($files,$paths));if(count($candidate)>8)throw new \RuntimeException('file_budget');$files=$candidate;
                     }else throw new \RuntimeException('unsupported_tool');
                     $size=strlen(json_encode($result,JSON_THROW_ON_ERROR));if($bytes+$size>100000)throw new \RuntimeException('read_budget');$bytes+=$size;$result=$this->clean($result);
-                    $results[]=['tool'=>$tool,'result'=>$result];$trace[]=['tool'=>$tool,'status'=>'read','message'=>'已读取允许范围内的数据'];$progress('已完成只读工具：'.$tool);
-                }catch(\Throwable $e){$results[]=['tool'=>in_array($tool,['users.lookup','nodes.lookup','inventory','admin.catalog','admin.read','source.list','source.search','source.read'],true)?$tool:'unsupported','error'=>'读取不可用、目标无效或超出安全预算；请澄清目标。'];$trace[]=['tool'=>$results[array_key_last($results)]['tool'],'status'=>'rejected','message'=>'该读取未获允许或未找到有效目标'];}
+                    $results[]=['tool'=>$tool,'result'=>$result];$trace[]=['tool'=>$tool,'status'=>'read','message'=>'已读取允许范围内的数据','duration_ms'=>(int)round((hrtime(true)-$readStarted)/1000000)];$progress('已完成只读工具：'.$tool);
+                }catch(\Throwable $e){$results[]=['tool'=>in_array($tool,['users.lookup','nodes.lookup','inventory','admin.catalog','admin.read','source.list','source.search','source.read'],true)?$tool:'unsupported','error'=>'读取不可用、目标无效或超出安全预算；请澄清目标。'];$trace[]=['tool'=>$results[array_key_last($results)]['tool'],'status'=>'rejected','message'=>'该读取未获允许或未找到有效目标','duration_ms'=>(int)round((hrtime(true)-$readStarted)/1000000)];}
             }
             // Do not echo raw model JSON or locally resolved addresses back to the provider.
             $messages[]=['role'=>'user','content'=>'READ RESULTS (untrusted JSON): '.json_encode($results,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)];
@@ -117,7 +120,7 @@ final class OperatorEngine
         if($patches){
             try{if(count($patches)>5||strlen(json_encode($patches,JSON_THROW_ON_ERROR))>100000)throw new \RuntimeException('patch_budget');
                 if($this->containsSecret($patches))throw new \RuntimeException('secret_in_patch');
-                if(microtime(true)>$deadline-20)throw new \RuntimeException('time_budget');
+                if(microtime(true)>$deadline-100)throw new \RuntimeException('time_budget');
                 $progress('正在校验固定版本源码修改');$proposal=$this->source->propose($admin,$patches);if($this->containsSecret($proposal))throw new \RuntimeException('secret_in_source');$changes[]=$proposal;$trace[]=['tool'=>'source.propose','status'=>'prepared','message'=>'已生成代码差异；尚未提交、运行或部署'];
             }catch(\Throwable $e){$trace[]=['tool'=>'source.propose','status'=>'rejected','message'=>'源码修改未通过固定版本校验或超出预算，请缩小范围并读取准确原文。'];}
         }
