@@ -49,6 +49,7 @@ func runtimeUUID() string {
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 
+var runtimeHeader = regexp.MustCompile(`(?i)^\s*(?:[-+0-9:.TZ /]+\s+)?\[?(?:TRACE|DEBUG|INFO|WARN(?:ING)?|ERROR|FATAL|PANIC)\]?\s*`)
 var runtimeANSI = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 var runtimePrivate = regexp.MustCompile(`(?i)(?:bearer\s+\S+|(?:password|passwd|token|secret|authorization|private[_ -]?key|uuid|email|user[_-]?id|node[_-]?id|machine[_-]?id|port|address|host|server|config|payload|body)\s*[:=]\s*(?:"[^"]*"|'[^']*'|\S+))`)
 var runtimeURL = regexp.MustCompile(`(?i)\b(?:https?|socks5?|trojan|vless|vmess|ss)://\S+`)
@@ -166,6 +167,7 @@ func (RuntimeWriter) Write(p []byte) (int, error) {
 		} else if strings.Contains(lower, "warn") {
 			level = slog.LevelWarn
 		}
+		line = runtimeHeader.ReplaceAllString(runtimeANSI.ReplaceAllString(line, ""), "")
 		logWithColor(level, "runtime", line)
 	}
 	return len(p), nil
@@ -184,6 +186,7 @@ func ResetRuntime() {
 // Sanitize is also used by the embedded kernel factory before its observable
 // feed, so in-process subscribers never receive unfiltered messages.
 func (RuntimeWriter) Sanitize(message string) (string, bool) {
+	message = runtimeHeader.ReplaceAllString(runtimeANSI.ReplaceAllString(message, ""), "")
 	level := slog.LevelInfo
 	if runtimeFailure.MatchString(message) {
 		level = slog.LevelWarn

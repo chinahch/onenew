@@ -1,0 +1,44 @@
+package singbox
+
+import (
+	"bytes"
+	"context"
+	"github.com/cedar2025/xboard-node/internal/nlog"
+	singLog "github.com/sagernet/sing-box/log"
+	"log/slog"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestKernelLoggerFiltersBeforeWriterAndObservable(t *testing.T) {
+	var local bytes.Buffer
+	nlog.Init(&local, slog.LevelDebug, false)
+	nlog.ResetRuntime()
+	factory := singLog.NewDefaultFactory(context.Background(), singLog.Formatter{DisableColors: true}, nlog.RuntimeWriter{}, "", nil, true)
+	defer factory.Close()
+	factory.SetLevel(singLog.LevelTrace)
+	sub, done, err := factory.Subscribe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer factory.UnSubscribe(sub)
+	logger := factory.NewLogger("inbound/vless[45678]")
+	logger.Warn("users updated successfully password=private-sentinel")
+	logger.Error("listen tcp 192.0.2.8:45678: bind: address already in use token=private-sentinel")
+	select {
+	case entry := <-sub:
+		for _, bad := range []string{"45678", "192.0.2.8", "private-sentinel", "users updated"} {
+			if strings.Contains(entry.Message+local.String(), bad) {
+				t.Fatalf("unsafe local/observable log %s", bad)
+			}
+		}
+		if !strings.Contains(entry.Message, "address already in use") {
+			t.Fatal(entry.Message)
+		}
+	case <-done:
+		t.Fatal("observable closed")
+	case <-time.After(time.Second):
+		t.Fatal("safe error not delivered")
+	}
+}

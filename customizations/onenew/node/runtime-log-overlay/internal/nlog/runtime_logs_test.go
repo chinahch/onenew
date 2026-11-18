@@ -92,3 +92,16 @@ func TestRuntimeStructuredHandlerKeepsReasons(t *testing.T) {
 		t.Fatal(out.String())
 	}
 }
+
+func TestRuntimeLibrarySuccessSeverityDoesNotBypassSuppression(t *testing.T) {
+	var out bytes.Buffer
+	Init(&out, slog.LevelDebug, false)
+	ResetRuntime()
+	w := RuntimeWriter{}
+	for _, line := range []string{"WARN config updated users=5", "[Error] users added successfully", "ERROR listener started port=45234"} {
+		w.Write([]byte(line + "\n"))
+	}
+	if out.Len() != 0 {
+		t.Fatal("library severity bypassed success suppression: " + out.String())
+	}
+}
