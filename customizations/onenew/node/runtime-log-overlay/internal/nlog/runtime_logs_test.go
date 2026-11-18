@@ -69,3 +69,11 @@ func TestRuntimeWriterSanitizesKernelAndMultiline(t *testing.T) {
 	}
 	_ = context.Background()
 }
+
+func TestRuntimePreservesGenericStartupAndBraceError(t *testing.T) {
+ var out bytes.Buffer;Init(&out,slog.LevelDebug,false);ResetRuntime()
+ Core().Info("runtime starting")
+ Core().Warn("users updated successfully")
+ Core().Error(`certificate failed {"token":"private-sentinel"}: connection refused`)
+ if !strings.Contains(out.String(),"runtime starting") || !strings.Contains(out.String(),"connection refused") || strings.Contains(out.String(),"private-sentinel") || strings.Contains(out.String(),"users updated") {t.Fatal(out.String())}
+}

@@ -56,7 +56,7 @@ var runtimeAddress = regexp.MustCompile(`(?:\[[0-9a-fA-F:]+\](?::[0-9]+)?|\b(?:[
 var runtimeNumbers = regexp.MustCompile(`[0-9]+`)
 var runtimeOpaque = regexp.MustCompile(`\b[A-Za-z0-9_+/=-]{25,}\b`)
 var runtimeQuoted = regexp.MustCompile(`"[^"\n]*"|'[^'\n]*'`)
-var runtimeSuccess = regexp.MustCompile(`(?i)(config|configuration|user|node|listener|inbound|outbound|report pushed|hot.?reload|sync\.|discovered|starting|stopping|reloaded|hot.swapp|limits updated|kernel restart)`)
+var runtimeSuccess = regexp.MustCompile(`(?i)(config|configuration|user|node|listener|inbound|outbound|report pushed|hot.?reload|sync\.|discovered|hot.swapp|limits updated|kernel restart)`)
 var runtimeFailure = regexp.MustCompile(`(?i)(error|fail|refused|denied|timeout|timed out|unavailable|unable|invalid|expired|already in use|not found|cannot|could not|panic|warning|warn)`)
 
 func SanitizeRuntime(message string) string {

@@ -3,6 +3,14 @@ import argparse,json,shutil,subprocess
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 
+def dependency_dir(source):
+ # `go list -m .Dir` can be empty on a clean runner; resolving/downloading the
+ # named module honors its exact pinned go.mod replace, never latest.
+ data=json.loads(subprocess.check_output(['go','mod','download','-json','github.com/sagernet/sing-box'],cwd=source,text=True))
+ folder=data.get('Dir')
+ if not folder or not Path(folder).is_dir():raise ValueError('pinned sing-box source directory unavailable')
+ return Path(folder)
+
 def patch(source):
  source=Path(source)
  def edit(name,old,new):
@@ -25,7 +33,7 @@ def patch(source):
  # of raw messages. The dependency is copied from its immutable pinned module.
  dep=source/'onenew-dependencies/sing-box'
  if not dep.exists():
-  folder=subprocess.check_output(['go','list','-m','-f','{{.Dir}}','github.com/sagernet/sing-box'],cwd=source,text=True).strip()
+  folder=dependency_dir(source)
   shutil.copytree(folder,dep)
   for f in dep.rglob('*'):
    if f.is_file():f.chmod(0o644)
