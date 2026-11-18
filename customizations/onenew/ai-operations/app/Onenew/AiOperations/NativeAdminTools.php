@@ -15,6 +15,7 @@ final class NativeAdminTools
     private const TABLE = 'onenew_ai_native_actions';
     private const READS = ['fetch','list','get','getNodes','nodes','history','detail','getUserInfoById','getOverride','getStats','getServerLastRank','getServerYesterdayRank','getOrder','getStatUser','getRanking','getStatRecord','getTrafficRank','templates','codes','usages','statistics','types','getCategory','getPaymentMethods','getSystemStatus','getQueueStats','getQueueWorkload','getHorizonFailedJobs','getAuditLog','getThemes','getThemeConfig','logs','stats','userHistory','getEmailTemplate','getThemeTemplate'];
     private const CLASS_READS = [
+        'App\\Onenew\\RuntimeLogs\\Controller'=>['index'],
         'App\\Onenew\\CloudBackup\\Controller'=>['info'],
         'App\\Onenew\\WebRestore\\Controller'=>['info','status'],
         'App\\Onenew\\External\\ExternalController'=>['index','lookups'],

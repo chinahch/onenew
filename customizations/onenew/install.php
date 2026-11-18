@@ -68,6 +68,7 @@ applyOnenewProtocolPatch($root);
 copyOverlay($custom . '/exit-probe/app', $root . '/app');
 copyOverlay($custom . '/remote-upgrade/app', $root . '/app');
 copyOverlay($custom . '/ai-operations/app', $root . '/app');
+copyOverlay($custom . '/runtime-logs/app', $root . '/app');
 copyOverlay($custom . '/landing-library/app', $root . '/app');
 require $custom . '/landing-library/install.php';
 applyOnenewLandingLibrary($root);
@@ -107,7 +108,7 @@ require $custom . '/traffic/install.php';
 applyOnenewTrafficPatch($root);
 replaceOnce($root . '/app/Console/Kernel.php',
     'app(PluginManager::class)->registerPluginSchedules($schedule);',
-    'app(PluginManager::class)->registerPluginSchedules($schedule);' . "\n        \$schedule->command('onenew:prune-telemetry')->dailyAt('03:10')->withoutOverlapping();\n        \$schedule->command('onenew:prune-migrations')->everyTenMinutes()->withoutOverlapping();\n        \$schedule->command('onenew:prune-ai-tasks')->everyTenMinutes()->withoutOverlapping();");
+    'app(PluginManager::class)->registerPluginSchedules($schedule);' . "\n        \$schedule->command('onenew:prune-telemetry')->dailyAt('03:10')->withoutOverlapping();\n        \$schedule->command('onenew:prune-migrations')->everyTenMinutes()->withoutOverlapping();\n        \$schedule->command('onenew:prune-ai-tasks')->everyTenMinutes()->withoutOverlapping();\n        \$schedule->command('onenew:prune-runtime-logs')->hourly()->withoutOverlapping();");
 foreach (['XboardInstall.php', 'XboardUpdate.php'] as $command) {
     replaceOnce($root . '/app/Console/Commands/' . $command,
         'PluginManager::installDefaultPlugins();',
