@@ -8,9 +8,10 @@ import (
 
 // HealthStages carries bounded, independently executed saved landing snapshots.
 type HealthStages struct {
-	Version     int       `json:"version"`
-	EntrySource string    `json:"entry_source,omitempty"`
-	Landings    []Landing `json:"landings"`
+	Version          int                   `json:"version"`
+	EntrySource      string                `json:"entry_source,omitempty"`
+	FallbackOutbound *panel.OutboundConfig `json:"fallback_outbound,omitempty"`
+	Landings         []Landing             `json:"landings"`
 }
 type Landing struct {
 	Kernel   string               `json:"kernel_type,omitempty"`
@@ -19,10 +20,17 @@ type Landing struct {
 	Name     string               `json:"name"`
 	Outbound panel.OutboundConfig `json:"outbound"`
 }
+type StageAttempt struct {
+	State string `json:"state"`
+	Error string `json:"error_code"`
+}
+
 type Stage struct {
-	State  string `json:"state"`
-	Error  string `json:"error_code"`
-	Source string `json:"source,omitempty"`
+	Primary  *StageAttempt `json:"primary,omitempty"`
+	Fallback *StageAttempt `json:"fallback,omitempty"`
+	State    string        `json:"state"`
+	Error    string        `json:"error_code"`
+	Source   string        `json:"source,omitempty"`
 }
 type LandingResult struct {
 	ID    string `json:"id"`
@@ -37,6 +45,9 @@ type Stages struct {
 
 func runStaged(ctx context.Context, t Task, request func(context.Context, Payload) (string, int64), ping func(context.Context, string) (*float64, string)) Result {
 	h := t.Payload.HealthStages
+	if h != nil && h.Version == 2 {
+		return runStagedV2(ctx, t, request)
+	}
 	if h == nil {
 		return runTask(ctx, t, request, ping)
 	}

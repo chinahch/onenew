@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {nodeAvailability,automaticHealthView} from './serverCards.ts'
 import {calendarRange} from './calendar.ts'
-import {subscriptionState} from './featureState.ts'
+import {probeEntryDetail,probeLandingDetail,probeLabel,subscriptionState} from './featureState.ts'
 test('subscription URL remains absolute and stable across refresh',async()=>{
  const state=subscriptionState(),url='https://subscription.example.invalid/s/test_only'
  await state.load(async()=>({path:url,needs_recovery:false}));assert.equal(state.path,url)
@@ -25,4 +25,14 @@ test('legacy success stays unknown and staged landing labels remain specific',()
  const now=Date.now(),finished_at=new Date(now).toISOString();
  assert.equal(automaticHealthView({state:'succeeded',finished_at},now).tone,'default');
  assert.equal(nodeAvailability({latest_probe:{state:'succeeded',health_state:'partial_landing_fault',finished_at}},now).text,'部分落地故障');
+});
+
+test('v2 display separates original CDN fallback local and landing evidence',()=>{
+ const primary={state:'failed',error_code:'timeout'},fallback={state:'succeeded',error_code:''};
+ const p={state:'succeeded',health_state:'online',stages:{version:2,entry:{source:'cdn_roundtrip',primary,fallback},landings:[]}};
+ assert.equal(probeLabel(p),'备用入口正常');assert.equal(probeEntryDetail(p),'原CDN异常，备用 ip.sb:443 正常');
+ p.stages.entry.primary={state:'succeeded',error_code:''};assert.equal(probeLabel(p),'原CDN正常');
+ p.stages.entry.source='local_listener_roundtrip';assert.equal(probeEntryDetail(p),'本地监听正常');
+ assert.equal(probeLandingDetail({state:'failed',error_code:'transport_failed'}),'落地故障');
+ assert.equal(probeLandingDetail({state:'expired',error_code:'expired'}),'落地未完成检测');
 });

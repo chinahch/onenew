@@ -20,7 +20,7 @@ def apply(source):
  for f in overlay.rglob('*.go'):
   out=source/f.relative_to(overlay);out.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(f,out)
  manifest=source/'build-source.json';data=json.loads(manifest.read_text())
- data['features']=sorted(set(data['features'])|{'onenew-staged-health-v1'})
+ data['features']=sorted(set(data['features'])|{'onenew-staged-health-v1', 'onenew-staged-health-v2'})
  data['onenew_staged_health_overlay_sha256']={str(f.relative_to(Path(__file__).parent)).replace('\\','/'):hashlib.sha256(f.read_bytes()).hexdigest() for f in [Path(__file__),*sorted(overlay.rglob('*.go'))]}
  manifest.write_text(json.dumps(data,indent=2)+'\n',encoding='utf-8',newline='\n')
 if __name__=='__main__':

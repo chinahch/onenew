@@ -31,3 +31,27 @@ $local=stages('', ['', '']); $local['entry']['source']='local_listener_roundtrip
 check(ProbeStages::accept($expected,$local,'succeeded','','local_listener_roundtrip')['health_state']==='online');
 try { ProbeStages::accept($expected,$local,'succeeded','','public_roundtrip'); throw new LogicException('False public provenance accepted'); } catch(RuntimeException $e) { check($e->getCode()===422); }
 echo "Stage classification, provenance, completeness and error allowlist checks passed\n";
+
+// Version 2 requires ordered, authenticated primary/fallback evidence.
+function v2($code='', $fallback=null, $source='cdn_roundtrip') {
+ $r=['state'=>$code===''?'succeeded':'failed','error_code'=>$code];
+ $entry=$r+['source'=>$source,'primary'=>$r];
+ if($fallback!==null) { $f=['state'=>$fallback===''?'succeeded':'failed','error_code'=>$fallback]; $entry=array_replace($entry,$f); $entry['fallback']=$f; }
+ return ['version'=>2,'entry'=>$entry,'landings'=>[]];
+}
+check(ProbeStages::accept([],v2(),'succeeded','','cdn_roundtrip',true)['health_state']==='online');
+check(ProbeStages::accept([],v2('timeout',''),'succeeded','','cdn_roundtrip',true)['health_state']==='online');
+check(ProbeStages::accept([],v2('timeout','transport_failed'),'failed','transport_failed','cdn_roundtrip',true)['health_state']==='node_fault');
+check(ProbeStages::accept([],v2('target_failed',null,'local_listener_roundtrip'),'failed','target_failed','local_listener_roundtrip')['health_state']==='node_fault');
+foreach ([v2('',''),v2('timeout'),v2('timeout','')] as $i=>$bad) {
+ try { ProbeStages::accept([],$bad,$bad['entry']['state'],$bad['entry']['error_code'],'cdn_roundtrip',$i!==2); throw new RuntimeException('Forged fallback accepted'); }
+ catch(RuntimeException $e) { check($e->getCode()===422); }
+}
+
+$notRun=v2('timeout');$notRun['entry']['state']='expired';$notRun['entry']['error_code']='expired';
+check(ProbeStages::accept([],$notRun,'expired','expired','cdn_roundtrip',true)['health_state']==='unknown');
+$unknown=v2('configuration_unavailable',null,'local_listener_roundtrip');
+check(ProbeStages::accept([],$unknown,'failed','configuration_unavailable','local_listener_roundtrip')['health_state']==='unknown');
+$landing=v2('',null,'local_listener_roundtrip');
+$landing['landings']=[['id'=>'landing_1','state'=>'failed','error_code'=>'timeout'],['id'=>'landing_2','state'=>'failed','error_code'=>'target_failed']];
+check(ProbeStages::accept($expected,$landing,'succeeded','','local_listener_roundtrip')['health_state']==='landing_fault');

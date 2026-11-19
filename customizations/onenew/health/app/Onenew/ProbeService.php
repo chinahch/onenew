@@ -14,7 +14,7 @@ class ProbeService
     public const INTERVAL = 60;
     public const RETRY_INTERVAL = 30;
     public const FRESHNESS = 600;
-    public const LIFETIME = 120;
+    public const LIFETIME = 180;
 
     public function __construct(private ProbeStore $store, private ProbeOutboundBuilder $builder)
     {
@@ -72,6 +72,7 @@ class ProbeService
                 try {
                     $payload = $this->builder->build($node, $user);
                     $payload['health_stages'] = ProbeStages::payload($node, $payload['kernel_type'], $payload);
+                    if ($payload['health_stages']['entry_source'] === 'cdn_roundtrip') $payload['health_stages']['fallback_outbound'] = $this->builder->build($node, $user, true)['outbound'];
                 } catch (ProbeUnavailable $e) {
                     $this->finish($task, $e->getMessage() === 'unsupported' ? 'unsupported' : 'pending', $e->getMessage());
                     return [];
@@ -85,6 +86,8 @@ class ProbeService
                 $lease = bin2hex(random_bytes(32));
                 $task['state'] = 'running';
                 $task['entry_source'] = $payload['health_stages']['entry_source'];
+                $task['expected_stages_version'] = $payload['health_stages']['version'];
+                $task['expected_fallback'] = isset($payload['health_stages']['fallback_outbound']);
                 $task['expected_landings'] = array_map(fn ($landing) => ['id'=>$landing['id'], 'name'=>$landing['name']], $payload['health_stages']['landings']);
                 $task['user_id'] = (int) $user->id;
                 $task['user_revision'] = hash('sha256', $user->uuid);
@@ -93,7 +96,7 @@ class ProbeService
                 $this->store->save($task);
                 return [[
                     'id' => $task['id'], 'lease' => $lease, 'expires_at' => $this->iso($task['expires_at']),
-                    'timeout_ms' => 90000, 'payload' => $payload,
+                    'timeout_ms' => 120000, 'payload' => $payload,
                 ]];
             }
             return [];
@@ -147,7 +150,7 @@ class ProbeService
                 }
             }
             $code = $result['error_code'] ?? '';
-            $task = array_replace($task, ProbeStages::accept($task['expected_landings'] ?? [], $result['stages'] ?? null, $result['state'], $code, $task['entry_source'] ?? 'public_roundtrip'));
+            $task = array_replace($task, ProbeStages::accept($task['expected_landings'] ?? [], $result['stages'] ?? null, $result['state'], $code, $task['entry_source'] ?? 'public_roundtrip', $task['expected_fallback'] ?? false, $task['expected_stages_version'] ?? 1));
             $state = $result['state'];
             // An unsupported/configuration result proves no proxy roundtrip happened.
             if (in_array($code, ['unsupported', 'configuration_unavailable', 'connector_only'], true)) {
@@ -161,7 +164,7 @@ class ProbeService
     {
         $task = $this->store->latest((int) $node->id);
         $source = $this->builder->cdnProbeHost($node) !== null
-            ? 'node machine · CDN ip.sb:443' : 'node machine · automatic';
+            ? 'node machine · 原CDN优先，备用 ip.sb:443' : 'node machine · 本地监听自测';
         $pending = ['state' => 'pending', 'finished_at' => null, 'created_at' => null,
             'error_code' => '', 'source' => $source, 'latency_ms' => null, 'ping_ms' => null];
         if (!$this->nodeAvailable($node) || !$node->machine_id || !$node->machine?->is_active) {
@@ -226,7 +229,7 @@ class ProbeService
         $fields = ['onenew_identity', 'machine_id', 'enabled', 'type', 'host', 'port', 'server_port', 'parent_id',
             'node_speed_limit_mbps', 'onenew_landing_bindings', 'protocol_settings', 'group_ids', 'custom_outbounds', 'custom_routes', 'route_ids', 'cert_config'];
         // Invalidate cached unsupported results when the client builder changes.
-        $values = ['probe_schema_version' => 9];
+        $values = ['probe_schema_version' => 10];
         foreach ($fields as $field) {
             $value = $node->getAttribute($field);
             // The native port column is VARCHAR without a model scalar cast:

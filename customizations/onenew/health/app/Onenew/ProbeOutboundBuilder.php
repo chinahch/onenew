@@ -19,12 +19,25 @@ class ProbeOutboundBuilder extends SingBox
         $this->clientVersion = '1.12.0';
     }
 
-    public function build(Server $node, User $user): array
+    public function build(Server $node, User $user, bool $fallback = false): array
     {
-        if ($cdnHost = $this->cdnProbeHost($node)) {
-            $node = clone $node;
-            $node->host = $cdnHost;
-            $node->port = 443;
+        $originalHost = $node->host;
+        if (!$originalHost) throw new ProbeUnavailable('configuration_unavailable');
+        $cdn = $this->cdnProbeHost($node) !== null;
+        if ($fallback && !$cdn) throw new ProbeUnavailable('configuration_unavailable');
+        $node = clone $node;
+        if (!$cdn || $fallback) {
+            $settings = $node->protocol_settings ?? [];
+            $tlsKey = in_array($node->type, ['hysteria', 'tuic', 'anytls'], true) ? 'tls' : 'tls_settings';
+            if (!data_get($settings, $tlsKey.'.server_name')) $settings[$tlsKey]['server_name'] = $originalHost;
+            $network = data_get($settings, 'network', 'tcp');
+            if (in_array($network, ['xhttp','splithttp','httpupgrade'], true) && !data_get($settings,'network_settings.host')) $settings['network_settings']['host'] = $originalHost;
+            if ($network === 'ws' && !data_get($settings,'network_settings.host') && !array_key_exists('host',array_change_key_case((array)data_get($settings,'network_settings.headers',[]),CASE_LOWER))) $settings['network_settings']['headers']['Host'] = $originalHost;
+            $node->protocol_settings = $settings;
+            $port = $fallback ? 443 : filter_var($node->server_port, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1,'max_range'=>65535]]);
+            if (!$port) throw new ProbeUnavailable('configuration_unavailable');
+            $node->host = $fallback ? 'ip.sb' : '127.0.0.1';
+            $node->port = $port;
         }
         $settings = $node->protocol_settings ?? [];
         $type = $node->type;
@@ -67,20 +80,8 @@ class ProbeOutboundBuilder extends SingBox
             $settings['utls'] = array_replace(['enabled' => true, 'fingerprint' => 'chrome'], $settings['utls'] ?? []);
             $settings['utls']['enabled'] = true;
         }
-        // NAT hairpinning can fail even while subscribers reach the public port.
-        // Plain SS, REALITY/TCP and Hysteria2/QUIC keep their native account
-        // and handshake through the local listener. This verifies a local round trip, not public ingress.
-        $listenerPort = filter_var($node->server_port, FILTER_VALIDATE_INT,
-            ['options'=>['min_range'=>1,'max_range'=>65535]]);
-        $localListener = $listenerPort !== false && (
-            ($network === 'tcp' && (
-                ((int) $tls === 2 && in_array($type, ['vless', 'trojan'], true)) ||
-                ($type === 'shadowsocks' && (int) $tls === 0
-                    && !data_get($settings, 'plugin') && !data_get($settings, 'obfs'))
-            )) || ($type === 'hysteria' && (int) data_get($settings, 'version', 2) === 2)
-        );
-        $dialHost = $localListener ? '127.0.0.1' : $node->host;
-        $dialPort = $localListener ? $listenerPort : (int) $port;
+        $dialHost = $node->host;
+        $dialPort = (int) $port;
         // Preserve the subscription's certificate name when dialing localhost.
         $tlsKey = in_array($type, ['hysteria', 'tuic', 'anytls'], true) ? 'tls' : 'tls_settings';
         if (!data_get($settings, $tlsKey . '.server_name')) {
@@ -121,8 +122,7 @@ class ProbeOutboundBuilder extends SingBox
         $alpn = is_string($alpn) ? array_map('trim', explode(',', $alpn)) : (is_array($alpn) ? $alpn : []);
         $xhttp = $node->type === 'vless' && in_array($network, ['xhttp', 'splithttp'], true)
             && in_array('h2', $alpn, true);
-        if ((!$ws && !$xhttp) || (int) data_get($s, 'tls', 0) !== 1
-            || !filter_var(trim((string) $node->host, '[]'), FILTER_VALIDATE_IP)) {
+        if ((!$ws && !$xhttp) || (int) data_get($s, 'tls', 0) !== 1) {
             return null;
         }
         $sni = strtolower(trim((string) data_get($s, 'tls_settings.server_name', '')));

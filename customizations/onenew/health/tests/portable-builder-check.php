@@ -133,15 +133,13 @@ namespace {
         check($payload['target'] === \App\Onenew\ProbeOutboundBuilder::TARGET, $name . ': wrong target');
         check(!str_contains(json_encode($payload), 'private-never-export'), $name . ': private value exported');
         if ($payload['kernel_type'] === 'xray') {
-            check(data_get($out, 'settings.vnext.0.address') === 'public.example', $name . ': wrong public ingress');
-            check(data_get($out, 'settings.vnext.0.port') === 443, $name . ': wrong public port');
+            check(data_get($out, 'settings.vnext.0.address') === '127.0.0.1', $name . ': wrong local ingress');
+            check(data_get($out, 'settings.vnext.0.port') === 12345, $name . ': wrong local port');
             check(data_get($out, 'settings.vnext.0.users.0.id') === $uuid, $name . ': wrong user');
             check(isset($out['stream_settings']), $name . ': stream_settings missing');
         } else {
-            $localReality = ($type === 'hysteria' || $type === 'shadowsocks' || (in_array($type, ['vless', 'trojan'], true) && (int) ($settings['tls'] ?? 0) === 2))
-                && ($settings['network'] ?? 'tcp') === 'tcp';
-            check(data_get($out, 'settings.server') === ($localReality ? '127.0.0.1' : 'public.example'), $name . ': wrong probe ingress');
-            check(data_get($out, 'settings.server_port') === ($localReality ? 12345 : 443), $name . ': wrong probe port');
+            check(data_get($out, 'settings.server') === '127.0.0.1', $name . ': wrong probe ingress');
+            check(data_get($out, 'settings.server_port') === 12345, $name . ': wrong probe port');
         }
         if ($type === 'shadowsocks') {
             check(data_get($out, 'settings.password') === \App\Utils\Helper::getServerKey(1700000000, 16) . ':' . \App\Utils\Helper::uuidToBase64($uuid, 16), 'SS2022 native password mismatch');
@@ -165,8 +163,9 @@ namespace {
         check(\App\Onenew\ProbeStages::payload($node,'singbox',$payload)['entry_source']==='local_listener_roundtrip','SS stage mislabeled public');
         check($node->host==='8.138.255.100' && $node->port===30001,'SS subscription endpoint mutated');
         foreach([null,0,-1,65536,'invalid',40558.5,'40558x'] as $invalidPort){
-            $node->server_port=$invalidPort;$fallback=$builder->build($node,$user)['outbound']['settings'];
-            check($fallback['server']==='8.138.255.100' && $fallback['server_port']===30001,'Invalid SS listener port must preserve public fallback');
+            $node->server_port=$invalidPort;
+            try { $builder->build($node,$user); throw new RuntimeException('Invalid local port accepted'); }
+            catch (\App\Onenew\ProbeUnavailable $e) { check($e->getMessage()==='configuration_unavailable','Invalid port must remain unknown'); }
         }
     }
     foreach([null,'certificate.example'] as $serverName){
@@ -182,8 +181,9 @@ namespace {
         check(\App\Onenew\ProbeStages::payload($node,'singbox',$payload)['entry_source']==='local_listener_roundtrip','Hysteria2 source mislabeled public');
         check($node->host==='hkbn-1.ddns-go.de' && $node->port===20201 && $node->protocol_settings===$before,'Hysteria2 subscription mutated');
         foreach([null,0,-1,65536,'bad'] as $invalid){
-            $node->server_port=$invalid;$fallback=$builder->build($node,$user)['outbound']['settings'];
-            check($fallback['server']==='hkbn-1.ddns-go.de' && $fallback['server_port']===20201,'Invalid Hysteria2 listener must preserve public fallback');
+            $node->server_port=$invalid;
+            try { $builder->build($node,$user); throw new RuntimeException('Invalid local port accepted'); }
+            catch (\App\Onenew\ProbeUnavailable $e) { check($e->getMessage()==='configuration_unavailable','Invalid port must remain unknown'); }
         }
     }
     // The production install patch extends SS's native settings schema. This
@@ -195,7 +195,13 @@ namespace {
         public function getProtocolSettingsAttribute($value) { return $value; }
     };
     $wsPayload=$builder->build($wsNode,$user);
-    check(data_get($wsPayload,'outbound.settings.servers.0.address')==='ip.sb' && data_get($wsPayload,'outbound.settings.servers.0.port')===443,'SS WS/TLS lost CDN ingress');
+    check(data_get($wsPayload,'outbound.settings.servers.0.address')==='101.69.181.108' && data_get($wsPayload,'outbound.settings.servers.0.port')===443,'SS WS/TLS lost CDN ingress');
+    $backup=$builder->build($wsNode,$user,true);
+    check(data_get($backup,'outbound.settings.servers.0.address')==='ip.sb','CDN fallback missing');
+    check($backup['outbound']['stream_settings']===$wsPayload['outbound']['stream_settings'],'CDN fallback changed TLS/WS');
+    $wsNode->host='argo.example';
+    check($builder->cdnProbeHost($wsNode)==='ip.sb','Argo hostname not classified');
+    $wsNode->host='101.69.181.108';
     check(data_get($wsPayload,'outbound.stream_settings.security')==='tls','SS WS/TLS lost TLS');
     check($wsNode->host==='101.69.181.108' && $wsNode->port===443,'SS WS/TLS subscription mutated');
     foreach ([
