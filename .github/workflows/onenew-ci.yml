@@ -97,6 +97,7 @@ jobs:
           docker compose up -d --wait
           docker compose exec -T -e ONENEW_CI_FIXTURE=isolated-only onenew php /opt/onenew/ci-smoke.php
           docker compose exec -T -e ONENEW_CI_FIXTURE=isolated-only onenew php /opt/onenew/traffic/tests/redis-replay.php
+          docker compose exec -T -e ONENEW_CI_FIXTURE=isolated-only onenew php /opt/onenew/remote-upgrade/tests/parallel-claims.php
       - name: Exercise actual login and user portal
         run: |
           curl --fail --silent http://127.0.0.1:7001/ | grep -q onenew
