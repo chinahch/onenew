@@ -51,3 +51,7 @@ test('native SOCKS and HTTPS proxy links are displayed with the same evidence bo
   ready();const h=harness(),props={post:async()=>({node_link:{...result,uri}})};input(h.render(props),'消息').props.onChange({target:{value:'给我节点45链接，用户ID12'}});await button(h.render(props),'发送消息').props.onClick();assert.equal(input(h.render(props),'完整节点链接').props.value,uri)
  }
 });
+
+test('generated credential panel follows the latest reply so chat bottom scrolling reveals it',async()=>{
+ ready();const h=harness(),props={post:async()=>({node_link:result})};input(h.render(props),'消息').props.onChange({target:{value:'给我节点45链接，用户ID12'}});await button(h.render(props),'发送消息').props.onClick();const tree=h.render(props),history=all(tree).find(n=>n.props.className==='onenew-ai-history'),nodes=all(history),panel=nodes.findIndex(n=>n.props['aria-label']==='节点链接生成'),replies=nodes.map((n,i)=>n.props.className==='onenew-ai-message onenew-ai-message-assistant'?i:-1).filter(i=>i>=0);assert.ok(replies.length>0);assert.ok(panel>replies.at(-1),'credential panel must be after the latest assistant reply');
+});
