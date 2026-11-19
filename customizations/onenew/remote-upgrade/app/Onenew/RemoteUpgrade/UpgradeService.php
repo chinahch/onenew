@@ -7,6 +7,7 @@ use Illuminate\Support\Str;
 
 final class UpgradeService
 {
+    public const CONCURRENCY=5;
     public const ACTIVE=['leased','downloading','verifying','installing','checking'];
     public const TERMINAL=['succeeded','failed','rolled_back','cancelled','expired'];
     public const ERRORS=['download_failed','verification_failed','install_failed','health_failed','rollback_failed','interrupted','journal_failed','invalid_task','expired','unsupported','internal_error'];
@@ -58,7 +59,7 @@ final class UpgradeService
                     'version'=>$valid?$a->version:null,'arch'=>$valid?$a->arch:null,'seen_at'=>$valid?(int)$a->seen_at:null,
                     'assistant_version'=>$valid?$a->assistant_version:null,'job'=>$latest?$this->project($latest):null];
             }
-            return ['machines'=>$rows,'versions'=>array_keys($this->catalog->all()),'concurrency'=>1];
+            return ['machines'=>$rows,'versions'=>array_keys($this->catalog->all()),'concurrency'=>self::CONCURRENCY];
         });
     }
     public function create(array $ids,string $target,int $admin): array {
@@ -89,8 +90,10 @@ final class UpgradeService
             $agent=array_merge($this->binding($m),['machine_id'=>(int)$m->id,'arch'=>$data['arch'],'version'=>$data['version'],
                 'assistant_version'=>$data['assistant_version'],'seen_at'=>now()->timestamp]);
             DB::table(self::AGENTS)->updateOrInsert(['machine_id'=>$m->id],$agent);
-            // FIFO across a batch; an offline first server remains visibly waiting, but does not block other online servers.
-            if(DB::table(self::JOBS)->whereIn('state',self::ACTIVE)->exists()) return null;
+            // Count and claim under the same mutex, including the expiry grace window.
+            // An old credential generation must not overlap a new upgrade on the same machine.
+            if(DB::table(self::JOBS)->where('machine_id',$m->id)->whereIn('state',self::ACTIVE)->exists()) return null;
+            if(DB::table(self::JOBS)->whereIn('state',self::ACTIVE)->count()>=self::CONCURRENCY) return null;
             $row=DB::table(self::JOBS)->where('machine_id',$m->id)->where('state','pending')->orderBy('sequence')->first();
             if(!$row) return null;
             if(!$this->matches($row,$m) || $row->arch!==$data['arch']) {

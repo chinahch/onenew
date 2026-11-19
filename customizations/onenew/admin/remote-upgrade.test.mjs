@@ -38,3 +38,69 @@ test('actual server controls require selected-count confirmation before posting 
  tree=render();assert.match(JSON.stringify(tree),/升级记录写入失败/);
  cleanups.forEach(cleanup=>cleanup?.());
 });
+
+async function bulkHarness(t,machines,extra={}){
+ const state=[],effects=[],dependencies=[],cleanups=[],posts=[];
+ let cursor=0,effectCursor=0;
+ const R={Fragment:'fragment',createElement:(type,props,...children)=>({type,props:props||{},children:children.flat(Infinity)}),
+  useState:init=>{const slot=cursor++;if(!(slot in state))state[slot]=init;return [state[slot],next=>{state[slot]=typeof next==='function'?next(state[slot]):next}]},
+  useEffect:(fn,deps)=>{const slot=effectCursor++;if(JSON.stringify(dependencies[slot])!==JSON.stringify(deps)){dependencies[slot]=deps;effects.push(fn)}}};
+ const props={react:R,get:async()=>({data:{versions:['v0.1.16','v0.1.14'],machines}}),post:async(...args)=>posts.push(args),...extra};
+ const render=()=>{cursor=0;effectCursor=0;return RemoteUpgrade(props)};
+ const nodes=tree=>{const result=[];function walk(node){if(!node||typeof node!=='object')return;result.push(node);node.children?.forEach(walk)}walk(tree);return result};
+ const find=label=>nodes(render()).find(node=>node.props['aria-label']===label);
+ const button=label=>nodes(render()).find(node=>node.type==='button'&&node.children.includes(label));
+ t.after(()=>cleanups.forEach(cleanup=>cleanup?.()));
+ render().props.onClick();render();
+ for(const effect of effects.splice(0))cleanups.push(effect());
+ await new Promise(resolve=>setImmediate(resolve));
+ return {render,nodes,find,button,posts,props};
+}
+const upgradeMachine=(id,extra={})=>({machine_id:id,name:`server-${id}`,is_active:true,capable:true,online:true,version:'v0.1.15',job:null,...extra});
+
+test('bulk selection includes eligible offline nodes, excludes blocked nodes and preserves confirmation',async t=>{
+ const harness=await bulkHarness(t,[upgradeMachine(1),upgradeMachine(2,{online:false}),upgradeMachine(3,{capable:false}),
+  upgradeMachine(4,{is_active:false}),upgradeMachine(5,{version:'v0.1.16'}),upgradeMachine(6,{job:{state:'pending'}})]);
+ const {find,button,posts,render}=harness;
+ assert.match(JSON.stringify(render()),/最多同时升级 5 台/);
+ assert.equal(find('全选可升级服务器').props.checked,false);
+ find('选择服务器 1').props.onChange({target:{checked:true}});
+ const partial=find('全选可升级服务器');
+ assert.equal(partial.props['aria-checked'],'mixed');
+ const element={};partial.props.ref(element);assert.equal(element.indeterminate,true);
+ partial.props.onChange({target:{checked:true}});
+ assert.equal(find('全选可升级服务器').props.checked,true);
+ for(const id of [1,2])assert.equal(find(`选择服务器 ${id}`).props.checked,true);
+ for(const id of [3,4,5,6])assert.equal(find(`选择服务器 ${id}`).props.checked,false);
+ assert.equal(posts.length,0);
+ button('升级已选 2 台').props.onClick();
+ assert.match(JSON.stringify(render()),/确认将 2 台服务器升级到 v0.1.16/);
+ await button('确认升级').props.onClick();
+ assert.deepEqual(posts[0],[ '/api/onenew/admin/upgrades',{machine_ids:[1,2],version:'v0.1.16',confirmed:true},{baseURL:'/'} ]);
+ assert.equal(find('全选可升级服务器').props.checked,false);
+});
+
+test('bulk selection respects the 100 machine batch limit and can be cleared',async t=>{
+ const {find,button,render}=await bulkHarness(t,Array.from({length:105},(_,i)=>upgradeMachine(i+1)));
+ find('全选可升级服务器').props.onChange({target:{checked:true}});
+ assert.ok(button('升级已选 100 台'));
+ assert.match(JSON.stringify(render()),/前 100 台可升级服务器/);
+ assert.equal(find('选择服务器 101').props.disabled,true);
+ find('选择服务器 1').props.onChange({target:{checked:false}});
+ assert.equal(find('选择服务器 101').props.disabled,false);
+ assert.equal(find('全选可升级服务器').props['aria-checked'],'mixed');
+ button('清空选择').props.onClick();
+ assert.ok(button('升级已选 0 台').props.disabled);
+ find('全选可升级服务器').props.onChange({target:{checked:true}});
+ find('全选可升级服务器').props.onChange({target:{checked:false}});
+ assert.ok(button('升级已选 0 台').props.disabled);
+});
+
+test('bulk selection is disabled without eligible nodes and is scoped to server details',async t=>{
+ const empty=await bulkHarness(t,[upgradeMachine(1,{version:'v0.1.16'})]);
+ assert.equal(empty.find('全选可升级服务器').props.disabled,true);
+ const detail=await bulkHarness(t,[upgradeMachine(1),upgradeMachine(2)],{machineId:2});
+ detail.find('全选可升级服务器').props.onChange({target:{checked:true}});
+ assert.equal(detail.find('选择服务器 1'),undefined);
+ assert.equal(detail.find('选择服务器 2').props.checked,true);
+});
