@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Onenew;
 
+use App\Jobs\StatServerJob;
 use App\Models\Server;
 use App\Models\ServerMachine;
 use App\Models\StatUser;
@@ -63,6 +64,36 @@ class NodeTrafficTest extends TestCase
         $job->fail = false;
         $job->handle();
         $this->assertDatabaseCount('v2_onenew_traffic_receipts', 1);
+    }
+
+    public function test_node_totals_roll_back_together_and_queue_replay_does_not_add_them_twice(): void
+    {
+        [, $server] = $this->fixture();
+        $job = new class($server, [1 => [10, 20]], 'vmess') extends StatServerJob {
+            public bool $fail = true;
+
+            protected function updateServerTraffic(int $u, int $d): void
+            {
+                parent::updateServerTraffic($u, $d);
+                if ($this->fail) {
+                    throw new \RuntimeException('Injected node counter failure');
+                }
+            }
+        };
+        try {
+            $job->handle();
+            $this->fail('Expected node counter failure');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Injected node counter failure', $e->getMessage());
+        }
+        $this->assertDatabaseCount('v2_stat_server', 0);
+        $this->assertDatabaseCount('v2_onenew_traffic_receipts', 0);
+        $job->fail = false;
+        $job->handle();
+        $job->handle();
+        $this->assertDatabaseCount('v2_onenew_traffic_receipts', 1);
+        $this->assertDatabaseHas('v2_stat_server', ['server_id' => $server['id'], 'u' => 10, 'd' => 20]);
+        $this->assertDatabaseHas('v2_server', ['id' => $server['id'], 'u' => 10, 'd' => 20]);
     }
 
     public function test_administrator_day_view_preserves_node_rate_and_deleted_node_attribution(): void

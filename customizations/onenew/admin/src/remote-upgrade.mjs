@@ -2,11 +2,19 @@ const root='/api/onenew/admin/upgrades';
 const live=new Set(['pending','leased','downloading','verifying','installing','checking']);
 const states={pending:'等待服务器 / 排队',leased:'已领取',downloading:'下载中',verifying:'校验中',installing:'安装中',checking:'健康检查',succeeded:'升级成功',rolled_back:'已回滚',failed:'升级失败',expired:'已过期',cancelled:'已取消'};
 const errors={download_failed:'官方下载失败',verification_failed:'校验失败',install_failed:'安装失败',health_failed:'健康检查失败',rollback_failed:'回滚失败，请检查服务器',interrupted:'升级被中断',journal_failed:'升级记录写入失败，请检查磁盘空间及权限',invalid_task:'任务或绑定已变化',expired:'任务已过期',unsupported:'运行环境不支持',internal_error:'升级助手错误'};
+const parseVersion=version=>/^v\d+\.\d+\.\d+$/.test(version||'')?version.slice(1).split('.').map(Number):null;
+function compareVersions(a,b){
+  for(let i=0;i<3;i++)if(a[i]!==b[i])return a[i]-b[i];
+  return 0;
+}
+function latestVersion(versions){
+  return versions.filter(version=>parseVersion(version)).reduce((latest,version)=>
+    !latest||compareVersions(parseVersion(version),parseVersion(latest))>0?version:latest,'');
+}
 export function upgradeEligible(machine,target){
   if(!machine?.is_active||!machine?.capable||!target||live.has(machine.job?.state))return false;
-  const parse=v=>/^v\d+\.\d+\.\d+$/.test(v||'')?v.slice(1).split('.').map(Number):null;
-  const current=parse(machine.version),next=parse(target);if(!current||!next)return false;
-  for(let i=0;i<3;i++){if(current[i]<next[i])return true;if(current[i]>next[i])return false}return false;
+  const current=parseVersion(machine.version),next=parseVersion(target);
+  return !!current&&!!next&&compareVersions(current,next)<0;
 }
 export function upgradePayload(ids,version){
   const machine_ids=[...new Set(ids.map(Number))];
@@ -16,8 +24,23 @@ export function upgradePayload(ids,version){
 export function RemoteUpgrade({react:R,get,post,table,machineId}){
   const h=R.createElement,[open,setOpen]=R.useState(false),[data,setData]=R.useState(null),[selected,setSelected]=R.useState([]),[target,setTarget]=R.useState(''),[confirm,setConfirm]=R.useState(false),[busy,setBusy]=R.useState(false),[error,setError]=R.useState('');
   const button=(label,onClick,disabled=false)=>h('button',{type:'button',className:'rounded-md border px-3 py-1.5 text-sm disabled:opacity-50',onClick,disabled},label);
-  const load=async()=>{const result=await get(root,{baseURL:'/'});const next=result?.data??result;setData(next);setTarget(old=>next.versions?.includes(old)?old:next.versions?.at(-1)||'');return next};
-  R.useEffect(()=>{if(!open)return;let active=true;const update=()=>load().catch(()=>active&&setError('无法读取升级状态，请重试'));update();const timer=setInterval(update,5000);return()=>{active=false;clearInterval(timer)}},[open]);
+  const load=async(isCurrent=()=>true)=>{
+    const result=await get(root,{baseURL:'/'});
+    if(!isCurrent())return;
+    const next=result?.data??result,versions=next.versions??[];
+    setData(next);
+    setTarget(old=>versions.includes(old)?old:latestVersion(versions));
+  };
+  R.useEffect(()=>{
+    if(!open)return;
+    let active=true,timer;
+    const update=async()=>{
+      try{await load(()=>active)}catch{if(active)setError('无法读取升级状态，请重试')}
+      if(active)timer=setTimeout(update,5000);
+    };
+    update();
+    return()=>{active=false;clearTimeout(timer)};
+  },[open]);
   const show=()=>{setOpen(true);setConfirm(false);setError('');setSelected(machineId?[Number(machineId)]:(table?.getSelectedRowModel?.().rows||[]).map(row=>Number(row.original.id)))};
   const rows=(data?.machines||[]).filter(row=>!machineId||Number(row.machine_id)===Number(machineId));
   const chosen=rows.filter(row=>selected.includes(row.machine_id));
