@@ -11,6 +11,8 @@ function updateMeta(){
  const meta=seasonMetadata(season.value,import.meta.env.BASE_URL)
  document.title=meta.title
  document.querySelector('link[rel="icon"]')?.setAttribute('href',meta.icon)
+ document.documentElement.style.setProperty('--season-cursor',`url("${meta.cursor}") 3 2`)
+ document.documentElement.style.setProperty('--season-pointer',`url("${meta.pointer}") 13 4`)
  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim())
 }
 function theme(){dark.value=!dark.value;try{storage?.setItem('onenew-theme',dark.value?'dark':'light')}catch{}document.documentElement.dataset.theme=dark.value?'dark':'light';updateMeta()}

@@ -15,7 +15,8 @@ export const seasonCopy:Record<Season,{tagline:string;badge:string;footer:string
 }
 export const seasonKey='onenew-season'
 export function seasonMetadata(season:Season,base:string){
- return {title:seasonCopy[season].footer,icon:`${base.endsWith('/')?base:base+'/'}icons/${season}.svg`}
+ const root=base.endsWith('/')?base:base+'/'
+ return {title:seasonCopy[season].footer,icon:`${root}icons/${season}.svg`,cursor:`${root}cursors/${season}.svg`,pointer:`${root}cursors/${season}-pointer.svg`}
 }
 type StorageReader={getItem(key:string):string|null}
 type StorageWriter={setItem(key:string,value:string):void}

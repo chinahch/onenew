@@ -42,6 +42,8 @@ test('tab titles and icons follow the selected identity and deployment base path
   const meta=seasonMetadata(season,'/onenew-user/')
   assert.ok(meta.title.startsWith(seasonIdentity[season].name+' · '))
   assert.equal(meta.icon,`/onenew-user/icons/${season}.svg`)
+  assert.equal(meta.cursor,`/onenew-user/cursors/${season}.svg`)
+  assert.equal(meta.pointer,`/onenew-user/cursors/${season}-pointer.svg`)
  }
  assert.equal(seasonMetadata('winter','/onenew-user').icon,'/onenew-user/icons/winter.svg')
  assert.equal(seasonMetadata('autumn','/').title,'暖秋 · 让连接多一点温度')

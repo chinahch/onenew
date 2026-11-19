@@ -27,5 +27,11 @@
 .auth-appearance .auth-theme{position:static}
 .season-art>svg{filter:drop-shadow(0 24px 30px #334b5e18)}
 .season-art .art-decoration{stroke:var(--green);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media(hover:hover) and (pointer:fine){
+ :root[data-season] body{cursor:var(--season-cursor),auto}
+ :root[data-season] :is(a,button,select,summary,[role='button'],[role='link'],[role='tab'],input[type='checkbox'],input[type='radio'],.n-dropdown-option){cursor:var(--season-pointer),pointer}
+ :root[data-season] :is(textarea,[contenteditable='true'],input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit'])){cursor:text}
+ :root[data-season] :is(button,select,input,textarea):disabled,:root[data-season] [aria-disabled='true']{cursor:not-allowed}
+}
 @media(max-width:760px){.auth-appearance{right:23px;top:24px}.public-header>.button-row{gap:6px}.public-header{gap:12px}.season-switch select{max-width:93px;padding:8px 4px}.customer-tools{gap:6px}}
 @media(max-width:380px){.public-header{padding-left:14px;padding-right:14px;gap:8px}.public-header .brand{font-size:21px;gap:6px}.public-header .brand-mark{width:31px;height:33px}.public-header>.button-row>.n-button:last-child{padding-left:10px;padding-right:10px}.customer-topbar{padding-left:14px;padding-right:14px}.season-switch select{font-size:11px;max-width:82px}}
