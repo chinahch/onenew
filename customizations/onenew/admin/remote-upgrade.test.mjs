@@ -62,6 +62,7 @@ test('bulk selection includes eligible offline nodes, excludes blocked nodes and
  const harness=await bulkHarness(t,[upgradeMachine(1),upgradeMachine(2,{online:false}),upgradeMachine(3,{capable:false}),
   upgradeMachine(4,{is_active:false}),upgradeMachine(5,{version:'v0.1.16'}),upgradeMachine(6,{job:{state:'pending'}})]);
  const {find,button,posts,render}=harness;
+ assert.match(JSON.stringify(render()),/最多同时升级 5 台/);
  assert.equal(find('全选可升级服务器').props.checked,false);
  find('选择服务器 1').props.onChange({target:{checked:true}});
  const partial=find('全选可升级服务器');
