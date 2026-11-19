@@ -21,5 +21,13 @@ export function probeEntryDetail(probe?:Probe|null){
  return executed(e.primary)?'原CDN异常，备用入口未完成检测':'原CDN未完成检测'
 }
 export function probeLandingDetail(landing:{state:string;error_code?:string}){
- return landing.state==='succeeded'?'落地正常':landing.state==='failed'&&['transport_failed','proxy_failed','target_failed','timeout'].includes(landing.error_code||'')?'落地故障':'落地未完成检测'
+  return landing.state==='succeeded'?'落地正常':landing.state==='failed'&&['transport_failed','proxy_failed','target_failed','timeout'].includes(landing.error_code||'')?'落地故障':'落地未完成检测'
+}
+
+export function probeLandingSummary(probe?:Probe|null){
+ const landings=probe?.stages?.landings||[]
+ if(!landings.length)return ''
+ const states=landings.map(probeLandingDetail)
+ if(states.includes('落地故障'))return '落地故障'
+ return states.every(state=>state==='落地正常')?'落地正常':'落地未完成检测'
 }
