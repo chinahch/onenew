@@ -36,15 +36,25 @@ final class UpgradeService
         DB::table(self::JOBS)->whereIn('state',self::ACTIVE)->where('lease_expires_at','<=',$now-180)->update(['state'=>'expired','error_code'=>'expired','updated_at'=>$now]);
     }
     public function overview(): array {
-        return $this->locked(function () {
+        return DB::transaction(function () {
+            $now=now()->timestamp;
             $agents=DB::table(self::AGENTS)->get()->keyBy('machine_id');
-            $jobs=DB::table(self::JOBS)->orderByDesc('sequence')->get()->groupBy('machine_id');
+            $latestSequences=DB::table(self::JOBS)->selectRaw('MAX(sequence) AS sequence')->groupBy('machine_id');
+            $jobs=DB::table(self::JOBS.' as job')->joinSub($latestSequences,'latest','latest.sequence','=','job.sequence')
+                ->get(['job.*'])->keyBy('machine_id');
             $rows=[];
             foreach(ServerMachine::orderBy('id')->get() as $m) {
-                $a=$agents->get($m->id); $valid=$this->matches($a,$m); $latest=$jobs->get($m->id)?->first();
+                $a=$agents->get($m->id); $valid=$this->matches($a,$m); $latest=$jobs->get($m->id);
                 if ($latest && !$this->matches($latest,$m)) $latest=null;
+                if ($latest && (($latest->state==='pending' && $latest->expires_at<=$now) ||
+                    (in_array($latest->state,self::ACTIVE,true) && $latest->lease_expires_at<=$now-180))) {
+                    // Mirror expiry for the read-only view. Queue mutations persist it under the lock.
+                    $latest->state='expired';
+                    $latest->error_code='expired';
+                    $latest->updated_at=$latest->lease_expires_at===null?(int)$latest->expires_at:(int)$latest->lease_expires_at+180;
+                }
                 $rows[]=['machine_id'=>(int)$m->id,'name'=>(string)$m->name,'is_active'=>(bool)$m->is_active,
-                    'capable'=>$valid,'online'=>$valid && $a->seen_at>=now()->timestamp-90,
+                    'capable'=>$valid,'online'=>$valid && $a->seen_at>=$now-90,
                     'version'=>$valid?$a->version:null,'arch'=>$valid?$a->arch:null,'seen_at'=>$valid?(int)$a->seen_at:null,
                     'assistant_version'=>$valid?$a->assistant_version:null,'job'=>$latest?$this->project($latest):null];
             }

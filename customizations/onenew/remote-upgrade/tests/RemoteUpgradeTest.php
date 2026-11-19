@@ -80,6 +80,18 @@ class RemoteUpgradeTest extends TestCase
         $this->getJson('/api/onenew/admin/upgrades')->assertJsonPath('machines.0.version','v0.1.11')->assertJsonPath('machines.0.job.state','rolled_back')->assertJsonPath('machines.0.job.reported_version','v0.1.11');
         $this->create([$m])->assertOk();
     }
+    public function test_overview_returns_latest_job_and_projects_expiry_without_writing(): void {
+        $m=$this->machine();$this->poll($m);$this->admin();
+        $old=$this->create([$m])->json('jobs.0.id');
+        $this->postJson('/api/onenew/admin/upgrades/'.$old.'/cancel')->assertOk();
+        $latest=$this->create([$m])->json('jobs.0.id');
+        $revision=DB::table('v2_onenew_upgrade_mutex')->where('id',1)->value('revision');
+        $this->travel(86401)->seconds();
+        $this->getJson('/api/onenew/admin/upgrades')->assertOk()
+            ->assertJsonPath('machines.0.job.id',$latest)->assertJsonPath('machines.0.job.state','expired');
+        $this->assertSame($revision,DB::table('v2_onenew_upgrade_mutex')->where('id',1)->value('revision'));
+        $this->assertSame('pending',DB::table('v2_onenew_upgrade_jobs')->where('id',$latest)->value('state'));
+    }
     public function test_journal_write_failure_is_reported_without_being_called_interrupted(): void {
         $m=$this->machine();$this->poll($m);$this->admin();$this->create([$m]);$job=$this->poll($m)->json('job');
         $this->report($m,$job,'failed','v0.1.11','journal_failed')->assertOk();
