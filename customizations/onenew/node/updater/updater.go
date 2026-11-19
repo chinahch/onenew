@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const assistantVersion = "v0.1.12"
+const assistantVersion = "v0.1.16"
 const officialBase = "https://github.com/chinahch/onenew-releases/releases/download/"
 
 var versionRE = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
@@ -47,6 +47,7 @@ type Journal struct {
 	Error      string `json:"error,omitempty"`
 }
 type Updater struct {
+	recoveryReason     string
 	Root, Bin, Manager string
 	Binding            Binding
 	Client, Download   *http.Client
@@ -145,13 +146,17 @@ func (u *Updater) save(j Journal) error {
 	if e != nil {
 		return e
 	}
-	return atomicWrite(filepath.Join(u.stateDir(), "journal.json"), b, 0600)
+	if e = atomicWrite(filepath.Join(u.stateDir(), "journal.json"), b, 0600); e != nil {
+		return journalWriteError{e}
+	}
+	return nil
 }
 func atomicWrite(path string, b []byte, mode os.FileMode) error {
 	f, e := os.OpenFile(path+".new", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 	if e != nil {
 		return e
 	}
+	defer os.Remove(path + ".new")
 	if e = f.Chmod(mode); e == nil {
 		_, e = f.Write(b)
 	}

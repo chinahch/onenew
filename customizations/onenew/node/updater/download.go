@@ -105,15 +105,11 @@ func extract(pkg, dir string) error {
 		if e != nil {
 			return e
 		}
-		if (h.Name != "caddy" && h.Name != "caddyctl") || seen[h.Name] || h.Typeflag != tar.TypeReg || h.Size < 1 || h.Size > 256*1024*1024 {
+		if (h.Name != "caddy" && h.Name != "caddyctl") || seen[h.Name] || h.Typeflag != tar.TypeReg || h.Size < 1 || h.Size > binaryLimit {
 			return errors.New("invalid package")
 		}
 		seen[h.Name] = true
-		b, e := io.ReadAll(io.LimitReader(tr, h.Size+1))
-		if e != nil || int64(len(b)) != h.Size {
-			return errors.New("invalid binary")
-		}
-		if e = atomicWrite(filepath.Join(dir, h.Name+".candidate"), b, 0755); e != nil {
+		if e = streamAtomic(filepath.Join(dir, h.Name+".candidate"), tr, h.Size, 0755); e != nil {
 			return e
 		}
 	}
@@ -121,11 +117,4 @@ func extract(pkg, dir string) error {
 		return errors.New("missing binary")
 	}
 	return nil
-}
-func copyFile(src, dst string, mode os.FileMode) error {
-	b, e := regular(src, false, 256*1024*1024)
-	if e != nil {
-		return e
-	}
-	return atomicWrite(dst, b, mode)
 }

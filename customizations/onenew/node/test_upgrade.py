@@ -63,7 +63,7 @@ else exit 10
 fi
 '''
         with tarfile.open(self.package, 'w:gz') as archive:
-            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.15 (built candidate)"\n'), ('caddyctl', cli)]:
+            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.16 (built candidate)"\n'), ('caddyctl', cli)]:
                 data = content.encode(); info = tarfile.TarInfo(name); info.size = len(data); info.mode = 0o755
                 archive.addfile(info, io.BytesIO(data))
         self.sums.write_text(hashlib.sha256(self.package.read_bytes()).hexdigest() + '  ' + self.package.name + '\n')
@@ -73,6 +73,133 @@ fi
             script = script.replace(path, self.posix(self.root) + path)
         self.fixture_script = self.root / 'install-fixture.sh'
         self.fixture_script.write_text(script, newline='\n')
+
+    def refresh(self, journal=False, fail_restart=False, background=False, openrc=False):
+        helper = self.installed / 'caddy-updater'
+        helper.write_text('#!/bin/sh\n# previous assistant\n')
+        helper.chmod(0o755)
+        (self.system / 'caddy-updater.service').write_text('previous-assistant-unit')
+        updater = self.root / 'caddy-updater-linux-amd64'
+        updater.write_text('#!/bin/sh\ncase "$5" in panel) echo https://panel.example.test;; machine) echo 7;; *) exit 1;; esac\n')
+        (self.root / 'SHA256SUMS-updater-amd64').write_text(hashlib.sha256(updater.read_bytes()).hexdigest() + '  ' + updater.name + '\n')
+        script = self.bin.joinpath('systemctl').read_text().replace('echo "$1" >>', 'echo "$1 $2" >>')
+        script = script.replace('if [ "$1" = show ]; then', '''if [ "$4" = caddy-updater.service ] && [ "$1" = show ]; then
+ case "$2" in
+ --property=DropInPaths) [ ! -e "$FIXTURE_ROOT/lxc-dropin" ] || echo /run/systemd/system/service.d/zzz-lxc-service.conf;;
+ --property=Description) echo 'Onenew Native Upgrade Assistant';;
+ --property=FragmentPath) echo "$FIXTURE_ROOT/etc/systemd/system/caddy-updater.service";;
+ --property=ExecStart) echo "{ path=$FIXTURE_ROOT/usr/local/bin/caddy-updater ; argv[]=$FIXTURE_ROOT/usr/local/bin/caddy-updater run --root $FIXTURE_ROOT/etc/caddy --manager systemd ; ignore_errors=no ; }";;
+ esac
+ exit 0
+fi
+if [ "$1" = show ]; then''')
+        if fail_restart:
+            script = script.replace('if [ "$1" = show ]; then', 'if [ "$1" = restart ] && [ ! -e "$FIXTURE_ROOT/restart-failed" ]; then touch "$FIXTURE_ROOT/restart-failed"; exit 1; fi\nif [ "$1" = show ]; then')
+        self.script('systemctl', script)
+        if openrc:
+            self._prepare_openrc()
+            (self.system / 'caddy-updater.service').unlink()
+            unit = self.root / 'etc/init.d/caddy-updater'
+            unit.write_text('#!/sbin/openrc-run\ndescription="Onenew Native Upgrade Assistant"\ncommand="' + self.posix(self.installed) + '/caddy-updater"\ncommand_args="run --root ' + self.posix(self.native) + ' --manager openrc"\nsupervisor="supervise-daemon"\nrespawn_delay=10\nrespawn_max=0\noutput_log="/var/log/caddy-updater.log"\nerror_log="/var/log/caddy-updater.err"\ndepend() { need net; }\n')
+            unit.chmod(0o755)
+            self.script('rc-service', '#!/bin/sh\necho "$2 $1" >> "$FIXTURE_ROOT/service-actions"\nif [ "$1" = caddy-updater ] && [ "$2" = restart ]; then flock -n "$FIXTURE_ROOT/etc/caddy/updater.lock" true || exit 75; fi\nexit 0\n')
+        if journal:
+            (self.native / 'updater').mkdir()
+            (self.native / 'updater/journal.json').write_text('{"state":"running","secret":"hidden"}')
+        env = {**os.environ, 'FIXTURE_ROOT': self.posix(self.root), 'MOCK_BIN': self.posix(self.bin)}
+        bash = 'C:/Program Files/Git/bin/bash.exe' if os.name == 'nt' else shutil.which('bash')
+        args = [bash, '--noprofile', '--norc', '-c', 'export PATH="$MOCK_BIN:$PATH"; exec bash "$@"', 'refresh', self.posix(self.fixture_script), '--refresh-assistant']
+        if background:
+            return subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True), args, env
+        return subprocess.run(args, env=env, capture_output=True, text=True)
+
+    def test_refresh_only_replaces_assistant_without_token_or_core_mutation(self):
+        self.package.unlink()
+        result = self.refresh()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for path, content in self.original.items(): self.assertEqual(Path(path).read_bytes(), content)
+        actions = (self.root / 'service-actions').read_text()
+        self.assertIn('stop caddy-updater.service', actions)
+        self.assertNotIn('stop caddy.service', actions)
+        self.assertIn('case "$5"', (self.installed / 'caddy-updater').read_text())
+
+    def test_refresh_installer_guard_spans_stop_replace_and_restart(self):
+        self.script('flock', '#!/bin/sh\necho "flock $*" >> "$FIXTURE_ROOT/service-actions"\nexit 0\n')
+        result = self.refresh()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        actions = (self.root / 'service-actions').read_text()
+        self.assertLess(actions.index('flock -n 8'), actions.index('stop caddy-updater.service'))
+        self.assertLess(actions.index('flock -u 9'), actions.index('restart caddy-updater.service'))
+        self.assertLess(actions.index('restart caddy-updater.service'), actions.index('flock -u 8'))
+
+    @unittest.skipIf(os.name == 'nt', 'Linux concurrent flock integration')
+    def test_concurrent_refresh_cannot_enter_stop_or_restore_window(self):
+        import time
+        service = self.bin / 'systemctl'
+        script = service.read_text().replace('if [ "$1" = show ]; then', 'if [ "$1" = stop ] && [ "$2" = caddy-updater.service ]; then\n touch "$FIXTURE_ROOT/stopped-gate"\n while [ ! -e "$FIXTURE_ROOT/release-gate" ]; do /bin/sleep .02; done\nfi\nif [ "$1" = show ]; then')
+        self.script('systemctl', script)
+        first, args, env = self.refresh(background=True)
+        try:
+            deadline = time.monotonic() + 10
+            while not (self.root / 'stopped-gate').exists() and time.monotonic() < deadline:
+                time.sleep(.02)
+            self.assertTrue((self.root / 'stopped-gate').exists())
+            second = subprocess.run(args, env=env, capture_output=True, text=True, timeout=5)
+            self.assertNotEqual(second.returncode, 0)
+            self.assertIn('holds the installer lock', second.stderr)
+            self.assertEqual((self.root / 'service-actions').read_text().count('stop caddy-updater.service'), 1)
+        finally:
+            (self.root / 'release-gate').touch()
+            stdout, stderr = first.communicate(timeout=10)
+        self.assertEqual(first.returncode, 0, stderr)
+
+    def test_openrc_refresh_preserves_core_configuration_and_credentials(self):
+        result = self.refresh(openrc=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for path, content in self.original.items():
+            if path != str(self.system / 'caddy.service'):
+                self.assertEqual(Path(path).read_bytes(), content)
+        actions = (self.root / 'service-actions').read_text()
+        self.assertIn('stop caddy-updater', actions)
+        self.assertNotIn('stop caddy\n', actions)
+        self.assertIn('restart caddy-updater', actions)
+        self.assertIn('respawn_max=0', (self.root / 'etc/init.d/caddy-updater').read_text())
+
+    def test_refresh_accepts_known_lxc_global_dropin(self):
+        (self.root / 'lxc-dropin').touch()
+        result = self.refresh()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_refresh_bad_checksum_never_stops_assistant(self):
+        self.script('sha256sum', '#!/bin/sh\nexit 1\n')
+        result = self.refresh()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Assistant checksum mismatch', result.stderr)
+        self.assertNotIn('stop ', (self.root / 'service-actions').read_text())
+
+    def test_refresh_contended_lock_restarts_old_assistant_without_mutation(self):
+        self.script('flock', '#!/bin/sh\n[ "$1" = -u ] || [ "$2" = 8 ]\n')
+        result = self.refresh()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('holds the upgrade lock', result.stderr)
+        self.assertIn('previous assistant', (self.installed / 'caddy-updater').read_text())
+        self.assertIn('restart caddy-updater.service', (self.root / 'service-actions').read_text())
+
+    def test_refresh_preserves_existing_journal_without_stopping_assistant(self):
+        result = self.refresh(journal=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('resolve the task first', result.stderr)
+        self.assertNotIn('hidden', result.stderr)
+        self.assertTrue((self.native / 'updater/journal.json').exists())
+        self.assertIn('previous assistant', (self.installed / 'caddy-updater').read_text())
+        self.assertNotIn('stop caddy-updater.service', (self.root / 'service-actions').read_text())
+
+    def test_refresh_restores_previous_helper_and_service_after_start_failure(self):
+        result = self.refresh(fail_restart=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('previous assistant', (self.installed / 'caddy-updater').read_text())
+        self.assertEqual((self.system / 'caddy-updater.service').read_text(), 'previous-assistant-unit')
+        self.assertGreaterEqual((self.root / 'service-actions').read_text().count('restart caddy-updater.service'), 2)
 
     @staticmethod
     def posix(path):

@@ -5,6 +5,23 @@ root under its own OS service, independently of caddy. It holds an advisory
 exclusive lock on `/etc/caddy/updater.lock` for its lifetime. A manual installer
 must refuse while that lock is held or a recovery journal exists.
 
+For helpers installed before v0.1.16, bootstrap the corrected helper once:
+`bash <(curl -fsSL https://get.timi.baby/upgrade) --refresh-assistant`.
+This downloads and verifies the replacement first, stops only the upgrade
+assistant, checks its lock and journal, and replaces/restarts only the helper.
+It does not replace or stop caddy, and does not change node credentials.
+Pending journals are refused and the old helper is restarted for recovery;
+never delete a journal or lock to bypass it. Future core upgrades use the panel.
+
+Archive extraction and executable copies use bounded streaming writes, synced
+private temporary files and atomic renames instead of whole-file allocations.
+CI checks a realistic 64 MiB executable inside a 96 MiB Alpine container.
+An historical OOM counter is evidence of a system event, not proof that a
+particular upgrade process was killed. Safe diagnostics identify recovery,
+polling or execution without logging credentials or raw errors. A known
+same-process journal write failure is reported as `journal_failed`, rather
+than being mistaken for an interrupted process on the next loop.
+
 `caddy-updater binding --root /etc/caddy --field panel|machine|token` reads the
 saved single machine binding. Token output is intended only for a private
 installer capture and must never be printed or evaluated as shell input.

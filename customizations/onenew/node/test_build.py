@@ -24,7 +24,7 @@ class BuildTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'pinned'):
                 builder.validate_source(root)
 
-    def test_v15_requires_udp_headroom_and_staged_health_v2(self):
+    def test_v16_requires_udp_headroom_and_staged_health_v2(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             features = ['landing-v1', 'proxy-probes-v1', 'certificate-lifecycle-v1',

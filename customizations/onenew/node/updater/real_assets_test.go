@@ -11,11 +11,11 @@ import (
 	"testing"
 )
 
-// Exercises shipped v14 and newly built v15 ELF binaries in a disposable
+// Exercises shipped v15 and newly built v16 ELF binaries in a disposable
 // filesystem. Service-manager calls are simulated; version probes execute real
 // binaries. The native kernel suite separately verifies real process health.
-func TestRealV14ToV15Assets(t *testing.T) {
-	oldPkg, newPkg := os.Getenv("ONENEW_TEST_V14_PACKAGE"), os.Getenv("ONENEW_TEST_V15_PACKAGE")
+func TestRealV15ToV16Assets(t *testing.T) {
+	oldPkg, newPkg := os.Getenv("ONENEW_TEST_V15_PACKAGE"), os.Getenv("ONENEW_TEST_V16_PACKAGE")
 	if oldPkg == "" || newPkg == "" {
 		t.Skip("Linux release asset integration runs in CI")
 	}
@@ -40,10 +40,10 @@ func TestRealV14ToV15Assets(t *testing.T) {
 				}
 				return originalCommand(ctx, n, a...)
 			}
-			if h.u.version() != "v0.1.14" {
+			if h.u.version() != "v0.1.15" {
 				t.Fatal("old asset version mismatch")
 			}
-			h.healthyVersion = "v0.1.14"
+			h.healthyVersion = "v0.1.15"
 			var e error
 			h.pkg, e = os.ReadFile(newPkg)
 			if e != nil {
@@ -53,13 +53,13 @@ func TestRealV14ToV15Assets(t *testing.T) {
 			h.sum = hex.EncodeToString(sum[:])
 			writeTest(t, filepath.Join(h.u.Root, "config.yml"), "preserve-config-and-certificates")
 			h.unhealthy = rollback
-			if e = h.u.execute(h.job("v0.1.15")); e != nil {
+			if e = h.u.execute(h.job("v0.1.16")); e != nil {
 				t.Fatal(e)
 			}
-			expected := "v0.1.15"
+			expected := "v0.1.16"
 			state := "succeeded"
 			if rollback {
-				expected = "v0.1.14"
+				expected = "v0.1.15"
 				state = "rolled_back"
 			}
 			if h.u.version() != expected || h.states[len(h.states)-1] != state {

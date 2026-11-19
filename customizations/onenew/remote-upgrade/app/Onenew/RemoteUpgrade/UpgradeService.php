@@ -9,7 +9,7 @@ final class UpgradeService
 {
     public const ACTIVE=['leased','downloading','verifying','installing','checking'];
     public const TERMINAL=['succeeded','failed','rolled_back','cancelled','expired'];
-    public const ERRORS=['download_failed','verification_failed','install_failed','health_failed','rollback_failed','interrupted','invalid_task','expired','unsupported','internal_error'];
+    public const ERRORS=['download_failed','verification_failed','install_failed','health_failed','rollback_failed','interrupted','journal_failed','invalid_task','expired','unsupported','internal_error'];
     private const JOBS='v2_onenew_upgrade_jobs';
     private const AGENTS='v2_onenew_upgrade_agents';
     public function __construct(private ReleaseCatalog $catalog) {}
