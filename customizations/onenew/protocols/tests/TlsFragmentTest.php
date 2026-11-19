@@ -21,7 +21,8 @@ final class TlsFragmentTest extends TestCase
 
     private function settings(bool $enabled = true): array
     {
-        return ['tls' => 1, 'network' => 'tcp', 'tls_settings' => ['server_name' => 'tls.example',
+        return ['tls' => 1, 'network' => 'tcp', 'utls' => ['enabled' => true, 'fingerprint' => 'chrome'],
+            'tls_settings' => ['server_name' => 'tls.example',
             'fragment' => ['enabled' => $enabled, 'length' => '100-200', 'interval' => '10-20']]];
     }
 
