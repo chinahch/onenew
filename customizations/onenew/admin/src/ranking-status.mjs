@@ -1,3 +1,13 @@
+export function rankingParameters(type,period,range){
+  if(!['node','user'].includes(type)||!['today','last7days','last30days','custom'].includes(period))throw new Error('无效的流量排行范围');
+  if(period!=='custom')return {type,period};
+  const day=date=>{
+    if(!(date instanceof Date)||!Number.isFinite(date.getTime()))throw new Error('请选择有效的日期范围');
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  };
+  return {type,period,start_date:day(range?.from),end_date:day(range?.to)};
+}
+
 export function RankingStatus({react:R,query}){
   const h=R.createElement;
   const loading=query.isPending??query.isLoading??false;

@@ -3,6 +3,9 @@
 /** Called by the root overlay installer on the pinned fresh upstream source. */
 function applyOnenewTrafficPatch(string $root): void
 {
+    replaceOnce($root.'/app/Http/Routes/V2/AdminRoute.php',
+        "\$router->get('/getTrafficRank', [StatController::class, 'getTrafficRank']);",
+        "\$router->get('/getTrafficRank', [\\App\\Onenew\\Traffic\\RankingController::class, 'getTrafficRank']);");
     $path = $root . '/app/Services/UserService.php';
     $source = str_replace("\r\n", "\n", file_get_contents($path));
     $old = 'use App\\Jobs\\StatUserJob;';
