@@ -44,6 +44,11 @@ export function RemoteUpgrade({react:R,get,post,table,machineId}){
   const show=()=>{setOpen(true);setConfirm(false);setError('');setSelected(machineId?[Number(machineId)]:(table?.getSelectedRowModel?.().rows||[]).map(row=>Number(row.original.id)))};
   const rows=(data?.machines||[]).filter(row=>!machineId||Number(row.machine_id)===Number(machineId));
   const chosen=rows.filter(row=>selected.includes(row.machine_id));
+  const selectable=rows.filter(row=>upgradeEligible(row,target));
+  const bulkRows=selectable.slice(0,100);
+  const allSelected=bulkRows.length>0&&bulkRows.every(row=>selected.includes(row.machine_id));
+  const partiallySelected=!allSelected&&chosen.length>0;
+  const toggleAll=checked=>{setConfirm(false);setSelected(checked?bulkRows.map(row=>row.machine_id):[])};
   const eligible=chosen.length>0&&chosen.length<=100&&chosen.every(row=>upgradeEligible(row,target));
   const run=async()=>{setBusy(true);setError('');try{await post(root,upgradePayload(chosen.map(row=>row.machine_id),target),{baseURL:'/'});setConfirm(false);setSelected([]);await load()}catch{setError('创建失败：请刷新并确认服务器已有助手、版本可升级且没有进行中的任务')}finally{setBusy(false)}};
   const cancel=async id=>{setBusy(true);try{await post(`${root}/${id}/cancel`,{}, {baseURL:'/'});await load()}catch{setError('任务已开始或状态已变化，无法取消')}finally{setBusy(false)}};
@@ -55,10 +60,20 @@ export function RemoteUpgrade({react:R,get,post,table,machineId}){
     !data?h('p',null,'正在读取升级状态…'):h(R.Fragment,null,
       h('label',{className:'flex items-center gap-2 text-sm'},'官方目标版本',h('select',{value:target,onChange:e=>{setTarget(e.target.value);setConfirm(false)},disabled:busy,className:'rounded border bg-background p-1'},(data.versions||[]).map(version=>h('option',{key:version,value:version},version)))),
       !target&&h('p',{className:'text-sm'},'暂无已验证的官方升级版本。'),
+      h('div',{className:'flex flex-wrap items-center gap-3 text-sm'},
+        h('span',{'aria-live':'polite'},`已选 ${chosen.length} 台 · 可升级 ${selectable.length} 台`),
+        button('清空选择',()=>toggleAll(false),busy||chosen.length===0),
+        selectable.length>100&&h('span',{className:'text-muted-foreground'},'每批最多 100 台；全选将选择列表中前 100 台可升级服务器。')),
       h('div',{className:'overflow-x-auto'},h('table',{className:'w-full text-left text-sm'},
-        h('thead',null,h('tr',null,...['选择','服务器','当前版本','目标版本','助手 / 升级状态','操作'].map(label=>h('th',{key:label,className:'p-2'},label)))),
+        h('thead',null,h('tr',null,
+          h('th',{className:'p-2'},h('label',{className:'inline-flex items-center gap-2'},
+            h('input',{type:'checkbox','aria-label':'全选可升级服务器',checked:allSelected,
+              'aria-checked':partiallySelected?'mixed':allSelected,
+              ref:element=>{if(element)element.indeterminate=partiallySelected},
+              disabled:busy||bulkRows.length===0,onChange:event=>toggleAll(event.target.checked)}),'全选')),
+          ...['服务器','当前版本','目标版本','助手 / 升级状态','操作'].map(label=>h('th',{key:label,className:'p-2'},label)))),
         h('tbody',null,rows.map(row=>h('tr',{key:row.machine_id,className:'border-t'},
-          h('td',{className:'p-2'},h('input',{type:'checkbox','aria-label':`选择服务器 ${row.machine_id}`,checked:selected.includes(row.machine_id),disabled:busy||(!upgradeEligible(row,target)&&!selected.includes(row.machine_id)),onChange:e=>{setConfirm(false);setSelected(old=>e.target.checked?[...old,row.machine_id]:old.filter(id=>id!==row.machine_id))}})),
+          h('td',{className:'p-2'},h('input',{type:'checkbox','aria-label':`选择服务器 ${row.machine_id}`,checked:selected.includes(row.machine_id),disabled:busy||(!selected.includes(row.machine_id)&&(!upgradeEligible(row,target)||chosen.length>=100)),onChange:e=>{setConfirm(false);setSelected(old=>e.target.checked?[...new Set([...old,row.machine_id])]:old.filter(id=>id!==row.machine_id))}})),
           h('td',{className:'p-2'},`${row.name} (#${row.machine_id})`),h('td',{className:'p-2'},row.version||'尚未上报'),
           h('td',{className:'p-2'},row.job?.target||target||'—'),
           h('td',{className:'p-2'},!row.capable?'需先安装助手':`${row.online?'助手在线':'助手离线'} · ${row.job?(states[row.job.state]||'未知状态'):(upgradeEligible(row,target)?'可升级':'已是当前或更新版本')}`,
