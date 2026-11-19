@@ -55,7 +55,7 @@ export function RemoteUpgrade({react:R,get,post,table,machineId}){
   if(!open)return button(machineId?'远程升级':'服务器升级',show);
   return h('section',{className:'w-full rounded-xl border bg-card p-4 space-y-3','aria-label':'服务器远程升级'},
     h('div',{className:'flex flex-wrap items-center justify-between gap-2'},h('strong',null,'服务器升级'),button('收起',()=>{setOpen(false);setConfirm(false)},busy)),
-    h('p',{className:'text-sm text-muted-foreground'},'旧服务器需先运行一次服务器详情中的升级命令，安装独立升级助手。助手上线后可在此升级，无需再次输入 Token。离线服务器等待上线，等待任务 24 小时过期；全局同时升级 1 台。'),
+    h('p',{className:'text-sm text-muted-foreground'},'旧服务器需先运行一次服务器详情中的升级命令，安装独立升级助手。助手上线后可在此升级，无需再次输入 Token。离线服务器等待上线，等待任务 24 小时过期；全局最多同时升级 5 台，空出名额后自动处理下一台。'),
     error&&h('p',{role:'alert',className:'text-sm text-red-600'},error),
     !data?h('p',null,'正在读取升级状态…'):h(R.Fragment,null,
       h('label',{className:'flex items-center gap-2 text-sm'},'官方目标版本',h('select',{value:target,onChange:e=>{setTarget(e.target.value);setConfirm(false)},disabled:busy,className:'rounded border bg-background p-1'},(data.versions||[]).map(version=>h('option',{key:version,value:version},version)))),
