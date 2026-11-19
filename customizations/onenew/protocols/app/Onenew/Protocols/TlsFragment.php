@@ -16,7 +16,7 @@ final class TlsFragment
         return $parts[0] >= $minimum && end($parts) <= $maximum && $parts[0] <= end($parts);
     }
 
-    /** Shadowrocket's client-only reserved parameter; never a server TLS option. */
+    /** Shadowrocket's client-only fragment parameter; never a server TLS option. */
     public static function appendShadowrocket(array &$query, array $server): void
     {
         $type = $server['type'] ?? '';
@@ -33,6 +33,6 @@ final class TlsFragment
         if (!self::validRange($length, 1, 16384) || !self::validRange($interval, 0, 1000)) {
             return;
         }
-        $query['reserved'] = '1,'.$length.','.$interval;
+        $query['fragment'] = '1,'.$length.','.$interval.',tlshello';
     }
 }
