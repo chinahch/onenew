@@ -1,0 +1,37 @@
+/* Autumn deliberately inherits the existing warm.css without palette overrides. */
+:root[data-season='spring']{--canvas:#f7fbf4;--surface:#fefffa;--text:#253e30;--muted:#596f60;--line:#dbe8da;--soft:#eaf4e7;--green:#2e7653;--sidebar:#fbfdf7;--shadow:0 12px 38px #305b3110;--season-glow:#acd69d25;--art-halo:#e2efd7;--art-sun:#f6dca7;--art-screen-top:#264f3a;--art-screen-bottom:#4b8a5d;--art-phone:#80b68d;--art-flower:#edafbc;--art-signal:#b9d8a9}
+:root[data-season='summer']{--canvas:#f3faff;--surface:#fcfeff;--text:#233d4b;--muted:#526e7d;--line:#d9e9f1;--soft:#e4f4fb;--green:#1b6d93;--sidebar:#fbfeff;--shadow:0 12px 38px #23617b10;--season-glow:#87cce923;--art-halo:#dceff6;--art-sun:#f6d78a;--art-screen-top:#244e6b;--art-screen-bottom:#3a90ac;--art-phone:#71c1d0;--art-flower:#f2c86e;--art-signal:#a5dae4}
+:root[data-season='winter']{--canvas:#f6f8ff;--surface:#fefeff;--text:#30394e;--muted:#626e84;--line:#e0e5f2;--soft:#edf0fb;--green:#586ca5;--sidebar:#fcfcff;--shadow:0 12px 38px #485a8710;--season-glow:#b1bfe92b;--art-halo:#e6eafb;--art-sun:#d5dff5;--art-screen-top:#394363;--art-screen-bottom:#6476a8;--art-phone:#a4b8e3;--art-flower:#c4cfe9;--art-signal:#ccd9ed}
+:root[data-season='spring'][data-theme='dark']{--canvas:#17221b;--surface:#202e24;--text:#e1edde;--muted:#a2b9aa;--line:#354b3a;--soft:#2b4030;--green:#8fceaa;--sidebar:#1b281f;--art-halo:#293e2b;--art-sun:#8b8050}
+:root[data-season='summer'][data-theme='dark']{--canvas:#15232d;--surface:#1d303d;--text:#e0f0f6;--muted:#a1bac9;--line:#334d5c;--soft:#254454;--green:#87cfe7;--sidebar:#192a36;--art-halo:#254556;--art-sun:#9b8956}
+:root[data-season='winter'][data-theme='dark']{--canvas:#1b2030;--surface:#252d40;--text:#e9edfa;--muted:#aeb9d2;--line:#3b465f;--soft:#303d59;--green:#b3c4ef;--sidebar:#202739;--art-halo:#303d5c;--art-sun:#67789f}
+:root[data-season]:not([data-season='autumn']) .customer-shell,
+:root[data-season]:not([data-season='autumn']) .auth-page{background:radial-gradient(ellipse at 5% 8%,var(--season-glow),transparent 42%),radial-gradient(ellipse at 98% 80%,var(--season-glow),transparent 38%),var(--canvas)}
+:root[data-season]:not([data-season='autumn']) .customer-nav button.active{border-color:var(--green)}
+:root[data-season]:not([data-season='autumn']) .warm-line{background:var(--green)}
+:root[data-season]:not([data-season='autumn']) .surface{box-shadow:var(--shadow)}
+:root[data-season]:not([data-season='autumn']) .auth-card{box-shadow:var(--shadow)}
+:root[data-season]:not([data-season='autumn']) .auth-form>.n-button{box-shadow:none}
+:root[data-season]:not([data-season='autumn']) .billing-summary{background:var(--soft)}
+:root[data-season]:not([data-season='autumn']) .billing-big,
+:root[data-season]:not([data-season='autumn']) .billing-detail strong{color:var(--green)}
+:root[data-season]:not([data-season='autumn']) .billing-detail{color:var(--muted);border-color:var(--line)}
+:root[data-season]:not([data-season='autumn']) .bar-fill{background:linear-gradient(0deg,var(--green),var(--art-phone))}
+:root[data-season]:not([data-season='autumn']) .stat-icon{color:var(--green)}
+.season-switch{display:inline-flex;align-items:center;flex:none}
+.season-switch-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.season-switch select{font:inherit;font-size:12px;line-height:1.4;border:1px solid var(--line);border-radius:10px;padding:9px 7px;background:var(--surface);color:var(--text);cursor:pointer;max-width:108px;min-height:36px}
+.season-switch select:hover{border-color:var(--green)}
+.season-switch select:focus-visible{outline:2px solid var(--green);outline-offset:3px}
+.auth-appearance{position:absolute;right:33px;top:25px;display:flex;align-items:center;gap:9px}
+.auth-appearance .auth-theme{position:static}
+.season-art>svg{filter:drop-shadow(0 24px 30px #334b5e18)}
+.season-art .art-decoration{stroke:var(--green);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media(hover:hover) and (pointer:fine){
+ :root[data-season] body{cursor:var(--season-cursor),auto}
+ :root[data-season] :is(a,button,select,summary,[role='button'],[role='link'],[role='tab'],input[type='checkbox'],input[type='radio'],.n-dropdown-option){cursor:var(--season-pointer),pointer}
+ :root[data-season] :is(textarea,[contenteditable='true'],input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit'])){cursor:text}
+ :root[data-season] :is(button,select,input,textarea):disabled,:root[data-season] [aria-disabled='true']{cursor:not-allowed}
+}
+@media(max-width:760px){.auth-appearance{right:23px;top:24px}.public-header>.button-row{gap:6px}.public-header{gap:12px}.season-switch select{max-width:93px;padding:8px 4px}.customer-tools{gap:6px}}
+@media(max-width:380px){.public-header{padding-left:14px;padding-right:14px;gap:8px}.public-header .brand{font-size:21px;gap:6px}.public-header .brand-mark{width:31px;height:33px}.public-header>.button-row>.n-button:last-child{padding-left:10px;padding-right:10px}.customer-topbar{padding-left:14px;padding-right:14px}.season-switch select{font-size:11px;max-width:82px}}
