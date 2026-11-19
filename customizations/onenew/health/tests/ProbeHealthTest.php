@@ -35,13 +35,13 @@ class ProbeHealthTest extends TestCase
     {
         [$machine, $node] = $this->fixture();
         $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->json('tasks.0');
-        $this->assertSame(['version'=>1, 'entry_source'=>'public_roundtrip', 'landings'=>[]], $task['payload']['health_stages']);
+        $this->assertSame(['version'=>2, 'entry_source'=>'local_listener_roundtrip', 'landings'=>[]], $task['payload']['health_stages']);
         $body = ['machine_id'=>$machine->id, 'lease'=>$task['lease'], 'state'=>'succeeded', 'error_code'=>'',
-            'stages'=>['version'=>1, 'entry'=>['state'=>'succeeded','error_code'=>'','source'=>'public_roundtrip'], 'landings'=>[]]];
+            'stages'=>['version'=>2, 'entry'=>['state'=>'succeeded','error_code'=>'','source'=>'local_listener_roundtrip','primary'=>['state'=>'succeeded','error_code'=>'']], 'landings'=>[]]];
         $url = '/api/v3/server/probes/'.$task['id'].'/result';
         $bad = $body; $bad['stages']['landings'][] = ['id'=>'injected', 'state'=>'succeeded', 'error_code'=>''];
         $this->withToken($machine->token)->postJson($url, $bad)->assertUnprocessable();
-        $bad = $body; $bad['stages']['entry']['source']='local_listener_roundtrip';
+        $bad = $body; $bad['stages']['entry']['source']='public_roundtrip';
         $this->withToken($machine->token)->postJson($url, $bad)->assertUnprocessable();
         $this->withToken($machine->token)->postJson($url, $body)->assertOk();
         $this->assertSame('online', app(ProbeService::class)->status($node)['health_state']);
@@ -77,7 +77,7 @@ class ProbeHealthTest extends TestCase
         $this->assertStringNotContainsString('secret', json_encode(app(ProbeStore::class)->latest($node->id)));
         $this->withToken($machine->token)->postJson('/api/v3/server/probes/'.$task['id'].'/result', [
             'machine_id'=>$machine->id, 'lease'=>$task['lease'], 'state'=>'succeeded', 'error_code'=>'',
-            'stages'=>['version'=>1,'entry'=>['state'=>'succeeded','error_code'=>'','source'=>'public_roundtrip'],
+            'stages'=>['version'=>2,'entry'=>['state'=>'succeeded','error_code'=>'','source'=>'local_listener_roundtrip','primary'=>['state'=>'succeeded','error_code'=>'']],
                 'landings'=>[['id'=>$landing['id'],'state'=>'failed','error_code'=>'proxy_failed']]],
         ])->assertOk();
         $health = app(ProbeService::class)->status($node);
@@ -143,9 +143,9 @@ class ProbeHealthTest extends TestCase
         $response = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk();
         $task = $response->json('tasks.0');
         $this->assertCount(1, $response->json('tasks'));
-        $this->assertSame(90000, $task['timeout_ms']);
+        $this->assertSame(120000, $task['timeout_ms']);
         $this->assertSame('https://www.cloudflare.com/cdn-cgi/trace', $task['payload']['target']);
-        $this->assertSame('public.example', $task['payload']['outbound']['settings']['server']);
+        $this->assertSame('127.0.0.1', $task['payload']['outbound']['settings']['server']);
         $this->assertSame(443, $task['payload']['outbound']['settings']['server_port']);
         $this->assertSame($user->uuid, $task['payload']['outbound']['settings']['uuid']);
         $stored = app(ProbeStore::class)->task($task['id']);
@@ -199,7 +199,7 @@ class ProbeHealthTest extends TestCase
     {
         [$machine, $node] = $this->fixture();
         $task = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->json('tasks.0');
-        $this->travel(121)->seconds();
+        $this->travel(181)->seconds();
         $this->assertNull(app(ProbeStore::class)->task($task['id']));
         $this->withToken($machine->token)->postJson('/api/v3/server/probes/' . $task['id'] . '/result', [
             'machine_id' => $machine->id, 'lease' => $task['lease'], 'state' => 'succeeded',
@@ -411,7 +411,7 @@ class ProbeHealthTest extends TestCase
             'tls_settings' => ['server_name' => 'aethercloud-us.chinaone.ggff.net'],
             'network_settings' => ['path' => '/juhost28000', 'headers' => ['Host' => 'aethercloud-us.chinaone.ggff.net']]];
         $public = app(ProbeOutboundBuilder::class)->build($node, $user)['outbound']['settings'];
-        $this->assertSame('ip.sb', $public['server']);
+        $this->assertSame('101.69.181.108', $public['server']);
         $this->assertSame('101.69.181.108', $node->host);
         $this->assertSame(443, $public['server_port']);
         $this->assertSame('aethercloud-us.chinaone.ggff.net', $public['tls']['server_name']);
@@ -435,7 +435,7 @@ class ProbeHealthTest extends TestCase
         $payload = app(ProbeOutboundBuilder::class)->build($node, $user);
         $this->assertSame('xray', $payload['kernel_type']);
         $this->assertSame('native-public-key', $payload['outbound']['settings']['vnext'][0]['users'][0]['encryption']);
-        $this->assertSame('public.example', $payload['outbound']['settings']['vnext'][0]['address']);
+        $this->assertSame('127.0.0.1', $payload['outbound']['settings']['vnext'][0]['address']);
         $this->assertSame('xhttp', $payload['outbound']['stream_settings']['network']);
         $this->assertSame('/native', $payload['outbound']['stream_settings']['xhttpSettings']['path']);
         $this->assertSame('public-key', $payload['outbound']['stream_settings']['realitySettings']['publicKey']);
@@ -478,18 +478,22 @@ class ProbeHealthTest extends TestCase
         $node->protocol_settings = $settings;
         $builder = app(ProbeOutboundBuilder::class);
         $out = $builder->build($node, $user)['outbound']['settings'];
-        $this->assertSame('ip.sb', $out['server']);
-        $this->assertSame(443, $out['server_port']);
+        $this->assertSame('101.69.181.108', $out['server']);
+        $this->assertSame(25001, $out['server_port']);
+        $backup = $builder->build($node,$user,true)['outbound']['settings'];
+        $this->assertSame('ip.sb',$backup['server']);
+        $this->assertSame(443,$backup['server_port']);
+        $this->assertSame($out['transport'],$backup['transport']);
         $this->assertSame($user->uuid, $out['uuid']);
         $this->assertSame('/edge', $out['transport']['path']);
         $this->assertSame('101.69.181.108', $node->host);
         $this->assertSame('25001', $node->port);
-        $this->assertSame('node machine · CDN ip.sb:443', app(ProbeService::class)->status($node)['source']);
+        $this->assertSame('node machine · 原CDN优先，备用 ip.sb:443', app(ProbeService::class)->status($node)['source']);
 
         $settings['network_settings']['headers']['Host'] = 'different.example';
         $node->protocol_settings = $settings;
         $this->assertNull($builder->cdnProbeHost($node));
-        $this->assertSame('101.69.181.108', $builder->build($node, $user)['outbound']['settings']['server']);
+        $this->assertSame('127.0.0.1', $builder->build($node, $user)['outbound']['settings']['server']);
         $settings['network_settings']['headers']['Host'] = 'AetherCloud.chinaone.ggff.net';
         $settings['tls'] = 0;
         $node->protocol_settings = $settings;
@@ -510,7 +514,7 @@ class ProbeHealthTest extends TestCase
                 'tls_settings'=>['server_name'=>'cdn.example'],
                 'network_settings'=>['path'=>'/ws', 'headers'=>['Host'=>'cdn.example']]];
             $out = $builder->build($node, $user)['outbound']['settings'];
-            $this->assertSame('ip.sb', $out['server'], $type);
+            $this->assertSame('101.69.181.108', $out['server'], $type);
             $this->assertSame(443, $out['server_port'], $type);
             $this->assertSame('cdn.example', $out['tls']['server_name'], $type);
             $this->assertSame('/ws', $out['transport']['path'], $type);
@@ -523,7 +527,7 @@ class ProbeHealthTest extends TestCase
         $payload = $builder->build($node, $user);
         $this->assertSame('xray', $payload['kernel_type']);
         $out = $payload['outbound'];
-        $this->assertSame('ip.sb', $out['settings']['vnext'][0]['address']);
+        $this->assertSame('101.69.181.108', $out['settings']['vnext'][0]['address']);
         $this->assertSame(443, $out['settings']['vnext'][0]['port']);
         $this->assertSame('cdn.example', $out['stream_settings']['tlsSettings']['serverName']);
         $this->assertSame(['h2'], $out['stream_settings']['tlsSettings']['alpn']);
@@ -531,6 +535,28 @@ class ProbeHealthTest extends TestCase
         $this->assertSame('/xhttp', $out['stream_settings']['xhttpSettings']['path']);
         $this->assertSame('100-1000', $out['stream_settings']['xhttpSettings']['extra']['xPaddingBytes']);
         $this->assertSame('101.69.181.108', $node->host);
+    }
+
+    public function test_v2_cdn_endpoint_requires_primary_before_fallback_and_binds_version(): void
+    {
+        [$machine,$node] = $this->fixture();
+        $node->update(['type'=>'vless','host'=>'original.example','port'=>8443,'protocol_settings'=>[
+            'network'=>'ws','tls'=>1,'tls_settings'=>['server_name'=>'cdn.example'],
+            'network_settings'=>['path'=>'/native','headers'=>['Host'=>'cdn.example']]]]);
+        $task=$this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk()->json('tasks.0');
+        $this->assertSame('original.example',data_get($task,'payload.outbound.settings.server'));
+        $this->assertSame(8443,data_get($task,'payload.outbound.settings.server_port'));
+        $this->assertSame('ip.sb',data_get($task,'payload.health_stages.fallback_outbound.settings.server'));
+        $url='/api/v3/server/probes/'.$task['id'].'/result';
+        $body=['machine_id'=>$machine->id,'lease'=>$task['lease'],'state'=>'succeeded','error_code'=>'',
+            'stages'=>['version'=>2,'entry'=>['state'=>'succeeded','error_code'=>'','source'=>'cdn_roundtrip',
+                'primary'=>['state'=>'failed','error_code'=>'timeout'],'fallback'=>['state'=>'succeeded','error_code'=>'']], 'landings'=>[]]];
+        $bad=$body;$bad['stages']['entry']['primary']=['state'=>'succeeded','error_code'=>''];
+        $this->withToken($machine->token)->postJson($url,$bad)->assertUnprocessable();
+        $bad=$body;$bad['stages']['version']=1;
+        $this->withToken($machine->token)->postJson($url,$bad)->assertUnprocessable();
+        $this->withToken($machine->token)->postJson($url,$body)->assertOk();
+        $this->assertSame('online',app(ProbeService::class)->status($node)['health_state']);
     }
 
     private function fixture(): array

@@ -157,3 +157,16 @@ test('proven landing fault retains incomplete entry disclosure',()=>{
  const view=healthLabel({proxy_health:{state:'failed',health_state:'landing_fault',error_code:'transport_failed',finished_at,stages:{entry:{state:'failed',source:'public_roundtrip'},landings:[{name:'落地一',state:'failed',error_code:'proxy_failed'}]}}});
  assert.equal(view.label,'落地故障');assert.match(view.detail,/节点完整链路未验证/);
 });
+
+test('v2 health clearly identifies original CDN, fallback, local and landing outcomes',()=>{
+ const time=new Date().toISOString(),r=(state,error_code='')=>({state,error_code});
+ const run=(source,primary,fallback,health='online',landings=[])=>healthLabel({proxy_health:{state:fallback?.state||primary.state,finished_at:time,health_state:health,stages:{version:2,entry:{source,primary,fallback},landings}}});
+ assert.equal(run('cdn_roundtrip',r('succeeded')).label,'原CDN正常');
+ const backup=run('cdn_roundtrip',r('failed','timeout'),r('succeeded'));
+ assert.equal(backup.label,'备用入口正常');assert.match(backup.detail,/原CDN异常，备用 ip.sb:443 正常/);
+ assert.equal(run('cdn_roundtrip',r('failed','timeout'),r('failed','proxy_failed'),'node_fault').label,'节点故障');
+ assert.equal(run('local_listener_roundtrip',r('succeeded')).label,'本地监听正常');
+ const landing=run('local_listener_roundtrip',r('succeeded'),null,'landing_fault',[{name:'出口A',...r('failed','transport_failed')}]);
+ assert.equal(landing.label,'落地故障');assert.match(landing.detail,/出口A：落地故障/);
+ assert.doesNotMatch(landing.detail,/公网回程|完整链路/);
+});

@@ -41,15 +41,15 @@ final class ProbeStages
         foreach (\App\Services\ServerService::getRoutes($node->route_ids ?? []) as $route) {
             if ($route->action === 'proxy' && !isset($landings[$route->action_value ?? ''])) throw new ProbeUnavailable('configuration_unavailable');
         }
-        $host = data_get($public, 'outbound.settings.server') ?? data_get($public, 'outbound.settings.vnext.0.address');
-        $source = in_array($host, ['127.0.0.1','::1','localhost'], true) ? 'local_listener_roundtrip' :
-            ((new ProbeOutboundBuilder())->cdnProbeHost($node) !== null ? 'cdn_roundtrip' : 'public_roundtrip');
-        return ['version'=>1, 'entry_source'=>$source, 'landings'=>array_values($landings)];
+        $source = (new ProbeOutboundBuilder())->cdnProbeHost($node) !== null ? 'cdn_roundtrip' : 'local_listener_roundtrip';
+        return ['version'=>2, 'entry_source'=>$source, 'landings'=>array_values($landings)];
     }
 
-    public static function accept(array $expected, ?array $stages, string $state, string $error, string $source = 'public_roundtrip'): array
+    public static function accept(array $expected, ?array $stages, string $state, string $error, string $source = 'public_roundtrip', bool $fallbackExpected = false, ?int $expectedVersion = null): array
     {
         if ($stages === null) return ['health_state'=>'unknown', 'stage_error'=>'upgrade_required'];
+        abort_unless($expectedVersion === null || ($stages['version'] ?? null) === $expectedVersion, 422, 'Unexpected stage version');
+        if (($stages['version'] ?? null) === 2) return self::acceptV2($expected, $stages, $state, $error, $source, $fallbackExpected);
         abort_unless(($stages['version'] ?? null) === 1 && in_array($source, ['public_roundtrip','local_listener_roundtrip','cdn_roundtrip'], true) && ($stages['entry']['source'] ?? null) === $source, 422, 'Invalid probe stages');
         $entry = self::result($stages['entry']);
         abort_unless($entry['state'] === $state && $entry['error_code'] === $error, 422, 'Inconsistent entry result');
@@ -69,6 +69,39 @@ final class ProbeStages
         elseif ($faults > 0) $health = $faults === count($expected) ? 'landing_fault' : 'partial_landing_fault';
         elseif (!$abnormal && $state === 'succeeded') $health = 'online';
         return ['health_state'=>$health, 'stages'=>['version'=>1, 'entry'=>$entry+['source'=>$source], 'landings'=>$landings]];
+    }
+
+    private static function executedFailure(array $r): bool
+    {
+        return $r['state'] === 'failed' && in_array($r['error_code'], ['transport_failed','proxy_failed','target_failed','timeout'], true);
+    }
+
+    private static function acceptV2(array $expected, array $stages, string $state, string $error, string $source, bool $fallbackExpected): array
+    {
+        $e = $stages['entry'] ?? [];
+        abort_unless(in_array($source, ['cdn_roundtrip','local_listener_roundtrip'], true) && ($e['source'] ?? null) === $source && is_array($e['primary'] ?? null), 422, 'Invalid entry evidence');
+        $primary = self::result($e['primary']);
+        $entry = self::result($e);
+        $fallback = isset($e['fallback']) ? self::result($e['fallback']) : null;
+        abort_unless(!$fallback || ($fallbackExpected && $source === 'cdn_roundtrip' && self::executedFailure($primary)), 422, 'Invalid fallback evidence');
+        $unexecutedFallback = $source === 'cdn_roundtrip' && $fallbackExpected && self::executedFailure($primary) && $fallback === null;
+        abort_unless(!$unexecutedFallback || ($entry['state'] === 'expired' && $entry['error_code'] === 'expired'), 422, 'Missing fallback evidence');
+        $effective = $unexecutedFallback ? $entry : ($fallback ?? $primary);
+        abort_unless($entry === $effective && $entry['state'] === $state && $entry['error_code'] === $error, 422, 'Inconsistent entry evidence');
+        $rows = $stages['landings'] ?? null;
+        abort_unless(is_array($rows) && array_is_list($rows) && count($rows) === count($expected), 422, 'Incomplete landing evidence');
+        $landings = []; $faults = 0; $unknown = false;
+        foreach ($expected as $i=>$l) {
+            abort_unless(($rows[$i]['id'] ?? null) === $l['id'], 422, 'Invalid landing evidence');
+            $r = self::result($rows[$i]);
+            $landings[] = ['id'=>$l['id'], 'name'=>$l['name']] + $r;
+            $faults += (int) self::executedFailure($r);
+            $unknown = $unknown || ($r['state'] !== 'succeeded' && !self::executedFailure($r));
+        }
+        $health = self::executedFailure($effective) ? 'node_fault' : ($faults ? ($faults === count($expected) ? 'landing_fault' : 'partial_landing_fault') : (!$unknown && $state === 'succeeded' ? 'online' : 'unknown'));
+        $evidence = $entry + ['source'=>$source, 'primary'=>$primary];
+        if ($fallback) $evidence['fallback'] = $fallback;
+        return ['health_state'=>$health, 'stages'=>['version'=>2,'entry'=>$evidence,'landings'=>$landings]];
     }
 
     private static function result(array $result): array

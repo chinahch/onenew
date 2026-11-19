@@ -31,7 +31,7 @@ final class ShadowsocksTransportTest extends TestCase
         $this->assertSame('cdn.example', $config['tls_settings']['server_name']);
         $user = new User(['uuid'=>'00000000-0000-4000-8000-000000000001']);
         $payload = app(ProbeOutboundBuilder::class)->build($node, $user);
-        $this->assertSame('ip.sb', $payload['outbound']['settings']['servers'][0]['address']);
+        $this->assertSame($node->host, $payload['outbound']['settings']['servers'][0]['address']);
         $this->assertSame('xray', $payload['kernel_type']);
         $this->assertSame('tls', $payload['outbound']['stream_settings']['security']);
         $uri = \App\Protocols\General::buildShadowsocks($user->uuid,
@@ -85,8 +85,9 @@ final class ShadowsocksTransportTest extends TestCase
             $this->assertSame('local_listener_roundtrip',\App\Onenew\ProbeStages::payload($node,'singbox',$payload)['entry_source']);
             $this->assertSame($before,$node->fresh()->getRawOriginal());$this->assertSame('8.138.255.100',$node->host);$this->assertSame(30001,(int)$node->port);
             foreach([null,0,-1,65536] as $invalid){
-                $node->server_port=$invalid;$fallback=app(ProbeOutboundBuilder::class)->build($node,$user)['outbound']['settings'];
-                $this->assertSame('8.138.255.100',$fallback['server']);$this->assertSame(30001,$fallback['server_port']);
+                $node->server_port=$invalid;
+                try { app(ProbeOutboundBuilder::class)->build($node,$user); $this->fail('Invalid local port accepted'); }
+                catch (\App\Onenew\ProbeUnavailable $e) { $this->assertSame('configuration_unavailable',$e->getMessage()); }
             }
         }
     }

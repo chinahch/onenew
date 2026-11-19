@@ -28,8 +28,9 @@ final class HysteriaLocalProbeTest extends TestCase
             $this->assertSame('local_listener_roundtrip',ProbeStages::payload($node,'singbox',$payload)['entry_source']);
             $this->assertSame($before,$node->fresh()->getRawOriginal());$this->assertSame('hkbn-1.ddns-go.de',$node->host);$this->assertSame(20201,(int)$node->port);
             foreach([null,0,-1,65536] as $invalid){
-                $node->server_port=$invalid;$fallback=app(ProbeOutboundBuilder::class)->build($node,$user)['outbound']['settings'];
-                $this->assertSame('hkbn-1.ddns-go.de',$fallback['server']);$this->assertSame(20201,$fallback['server_port']);
+                $node->server_port=$invalid;
+                try { app(ProbeOutboundBuilder::class)->build($node,$user); $this->fail('Invalid local port accepted'); }
+                catch (\App\Onenew\ProbeUnavailable $e) { $this->assertSame('configuration_unavailable',$e->getMessage()); }
             }
         }
     }

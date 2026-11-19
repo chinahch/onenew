@@ -247,6 +247,16 @@ export function healthLabel(node,now=Date.now()){
   if(!Number.isFinite(t)||age<0||age>=600000||!['succeeded','failed'].includes(h?.state))return {label:'待检测',tone:'pending',detail:'尚无十分钟内的真实代理检测结果'};
   const labels={online:'连通在线',node_fault:'节点故障',landing_fault:'落地故障',partial_landing_fault:'部分落地故障',unknown:'检测异常'};
   const health=h.health_state||'unknown';
+  if(h.stages?.version===2){
+    const e=h.stages.entry||{},cdn=e.source==='cdn_roundtrip';
+    const ok=r=>r?.state==='succeeded';
+    const failed=r=>r?.state==='failed'&&['transport_failed','proxy_failed','target_failed','timeout'].includes(r.error_code);
+    const stage=r=>ok(r)?'正常':failed(r)?'故障':'未完成检测';
+    const entry=cdn?(ok(e.primary)?'原CDN正常':e.fallback?`原CDN异常，备用 ip.sb:443 ${ok(e.fallback)?'正常':failed(e.fallback)?'异常':'未完成检测'}`:'原CDN未完成检测'):`本地监听${ok(e.primary)?'正常':failed(e.primary)?'异常':'未完成检测'}`;
+    const landings=(h.stages.landings||[]).map(l=>`${l.name}：落地${stage(l)}`).join('；');
+    const label=health==='online'?(cdn?(ok(e.primary)?'原CDN正常':'备用入口正常'):'本地监听正常'):(labels[health]||'待检测');
+    return {label,tone:health==='online'?'success':health==='unknown'?'pending':'failed',detail:[entry,landings].filter(Boolean).join('；')};
+  }
   const errors={transport_failed:'连接失败，无法确定入口/目标',proxy_failed:'代理连接失败',target_failed:'检测目标异常',timeout:'检测超时',configuration_unavailable:'配置不可用',unsupported:'不支持检测',expired:'已过期'};
   const sources={public_roundtrip:'公开入口完整路径检测',cdn_roundtrip:'CDN入口完整路径检测',local_listener_roundtrip:h.state==='succeeded'?'本地监听自测通过，未验证公网回程':'本地监听自测失败，未验证公网回程'};
   const source=sources[h.stages?.entry?.source]||'入口自测来源未确认';
