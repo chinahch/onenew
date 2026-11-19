@@ -22,6 +22,7 @@ class ProbeOutboundBuilder extends SingBox
     public function build(Server $node, User $user, bool $fallback = false): array
     {
         $originalHost = $node->host;
+        if (!$originalHost) throw new ProbeUnavailable('configuration_unavailable');
         $cdn = $this->cdnProbeHost($node) !== null;
         if ($fallback && !$cdn) throw new ProbeUnavailable('configuration_unavailable');
         $node = clone $node;
@@ -29,6 +30,9 @@ class ProbeOutboundBuilder extends SingBox
             $settings = $node->protocol_settings ?? [];
             $tlsKey = in_array($node->type, ['hysteria', 'tuic', 'anytls'], true) ? 'tls' : 'tls_settings';
             if (!data_get($settings, $tlsKey.'.server_name')) $settings[$tlsKey]['server_name'] = $originalHost;
+            $network = data_get($settings, 'network', 'tcp');
+            if (in_array($network, ['xhttp','splithttp','httpupgrade'], true) && !data_get($settings,'network_settings.host')) $settings['network_settings']['host'] = $originalHost;
+            if ($network === 'ws' && !data_get($settings,'network_settings.host') && !array_key_exists('host',array_change_key_case((array)data_get($settings,'network_settings.headers',[]),CASE_LOWER))) $settings['network_settings']['headers']['Host'] = $originalHost;
             $node->protocol_settings = $settings;
             $port = $fallback ? 443 : filter_var($node->server_port, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1,'max_range'=>65535]]);
             if (!$port) throw new ProbeUnavailable('configuration_unavailable');

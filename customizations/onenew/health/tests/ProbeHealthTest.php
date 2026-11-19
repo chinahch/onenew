@@ -137,7 +137,7 @@ class ProbeHealthTest extends TestCase
         $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertForbidden();
     }
 
-    public function test_poll_uses_real_user_and_public_entry_and_encrypts_cached_credentials(): void
+    public function test_poll_uses_real_user_and_local_listener_and_encrypts_cached_credentials(): void
     {
         [$machine, $node, $user] = $this->fixture();
         $response = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk();
@@ -146,7 +146,7 @@ class ProbeHealthTest extends TestCase
         $this->assertSame(120000, $task['timeout_ms']);
         $this->assertSame('https://www.cloudflare.com/cdn-cgi/trace', $task['payload']['target']);
         $this->assertSame('127.0.0.1', $task['payload']['outbound']['settings']['server']);
-        $this->assertSame(443, $task['payload']['outbound']['settings']['server_port']);
+        $this->assertSame(12345, $task['payload']['outbound']['settings']['server_port']);
         $this->assertSame($user->uuid, $task['payload']['outbound']['settings']['uuid']);
         $stored = app(ProbeStore::class)->task($task['id']);
         $this->assertStringNotContainsString($user->uuid, json_encode($stored));
@@ -251,7 +251,7 @@ class ProbeHealthTest extends TestCase
         $next = $this->withToken($machine->token)->getJson($this->pollUrl($machine))->assertOk()->json('tasks.0');
         $this->assertNotNull($next);
         $this->assertNotSame($first['id'], $next['id']);
-        $this->assertSame(443, $next['payload']['outbound']['settings']['server_port']);
+        $this->assertSame(23456, $next['payload']['outbound']['settings']['server_port']);
         $this->assertSame('running', app(ProbeService::class)->status($node->fresh())['state']);
         $this->withToken($machine->token)->postJson('/api/v3/server/probes/' . $first['id'] . '/result', [
             'machine_id' => $machine->id, 'lease' => $first['lease'], 'state' => 'succeeded',
