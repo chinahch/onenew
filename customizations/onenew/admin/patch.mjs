@@ -9,6 +9,14 @@ function replaceOnce(source,anchor,replacement){
 export function patchBundle(source,runtime){
   source=source.replace(/\r\n/g,'\n');
   if(sha(source)!==contract.files['assets/index-CEIYH7i8.js'])throw new Error('上游 bundle SHA256 不匹配，拒绝修改');
+  const rankingStart=source.indexOf('function eKt('),rankingEnd=source.indexOf('const tKt=',rankingStart);
+  if(rankingStart<0||rankingEnd<rankingStart)throw new Error('流量排行组件边界不存在');
+  let ranking=source.slice(rankingStart,rankingEnd);
+  const rankingFallback='Q.jsx("div",{className:"flex h-[400px] items-center justify-center",children:Q.jsx("div",{className:"animate-pulse",children:t("common:loading")})})';
+  if(ranking.split(rankingFallback).length!==3)throw new Error('流量排行空状态锚点已变更');
+  ranking=ranking.replace(rankingFallback,'Q.jsx(OnenewAdmin.RankingStatus,{react:H,query:h})');
+  ranking=replaceOnce(ranking,rankingFallback,'Q.jsx(OnenewAdmin.RankingStatus,{react:H,query:g})');
+  source=source.slice(0,rankingStart)+ranking+source.slice(rankingEnd);
   const editorStart=source.indexOf('function m4t('),editorEnd=source.indexOf('const f4t=',editorStart);
   let editor=source.slice(editorStart,editorEnd);
   if(sha(editor)!==contract.networkEditorSha256)throw new Error('协议编辑器 SHA256 不匹配');
@@ -120,4 +128,3 @@ export function patchBundle(source,runtime){
   source=source.slice(0,shellStart)+shell+source.slice(shellEnd);
   return runtime+'\n'+source;
 }
-
