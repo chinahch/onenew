@@ -1,0 +1,20 @@
+<?php
+namespace Tests\Feature;
+use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+use App\Models\{User,Server};
+use App\Services\AuthService;
+use App\Protocols\General;
+final class NodeLinksTest extends TestCase {
+ use RefreshDatabase;
+ private const URL='/api/onenew/admin/ai/node-links';
+ private function user(bool $admin=false):User {return User::create(['email'=>Str::random(12).'@example.test','password'=>password_hash('fixture',PASSWORD_DEFAULT),'uuid'=>(string)Str::uuid(),'token'=>Str::random(32),'is_admin'=>$admin,'group_id'=>8,'transfer_enable'=>100000,'u'=>0,'d'=>0,'expired_at'=>time()+86400,'banned'=>false]);}
+ private function headers(User $u):array {$this->app['auth']->forgetGuards();return ['Authorization'=>(new AuthService($u))->generateAuthData()['auth_data']];}
+ private function node(string $type='vless'):Server {return Server::create(['name'=>'IPv6 Reality','type'=>$type,'host'=>'2400:c620:29:133::a','port'=>25051,'server_port'=>25051,'rate'=>1,'show'=>true,'enabled'=>true,'group_ids'=>['8'],'protocol_settings'=>$type==='vless'?['network'=>'tcp','tls'=>2,'flow'=>'xtls-rprx-vision','reality_settings'=>['public_key'=>'public-fixture','private_key'=>'NEVER_RETURN_PRIVATE_KEY','short_id'=>'b9931306520b2d','server_name'=>'addons.mozilla.org']]:['cipher'=>'2022-blake3-aes-256-gcm']]);}
+ public function test_admin_only_and_missing_target_validation():void {$u=$this->user();$this->postJson(self::URL,[])->assertStatus(403);$this->postJson(self::URL,[],$this->headers($u))->assertStatus(403);$a=$this->user(true);$this->postJson(self::URL,['node_id'=>1],$this->headers($a))->assertStatus(422);$this->postJson(self::URL,['node_id'=>1,'user_id'=>$u->id,'email'=>$u->email],$this->headers($a))->assertStatus(422);}
+ public function test_native_reality_ipv6_link_and_evidence_are_returned_without_private_material():void {Http::preventStrayRequests();$u=$this->user();$a=$this->user(true);$n=$this->node();$r=$this->postJson(self::URL,['node_id'=>$n->id,'email'=>strtoupper($u->email)],$this->headers($a))->assertOk()->assertJsonPath('node_link.node_id',$n->id)->assertJsonPath('node_link.user_id',$u->id)->assertJsonPath('node_link.source','native_subscription')->assertJsonPath('node_link.evidence.connectivity_verified',false);$link=$r->json('node_link.uri');self::assertStringContainsString('vless://'.$u->uuid.'@[2400:c620:29:133::a]:25051',$link);self::assertStringContainsString('public-fixture',$link);self::assertStringNotContainsString('NEVER_RETURN_PRIVATE_KEY',$r->getContent());$body=$r->json();unset($body['node_link']['uri']);self::assertStringNotContainsString($u->uuid,json_encode($body));self::assertStringNotContainsString($u->email,$r->getContent());self::assertStringContainsString('no-store',$r->headers->get('Cache-Control'));Http::assertNothingSent();}
+ public function test_ss2022_uses_native_user_and_server_password():void {$u=$this->user();$a=$this->user(true);$n=$this->node('shadowsocks');$link=$this->postJson(self::URL,['node_id'=>$n->id,'user_id'=>$u->id],$this->headers($a))->assertOk()->json('node_link.uri');$expected=trim(General::buildShadowsocks($n->generateServerPassword($u),array_merge($n->toArray(),['password'=>$n->generateServerPassword($u)])));self::assertSame($expected,$link);}
+ public function test_ineligible_user_group_hidden_disabled_node_and_exhausted_traffic_are_rejected():void {$u=$this->user();$a=$this->user(true);$n=$this->node();$h=$this->headers($a);foreach([['banned'=>true],['expired_at'=>time()-60],['group_id'=>99],['u'=>100000]] as $patch){$original=$u->getAttributes();$u->fill($patch)->save();$this->postJson(self::URL,['node_id'=>$n->id,'user_id'=>$u->id],$h)->assertStatus(422);$u->setRawAttributes($original);$u->save();}foreach([['show'=>false],['enabled'=>false],['transfer_enable'=>10,'u'=>10]] as $patch){$original=$n->getAttributes();$n->fill($patch)->save();$this->postJson(self::URL,['node_id'=>$n->id,'user_id'=>$u->id],$h)->assertStatus(422);$n->setRawAttributes($original);$n->save();}}
+}

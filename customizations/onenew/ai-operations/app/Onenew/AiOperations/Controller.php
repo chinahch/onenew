@@ -55,6 +55,11 @@ final class Controller
         $data=$request->validate(['repo_key'=>['sometimes','nullable','string','max:512','regex:/^[^\x00-\x20\x7f]*$/D'],'clear_key'=>'sometimes|boolean']);
         return $this->response(['repository'=>$settings->save($data)]);
     }
+    public function nodeLinks(Request $request,NodeLinks $links)
+    {
+        $data=$request->validate(['node_id'=>'required|integer|min:1','user_id'=>'required_without:email|prohibits:email|integer|min:1','email'=>'required_without:user_id|prohibits:user_id|email|max:254']);
+        return $this->response($links->generate($this->admin($request),$data));
+    }
     public function options()
     {
         $nodes=DB::table('v2_server')->orderBy('id')->limit(200)->pluck('id')->map(fn($id)=>['id'=>(int)$id,'label'=>'节点 #'.(int)$id])->all();
