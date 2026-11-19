@@ -52,11 +52,19 @@ func main() {
 	}
 	defer unlock()
 	for {
+		operation := "recovery"
 		if e = u.recover(); e == nil {
+			u.recoveryReason = ""
+			operation = "poll"
 			var j *Job
 			j, e = u.poll()
 			if e == nil && j != nil {
+				operation = "execute"
 				e = u.execute(*j)
+				var persistence journalWriteError
+				if errors.As(e, &persistence) {
+					u.recoveryReason = "journal_failed"
+				}
 			}
 		}
 		if errors.Is(e, ErrUnauthorized) {
@@ -64,7 +72,7 @@ func main() {
 			os.Exit(1)
 		}
 		if e != nil {
-			fmt.Fprintln(os.Stderr, "Updater operation deferred; state retained")
+			fmt.Fprintf(os.Stderr, "Updater operation=%s error=%s; state retained\n", operation, operationErrorCode(e))
 		}
 		u.Sleep(15 * time.Second)
 	}

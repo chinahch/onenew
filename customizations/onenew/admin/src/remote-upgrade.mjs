@@ -1,7 +1,7 @@
 const root='/api/onenew/admin/upgrades';
 const live=new Set(['pending','leased','downloading','verifying','installing','checking']);
 const states={pending:'等待服务器 / 排队',leased:'已领取',downloading:'下载中',verifying:'校验中',installing:'安装中',checking:'健康检查',succeeded:'升级成功',rolled_back:'已回滚',failed:'升级失败',expired:'已过期',cancelled:'已取消'};
-const errors={download_failed:'官方下载失败',verification_failed:'校验失败',install_failed:'安装失败',health_failed:'健康检查失败',rollback_failed:'回滚失败，请检查服务器',interrupted:'升级被中断',invalid_task:'任务或绑定已变化',expired:'任务已过期',unsupported:'运行环境不支持',internal_error:'升级助手错误'};
+const errors={download_failed:'官方下载失败',verification_failed:'校验失败',install_failed:'安装失败',health_failed:'健康检查失败',rollback_failed:'回滚失败，请检查服务器',interrupted:'升级被中断',journal_failed:'升级记录写入失败，请检查磁盘空间及权限',invalid_task:'任务或绑定已变化',expired:'任务已过期',unsupported:'运行环境不支持',internal_error:'升级助手错误'};
 export function upgradeEligible(machine,target){
   if(!machine?.is_active||!machine?.capable||!target||live.has(machine.job?.state))return false;
   const parse=v=>/^v\d+\.\d+\.\d+$/.test(v||'')?v.slice(1).split('.').map(Number):null;

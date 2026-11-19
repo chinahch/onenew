@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -40,6 +41,10 @@ func (u *Updater) cleanup() {
 	syncDir(u.stateDir())
 }
 func (u *Updater) recover() error {
+	cause := "interrupted"
+	if u.recoveryReason == "journal_failed" {
+		cause = u.recoveryReason
+	}
 	b, e := regular(filepath.Join(u.stateDir(), "journal.json"), true, 1048576)
 	if os.IsNotExist(e) {
 		return nil
@@ -51,10 +56,13 @@ func (u *Updater) recover() error {
 	if json.Unmarshal(b, &j) != nil || !jobRE.MatchString(j.Job.ID) || len(j.Job.Lease) < 16 {
 		return errors.New("invalid recovery journal")
 	}
+	if j.Phase == "preparing" || j.Phase == "mutating" {
+		fmt.Fprintf(os.Stderr, "Updater recovery phase=%s reason=%s\n", j.Phase, cause)
+	}
 	if j.Phase == "mutating" {
 		u.rollback(&j)
 		if j.Error != "rollback_failed" {
-			j.Error = "interrupted"
+			j.Error = cause
 			if e = u.save(j); e != nil {
 				return e
 			}
@@ -63,7 +71,7 @@ func (u *Updater) recover() error {
 	if j.Phase != "result" {
 		j.Phase = "result"
 		j.Result = "failed"
-		j.Error = "interrupted"
+		j.Error = cause
 		if e = u.save(j); e != nil {
 			return e
 		}

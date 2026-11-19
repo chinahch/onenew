@@ -30,5 +30,7 @@ test('actual server controls require selected-count confirmation before posting 
  await button(tree,'确认升级').props.onClick();assert.deepEqual(calls[0],['/api/onenew/admin/upgrades',{machine_ids:[7],version:'v0.1.12',confirmed:true},{baseURL:'/'}]);
  fixture.machines[0].job={id:'fixture-job',state:'rolled_back',target:'v0.1.12',reported_version:'v0.1.11',error_code:'health_failed'};
  tree=render();assert.match(JSON.stringify(tree),/已回滚/);assert.match(JSON.stringify(tree),/实际结果版本/);
+ fixture.machines[0].job={...fixture.machines[0].job,state:'failed',error_code:'journal_failed'};
+ tree=render();assert.match(JSON.stringify(tree),/升级记录写入失败/);
  cleanups.forEach(cleanup=>cleanup?.());
 });
