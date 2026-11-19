@@ -112,6 +112,8 @@ final class RankingTest extends TestCase
 
     public function test_existing_timestamp_clients_are_still_supported(): void
     {
+        // The legacy ranking action does not use its constructor's Redis-backed service.
+        $this->mock(\App\Services\StatisticalService::class);
         $this->record('2026-11-20', 300);
         Sanctum::actingAs($this->user);
         $this->getJson($this->endpoint.'?'.http_build_query(['type' => 'node',
