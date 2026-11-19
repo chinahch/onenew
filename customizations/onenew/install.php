@@ -65,6 +65,8 @@ copyOverlay($custom . '/traffic/app', $root . '/app');
 copyOverlay($custom . '/protocols/app', $root . '/app');
 require $custom . '/protocols/install.php';
 applyOnenewProtocolPatch($root);
+require $custom . '/protocols/fragment-install.php';
+applyOnenewFragmentPatch($root);
 copyOverlay($custom . '/exit-probe/app', $root . '/app');
 copyOverlay($custom . '/remote-upgrade/app', $root . '/app');
 copyOverlay($custom . '/ai-operations/app', $root . '/app');
@@ -190,4 +192,3 @@ $text .= "\n[program:onenew-scheduler]\ncommand=php /www/artisan schedule:work\n
 $text .= "\n[unix_http_server]\nfile=/run/onenew-supervisor.sock\nchmod=0700\n[rpcinterface:supervisor]\nsupervisor.rpcinterface_factory=supervisor.rpcinterface:make_main_rpcinterface\n[supervisorctl]\nserverurl=unix:///run/onenew-supervisor.sock\n[program:onenew-restore]\ncommand=php /opt/onenew/web-restore/agent.php\nautostart=true\nautorestart=true\nuser=root\nredirect_stderr=true\nstdout_logfile=/dev/stdout\nstdout_logfile_maxbytes=0\nstopasgroup=true\nkillasgroup=true\npriority=700\n";
 file_put_contents($supervisor, $text);
 echo "Onenew overlay applied.\n";
-
