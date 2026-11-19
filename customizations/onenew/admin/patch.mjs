@@ -12,6 +12,10 @@ export function patchBundle(source,runtime){
   const rankingStart=source.indexOf('function eKt('),rankingEnd=source.indexOf('const tKt=',rankingStart);
   if(rankingStart<0||rankingEnd<rankingStart)throw new Error('流量排行组件边界不存在');
   let ranking=source.slice(rankingStart,rankingEnd);
+  ranking=replaceOnce(ranking,'jL({type:"node",start_time:FT.round(d.start.getTime()/1e3),end_time:FT.round(d.end.getTime()/1e3)})',
+    'jL(OnenewAdmin.rankingParameters("node",n,r))');
+  ranking=replaceOnce(ranking,'jL({type:"user",start_time:FT.round(u.start.getTime()/1e3),end_time:FT.round(u.end.getTime()/1e3)})',
+    'jL(OnenewAdmin.rankingParameters("user",o,l))');
   const rankingFallback='Q.jsx("div",{className:"flex h-[400px] items-center justify-center",children:Q.jsx("div",{className:"animate-pulse",children:t("common:loading")})})';
   if(ranking.split(rankingFallback).length!==3)throw new Error('流量排行空状态锚点已变更');
   ranking=ranking.replace(rankingFallback,'Q.jsx(OnenewAdmin.RankingStatus,{react:H,query:h})');

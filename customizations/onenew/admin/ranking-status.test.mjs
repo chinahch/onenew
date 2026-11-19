@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {RankingStatus} from './src/ranking-status.mjs';
+import {RankingStatus,rankingParameters} from './src/ranking-status.mjs';
 import {patchBundle} from './patch.mjs';
 
 const react={createElement:(type,props,...children)=>({type,props:props??{},children})};
@@ -38,9 +38,19 @@ test('both real dashboard ranking cards use their own query state and retain pop
   assert.ok(ranking.includes('OnenewAdmin.RankingStatus,{react:H,query:g}'));
   assert.ok(ranking.includes('p.length?Q.jsxs(Gqt'));
   assert.ok(ranking.includes('m.length?Q.jsxs(Gqt'));
-  assert.ok(ranking.includes('type:"node",start_time:'));
-  assert.ok(ranking.includes('type:"user",start_time:'));
+  assert.ok(ranking.includes('rankingParameters("node",n,r)'));
+  assert.ok(ranking.includes('rankingParameters("user",o,l)'));
+  assert.doesNotMatch(ranking,/start_time:FT.round/);
   assert.ok(ranking.includes('children:p.map('));
   assert.ok(ranking.includes('children:m.map('));
   assert.doesNotMatch(ranking,/animate-pulse/);
+});
+test('preset periods use panel time and custom dates retain selected calendar days',()=>{
+  for(const type of ['node','user'])for(const period of ['today','last7days','last30days']){
+    assert.deepEqual(rankingParameters(type,period),{type,period});
+  }
+  assert.deepEqual(rankingParameters('node','custom',{from:new Date(2026,10,20),to:new Date(2026,10,22)}),
+    {type:'node',period:'custom',start_date:'2026-11-20',end_date:'2026-11-22'});
+  assert.throws(()=>rankingParameters('node','custom',{}));
+  assert.throws(()=>rankingParameters('node','invalid'));
 });
