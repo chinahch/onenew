@@ -141,6 +141,45 @@ func TestOnenewHotApplyClosesOldExitOnlyOnChangedNode(t *testing.T) {
 	}
 }
 
+func TestOnenewProtocolSwitchRemovesOldInboundBeforeReusingPort(t *testing.T) {
+	listener, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.LocalAddr().(*net.UDPAddr).Port
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	users := []model.UserSpec{{ID: 1, UUID: "00000000-0000-4000-8000-000000000001"}}
+	previous := &model.NodeSpec{Protocol: "tuic", ListenIP: "127.0.0.1", ServerPort: port}
+	current := &model.NodeSpec{Protocol: "hysteria", ListenIP: "127.0.0.1", ServerPort: port, Version: 2}
+	s := New(config.KernelConfig{Type: "singbox", LogLevel: "error", ConfigDir: t.TempDir()})
+	tlsCert := lumaTestCert(t)
+	if err := s.Start(previous, users, tlsCert); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Stop()
+
+	manager := service.FromContext[adapter.InboundManager](s.ctx)
+	if _, ok := manager.Get("tuic-in"); !ok {
+		t.Fatal("initial TUIC inbound did not start")
+	}
+	oldBox := s.box
+	if err := s.Reload(current, users, tlsCert); err != nil {
+		t.Fatalf("switching protocol while reusing its port: %v", err)
+	}
+	if _, ok := manager.Get("tuic-in"); ok {
+		t.Fatal("old protocol listener remained after protocol switch")
+	}
+	if s.box != oldBox {
+		t.Fatal("protocol listener change restarted the box rather than reconciling inbounds")
+	}
+	if _, ok := manager.Get("hysteria-in"); !ok {
+		t.Fatal("replacement Hysteria2 listener did not start")
+	}
+}
+
 func TestOnenewExitChangeClosesTrackedUDP(t *testing.T) {
 	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
