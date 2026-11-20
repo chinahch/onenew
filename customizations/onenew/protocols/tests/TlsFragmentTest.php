@@ -23,7 +23,7 @@ final class TlsFragmentTest extends TestCase
     {
         return ['tls' => 1, 'network' => 'tcp', 'utls' => ['enabled' => true, 'fingerprint' => 'chrome'],
             'tls_settings' => ['server_name' => 'tls.example',
-            'fragment' => ['enabled' => $enabled, 'length' => '100-200', 'interval' => '10-20']]];
+            'fragment' => ['enabled' => $enabled, 'length' => '40-60', 'interval' => '30-50']]];
     }
 
     private function query(string $link): array
@@ -43,9 +43,9 @@ final class TlsFragmentTest extends TestCase
             $password = '00000000-0000-4000-8000-000000000001';
             $link = Shadowrocket::$method($password, $server);
             $query = $this->query($link);
-            $this->assertSame('1,100-200,10-20,tlshello', $query['fragment']);
+            $this->assertSame('1,40-60,30-50,tlshello', $query['fragment']);
             $this->assertArrayNotHasKey('reserved', $query);
-            $this->assertStringContainsString('fragment=1%2C100-200%2C10-20%2Ctlshello', $link);
+            $this->assertStringContainsString('fragment=1%2C40-60%2C30-50%2Ctlshello', $link);
             $without = $server;
             unset($without['protocol_settings']['tls_settings']['fragment']);
             $this->assertSame(General::$method($password, $without), General::$method($password, $server));
@@ -89,6 +89,24 @@ final class TlsFragmentTest extends TestCase
         $payload['protocol_settings'] = $this->settings(false);
         $this->postJson($endpoint, $payload)->assertOk();
         $this->assertFalse($node->fresh()->protocol_settings['tls_settings']['fragment']['enabled']);
+    }
+
+    public function test_missing_ranges_use_new_defaults_and_existing_saved_ranges_are_preserved(): void
+    {
+        $settings = $this->settings();
+        $settings['tls_settings']['fragment'] = ['enabled' => true];
+        $node = Server::create(['name' => 'fragment-defaults', 'type' => 'vless', 'host' => 'node.example',
+            'port' => 443, 'server_port' => 443, 'rate' => 1, 'protocol_settings' => $settings])->fresh();
+        $this->assertSame('40-60', $node->protocol_settings['tls_settings']['fragment']['length']);
+        $this->assertSame('30-50', $node->protocol_settings['tls_settings']['fragment']['interval']);
+        $query = [];
+        TlsFragment::appendShadowrocket($query, ['type' => 'vless', 'protocol_settings' => $settings]);
+        $this->assertSame('1,40-60,30-50,tlshello', $query['fragment']);
+        $settings['tls_settings']['fragment'] = ['enabled' => true, 'length' => '100-200', 'interval' => '10-20'];
+        $node->protocol_settings = $settings;
+        $node->save();
+        $legacy = $this->query(Shadowrocket::buildVless('00000000-0000-4000-8000-000000000001', $node->fresh()->toArray()));
+        $this->assertSame('1,100-200,10-20,tlshello', $legacy['fragment']);
     }
 
     public function test_non_tls_quic_and_invalid_ranges_never_emit_a_shadowrocket_fragment_flag(): void

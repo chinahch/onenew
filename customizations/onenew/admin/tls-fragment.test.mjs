@@ -23,7 +23,7 @@ test('the switch is off by default, writes client settings only and rejects non-
  assert.equal(toggle.props.checked,false);
  toggle.props.onChange({target:{checked:true}});
  assert.deepEqual(writes.map(([key,value])=>[key,value]),[
-  ['tls_settings.fragment.length','100-200'],['tls_settings.fragment.interval','10-20'],['tls_settings.fragment.enabled',true],
+  ['tls_settings.fragment.length','40-60'],['tls_settings.fragment.interval','30-50'],['tls_settings.fragment.enabled',true],
  ]);
  assert.equal(state.tls_settings.server_name,'tls.example');
  state.network='quic';tree=TlsFragment({react:R,form});

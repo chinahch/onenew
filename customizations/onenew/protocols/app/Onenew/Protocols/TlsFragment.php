@@ -4,8 +4,8 @@ namespace App\Onenew\Protocols;
 
 final class TlsFragment
 {
-    public const LENGTH = '100-200';
-    public const INTERVAL = '10-20';
+    public const LENGTH = '40-60';
+    public const INTERVAL = '30-50';
 
     public static function validRange(mixed $value, int $minimum, int $maximum): bool
     {

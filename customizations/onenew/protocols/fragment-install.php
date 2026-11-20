@@ -8,7 +8,7 @@ function applyOnenewFragmentPatch(string $root): void
     $patches = [
         'app/Models/Server.php' => [
             ["    private const TLS_SETTINGS_CONFIGURATION = [\n        'type' => 'object',\n        'fields' => [",
-             "    private const TLS_SETTINGS_CONFIGURATION = [\n        'type' => 'object',\n        'fields' => [\n            'fragment' => ['type' => 'object', 'default' => null, 'fields' => [\n                'enabled' => ['type' => 'boolean', 'default' => false],\n                'length' => ['type' => 'string', 'default' => '100-200'],\n                'interval' => ['type' => 'string', 'default' => '10-20'],\n            ]],"],
+             "    private const TLS_SETTINGS_CONFIGURATION = [\n        'type' => 'object',\n        'fields' => [\n            'fragment' => ['type' => 'object', 'default' => null, 'fields' => [\n                'enabled' => ['type' => 'boolean', 'default' => false],\n                'length' => ['type' => 'string', 'default' => '40-60'],\n                'interval' => ['type' => 'string', 'default' => '30-50'],\n            ]],"],
         ],
         'app/Http/Requests/Admin/ServerSave.php' => [
             ["        return \$rules;\n    }\n\n    public function attributes()",
