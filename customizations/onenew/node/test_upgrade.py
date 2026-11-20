@@ -63,7 +63,7 @@ else exit 10
 fi
 '''
         with tarfile.open(self.package, 'w:gz') as archive:
-            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.16 (built candidate)"\n'), ('caddyctl', cli)]:
+            for name, content in [('caddy', '#!/bin/sh\necho "caddy onenew-v0.1.17 (built candidate)"\n'), ('caddyctl', cli)]:
                 data = content.encode(); info = tarfile.TarInfo(name); info.size = len(data); info.mode = 0o755
                 archive.addfile(info, io.BytesIO(data))
         self.sums.write_text(hashlib.sha256(self.package.read_bytes()).hexdigest() + '  ' + self.package.name + '\n')
@@ -352,4 +352,3 @@ if [ "$1" = show ]; then''')
 
 
 if __name__ == '__main__': unittest.main()
-

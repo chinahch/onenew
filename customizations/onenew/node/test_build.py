@@ -24,7 +24,7 @@ class BuildTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'pinned'):
                 builder.validate_source(root)
 
-    def test_v16_requires_udp_headroom_and_staged_health_v2(self):
+    def test_v17_requires_udp_headroom_staged_health_and_listener_lifecycle(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             features = ['landing-v1', 'proxy-probes-v1', 'certificate-lifecycle-v1',
@@ -44,6 +44,10 @@ class BuildTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'overlays'):
                 builder.validate_source(root)
             features.append('onenew-staged-health-v2')
+            path.write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, 'overlays'):
+                builder.validate_source(root)
+            features.append('onenew-listener-lifecycle-v1')
             path.write_text(json.dumps(manifest))
             self.assertEqual(builder.validate_source(root), manifest)
 

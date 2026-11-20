@@ -60,6 +60,43 @@ func (s *SingBox) hotApplyInboundChanged(node *model.NodeSpec, users []model.Use
 	return !sameHotApplyValue(old["inbounds"], next["inbounds"])
 }
 
+// Remove listeners whose protocol-specific tags disappear during a protocol
+// switch before creating the replacement listener on the same port.
+func (s *SingBox) hotApplyRemoveStaleInbounds(manager adapter.InboundManager, node *model.NodeSpec, users []model.UserSpec, tls kernel.TLSCert) error {
+	old := buildConfig(s.cfg, s.nodeConfig, s.users, s.tls)
+	next := buildConfig(s.cfg, node, users, tls)
+
+	nextTags := make(map[string]struct{})
+	if inbounds, ok := next["inbounds"].([]M); ok {
+		for _, inbound := range inbounds {
+			if tag, _ := inbound["tag"].(string); tag != "" {
+				nextTags[tag] = struct{}{}
+			}
+		}
+	}
+
+	if inbounds, ok := old["inbounds"].([]M); ok {
+		for _, inbound := range inbounds {
+			tag, _ := inbound["tag"].(string)
+			if tag == "" {
+				continue
+			}
+			if _, retained := nextTags[tag]; retained {
+				continue
+			}
+			if _, exists := manager.Get(tag); !exists {
+				continue
+			}
+			if err := manager.Remove(tag); err != nil {
+				if _, stillExists := manager.Get(tag); stillExists {
+					return fmt.Errorf("remove stale inbound %s: %w", tag, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // Close only this logical node's tracked TCP and UDP sessions after an exit
 // policy change, so multiplexed clients cannot continue using the old exit.
 func (s *SingBox) hotApplyCloseOldExit(node *model.NodeSpec, users []model.UserSpec, tls kernel.TLSCert) {
