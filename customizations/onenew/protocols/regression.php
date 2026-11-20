@@ -19,13 +19,14 @@ namespace {
     function data_get($target, $key, $default = null) { foreach (explode('.', $key) as $segment) { if (is_array($target) && array_key_exists($segment, $target)) $target=$target[$segment]; elseif (is_object($target) && isset($target->$segment)) $target=$target->$segment; else return $default; } return $target; }
     function expect($yes, $message) { if (!$yes) throw new \RuntimeException($message); }
     $root=dirname(__DIR__,3); $work=__DIR__.'/.test-work';
-    foreach (['app/Models/Server.php','app/Services/ServerService.php','app/Protocols/General.php'] as $file) {
+    foreach (['app/Models/Server.php','app/Services/ServerService.php','app/Protocols/General.php','app/Protocols/Shadowrocket.php'] as $file) {
         @mkdir(dirname($work.'/'.$file),0777,true); copy($root.'/'.$file,$work.'/'.$file);
     }
     if (is_file(__DIR__.'/install.php')) { require __DIR__.'/install.php'; applyOnenewProtocolPatch($work); }
     if (is_file(__DIR__.'/app/Onenew/Protocols/ProtocolSettings.php')) require __DIR__.'/app/Onenew/Protocols/ProtocolSettings.php';
     require $work.'/app/Models/Server.php'; require $root.'/app/Utils/Helper.php';
     require $work.'/app/Services/ServerService.php'; require $work.'/app/Protocols/General.php';
+    require $work.'/app/Protocols/Shadowrocket.php';
     $settings=['utls'=>['enabled'=>false],'tls'=>1,'network'=>'xhttp','network_settings'=>['host'=>'example.com','path'=>'/','mode'=>'auto','alpn'=>'h3','extra'=>['headers'=>[],'xPaddingBytes'=>'100-1000','noGRPCHeader'=>false,'noSSEHeader'=>false,'xmux'=>[],'downloadSettings'=>['tlsSettings'=>[],'sockopt'=>[],'xhttpSettings'=>['extra'=>['headers'=>[]]]],'list'=>[],'hosts'=>['a','b'],'extensions'=>['ordered'=>[]]]]];
     foreach (['vmess','vless','trojan'] as $type) {
         $node=new \App\Models\Server; $node->type=$type; $node->host='example.com'; $node->port=443; $node->server_port=443; $node->name='h3';
@@ -49,6 +50,9 @@ namespace {
         expect($extra->headers instanceof \stdClass, "$type share: headers must encode as {}");
         expect(is_array($extra->list), "$type share: list must stay []");
         expect(($query['alpn']??null)==='h3', "$type share: preserve H3 ALPN");
+        $shadowrocket=\App\Protocols\Shadowrocket::$method('00000000-0000-4000-8000-000000000001',$server);
+        parse_str(parse_url(trim($shadowrocket),PHP_URL_QUERY),$shadowrocketQuery);
+        expect(($shadowrocketQuery['alpn']??null)==='h3', "$type Shadowrocket share: preserve H3 ALPN");
         // The raw JSON setter must also preserve unknown object/list shape, not guess by value.
         $node->protocol_settings='{"network":"xhttp","network_settings":{"extra":{"headers":{},"unknownObject":{},"unknownList":[]}}}';
         $roundtrip=json_decode($node->raw('protocol_settings'));

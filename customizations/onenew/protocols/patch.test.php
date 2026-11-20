@@ -1,7 +1,7 @@
 <?php
 require __DIR__.'/install.php';
 $root=dirname(__DIR__,3); $work=__DIR__.'/.test-work/preflight';
-$files=['app/Models/Server.php','app/Services/ServerService.php','app/Protocols/General.php'];
+$files=['app/Models/Server.php','app/Services/ServerService.php','app/Protocols/General.php','app/Protocols/Shadowrocket.php'];
 foreach ($files as $file) { @mkdir(dirname($work.'/'.$file),0777,true); copy($root.'/'.$file,$work.'/'.$file); }
 file_put_contents($work.'/app/Protocols/General.php', '<?php // intentionally changed upstream');
 $before=[]; foreach ($files as $file) $before[$file]=file_get_contents($work.'/'.$file);
