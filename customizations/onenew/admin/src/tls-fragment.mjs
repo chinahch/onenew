@@ -8,10 +8,10 @@ export function TlsFragment({react:R,form}){
  R.useEffect(()=>{const subscription=form.watch(value=>setValues({...value}));return()=>subscription.unsubscribe()},[form]);
  const set=(field,value)=>form.setValue(`tls_settings.fragment.${field}`,value,{shouldDirty:true,shouldValidate:true});
  const fragment=values.tls_settings?.fragment||{},enabled=fragment.enabled===true;
- const length=fragment.length??'100-200',interval=fragment.interval??'10-20';
+ const length=fragment.length??'40-60',interval=fragment.interval??'30-50';
  const tcp=['tcp','ws','grpc','h2','httpupgrade','xhttp'].includes(values.network||'tcp');
  if(![1,2].includes(Number(values.tls||0)))return null;
- const toggle=value=>{set('length',validFragmentRange(length,1,16384)?length:'100-200');set('interval',validFragmentRange(interval,0,1000)?interval:'10-20');set('enabled',value)};
+ const toggle=value=>{set('length',validFragmentRange(length,1,16384)?length:'40-60');set('interval',validFragmentRange(interval,0,1000)?interval:'30-50');set('enabled',value)};
  const field=(label,name,value,minimum,maximum)=>h('label',{className:'space-y-1 text-xs'},h('span',null,label),
   h('input',{className:'h-9 w-full rounded-md border bg-background px-3 font-mono text-xs',type:'text',value,
    'aria-invalid':!validFragmentRange(value,minimum,maximum),onChange:event=>set(name,event.target.value)}),

@@ -46,7 +46,7 @@ export function patchBundle(source,runtime){
   // never overwrite a library binding with their stale initialization snapshot.
   advanced=advanced.slice(0,saveStart)+'onClick:()=>{s(!1)'+advanced.slice(saveEnd);
   source=source.slice(0,start)+advanced+source.slice(end);
-  const fragmentSchema='py({enabled:uy().default(!1),length:cy().refine(e=>OnenewAdmin.validFragmentRange(e,1,16384),"片段长度须为 1–16384 内的整数或递增区间").default("100-200"),interval:cy().refine(e=>OnenewAdmin.validFragmentRange(e,0,1000),"片段间隔须为 0–1000 内的整数或递增区间").default("10-20")}).nullable().optional()';
+  const fragmentSchema='py({enabled:uy().default(!1),length:cy().refine(e=>OnenewAdmin.validFragmentRange(e,1,16384),"片段长度须为 1–16384 内的整数或递增区间").default("40-60"),interval:cy().refine(e=>OnenewAdmin.validFragmentRange(e,0,1000),"片段间隔须为 0–1000 内的整数或递增区间").default("30-50")}).nullable().optional()';
   for(const [type,schema,component,tlsDefault] of [['vmess','C4t','k4t',0],['vless','A4t','j4t',0],['trojan','W4t','z4t',1]]){
     const prefix=`${schema}=(e,t)=>py({tls:yy().default(${tlsDefault}),tls_settings:py({`;
     source=replaceOnce(source,prefix,prefix+'fragment:'+fragmentSchema+',');
