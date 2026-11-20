@@ -67,6 +67,8 @@ require $custom . '/protocols/install.php';
 applyOnenewProtocolPatch($root);
 require $custom . '/protocols/fragment-install.php';
 applyOnenewFragmentPatch($root);
+require $custom . '/protocols/clash-xhttp-alpn-install.php';
+applyOnenewClashXhttpAlpnPatch($root);
 copyOverlay($custom . '/exit-probe/app', $root . '/app');
 copyOverlay($custom . '/remote-upgrade/app', $root . '/app');
 copyOverlay($custom . '/ai-operations/app', $root . '/app');
