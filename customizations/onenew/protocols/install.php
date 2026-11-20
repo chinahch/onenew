@@ -25,6 +25,12 @@ function applyOnenewProtocolPatch(string $root): void
             ["if (\$extra = data_get(\$protocol_settings, 'network_settings.extra'))\n                    \$array['extra'] = is_array(\$extra) && !empty(\$extra) ? json_encode(\$extra) : null;",
              "\$array['extra'] = $helper::encodeExtra(data_get(\$protocol_settings, 'network_settings.extra'));\n                if (\$alpn = data_get(\$protocol_settings, 'network_settings.alpn'))\n                    \$array['alpn'] = is_array(\$alpn) ? implode(',', \$alpn) : \$alpn;"],
         ],
+        'app/Protocols/Shadowrocket.php' => [
+            ["        \$query = http_build_query(\$config, '', '&', PHP_QUERY_RFC3986);",
+             "        if (\$alpn = data_get(\$protocol_settings, 'network_settings.alpn')) {\n            \$config['alpn'] = is_array(\$alpn) ? implode(',', \$alpn) : \$alpn;\n        }\n        \$query = http_build_query(\$config, '', '&', PHP_QUERY_RFC3986);", 2],
+            ["        \$query = http_build_query(\$params);\n        \$addr = Helper::wrapIPv6(\$server['host']);\n\n        \$uri = \"trojan://",
+             "        if (\$alpn = data_get(\$protocol_settings, 'network_settings.alpn')) {\n            \$params['alpn'] = is_array(\$alpn) ? implode(',', \$alpn) : \$alpn;\n        }\n        \$query = http_build_query(\$params);\n        \$addr = Helper::wrapIPv6(\$server['host']);\n\n        \$uri = \"trojan://"],
+        ],
     ];
     $writes = [];
     foreach ($patches as $file => $replacements) {
