@@ -16,7 +16,7 @@ onMounted(async()=>{const [planResult,noticeResult]=await Promise.allSettled([ap
 </script>
 <template>
  <section class="surface user-welcome"><div><span class="eyebrow">YOUR SPACE</span><h1>欢迎回来</h1><p class="muted">{{me.email}}</p></div><n-tag round :bordered="false" :type="me.banned||expired?'warning':remaining>0?'success':'default'">{{me.banned?'服务已停用':expired?'套餐已到期':remaining>0?'服务使用中':'暂无可用流量'}}</n-tag></section>
- <section v-if="notices.length" class="surface announcement-bar" aria-label="公告"><span class="announcement-label"><n-icon :component="Bell" size="18"/><strong>公告</strong></span><div class="announcement-viewport"><div class="announcement-track"><span v-for="(notice,index) in notices" :key="notice.id||index" class="announcement-item"><b>{{notice.title}}</b><span v-if="noticeText(notice)">：{{noticeText(notice)}}</span></span><span v-for="(notice,index) in notices" :key="'repeat-'+(notice.id||index)" class="announcement-item" aria-hidden="true"><b>{{notice.title}}</b><span v-if="noticeText(notice)">：{{noticeText(notice)}}</span></span></div></div></section>
+ <section v-if="notices.length" class="surface announcement-bar" aria-label="公告"><span class="announcement-label"><n-icon :component="Bell" size="18"/><strong>公告</strong></span><div class="announcement-viewport"><div class="announcement-track" :class="{'announcement-track--static':notices.length===1}"><span v-for="(notice,index) in notices" :key="notice.id||index" class="announcement-item"><b>{{notice.title}}</b><span v-if="noticeText(notice)">：{{noticeText(notice)}}</span></span><span v-for="(notice,index) in notices" :key="'repeat-'+(notice.id||index)" class="announcement-item" aria-hidden="true"><b>{{notice.title}}</b><span v-if="noticeText(notice)">：{{noticeText(notice)}}</span></span></div></div></section>
  <n-alert v-if="error" type="error" class="space-bottom">{{error}}</n-alert>
  <section class="user-stat-grid">
   <article class="surface user-metric"><span class="metric-symbol"><n-icon :component="Wallet" size="23"/></span><span class="muted">剩余流量</span><strong>{{bytes(remaining)}}</strong><small class="muted">本周期额度 {{bytes(me.quota_bytes)}}</small></article>
@@ -34,6 +34,8 @@ onMounted(async()=>{const [planResult,noticeResult]=await Promise.allSettled([ap
 .announcement-label{display:flex;align-items:center;gap:8px;flex:none;color:var(--green);font-size:13px}
 .announcement-viewport{min-width:0;overflow:hidden;white-space:nowrap}
 .announcement-track{display:inline-flex;align-items:center;min-width:max-content;animation:announcement-scroll 32s linear infinite}
+.announcement-track--static{animation:none}
+.announcement-track--static .announcement-item[aria-hidden="true"]{display:none}
 .announcement-bar:hover .announcement-track{animation-play-state:paused}
 .announcement-item{display:inline-flex;align-items:center;padding-right:64px;color:var(--muted);font-size:13px}
 .announcement-item b{color:var(--text);font-weight:700}
