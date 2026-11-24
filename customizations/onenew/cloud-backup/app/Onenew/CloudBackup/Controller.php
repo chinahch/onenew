@@ -5,6 +5,13 @@ use App\Onenew\Migration\MigrationService;
 final class Controller
 {
     public function info(Service $service,MigrationService $migration){return response()->json($service->view()+['supported'=>$migration->info()['supported']])->header('Cache-Control','no-store');}
+    public function storageUsage(StorageUsage $usage,MigrationService $migration)
+    {
+        try{[$database]=$migration->database();}
+        catch(\RuntimeException){return response()->json(['message'=>'当前部署不支持检查数据大小，需要使用官方 SQLite 持久化目录。'],422)->header('Cache-Control','no-store');}
+        try{return response()->json($usage->inspect($migration->source(),$database))->header('Cache-Control','no-store');}
+        catch(\Throwable){return response()->json(['message'=>'暂时无法读取当前数据大小，请稍后重试。'],503)->header('Cache-Control','no-store');}
+    }
     public function save(Request $request,Config $config,Service $service)
     {
         $data=$request->validate(['enabled'=>'sometimes|boolean','daily_time'=>['sometimes','required','regex:/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/D'],'client_id'=>'sometimes|nullable|string|max:512','client_secret'=>['sometimes','nullable','string','max:16384','regex:/^[^\x00-\x20\x7f]+$/D'],'refresh_token'=>['sometimes','nullable','string','max:16384','regex:/^[^\x00-\x20\x7f]+$/D'],'folder_id'=>['sometimes','nullable','string','max:200','regex:/^[A-Za-z0-9_-]+$/D'],'password'=>'sometimes|nullable|string|confirmed','password_confirmation'=>'sometimes|nullable|string']);

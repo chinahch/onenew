@@ -8,14 +8,33 @@ export function backupSettingsPayload(form){
 }
 export function backupTime(value){return value?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date(Number(value)*1000)):'—'}
 export function backupDriveUrl(value){return typeof value==='string'&&/^https:\/\/drive\.google\.com\/file\/d\/[A-Za-z0-9_-]+\/view$/.test(value)?value:null}
+export function backupBytes(value){return Number.isFinite(value)&&value>=0?`${(value/1048576).toFixed(2)} MiB`:'—'}
+const storageLabels={v2_onenew_domain_events:'域名访问明细',v2_onenew_domain_batches:'域名上报批次',onenew_runtime_log_entries:'运行日志正文',onenew_runtime_log_batches:'运行日志批次',v2_onenew_traffic_receipts:'流量去重凭据'};
+export function BackupStorageUsage({react:React,usage}){
+ const h=React.createElement,db=usage.database;
+ const metric=(label,value)=>h(React.Fragment,{key:label},h('dt',null,label),h('dd',null,backupBytes(value)));
+ return h('div',{className:'onenew-backup-storage','aria-label':'当前数据大小'},
+  h('div',{className:'onenew-backup-heading'},h('h4',null,'当前数据大小'),h('span',{className:'onenew-help'},'检查时间：'+backupTime(usage.checked_at)+'（北京时间）')),
+  h('dl',{className:'onenew-backup-meta'},h('dt',null,'文件合计'),h('dd',null,h('strong',null,(usage.complete?'':'至少 ')+backupBytes(usage.total_bytes))),metric('数据库主文件',db.main_bytes),metric('数据库 WAL',db.wal_bytes),metric('数据库 SHM',db.shm_bytes),metric('插件',usage.plugins.bytes),metric('主题',usage.theme.bytes),metric('可复用空闲页',db.free_bytes)),
+  !usage.complete&&h('p',{className:'onenew-notice'},'部分目录无法完整统计，或包含未跟随的符号链接；显示的是已读取文件的大小。'),
+  h('p',{className:'onenew-help'},'按检查时的文件大小统计，包含数据库 WAL/SHM，不含临时备份包和单独保存的本地备份。空闲页已包含在数据库中，不重复计入合计；最终 .onm 文件大小可能不同。'),
+  db.table_sizes_available?h('details',null,h('summary',null,'数据库占用排行（表及索引合计，前 15 项）'),h('div',{className:'onenew-table-scroll'},h('table',{className:'onenew-resource-table'},h('thead',null,h('tr',null,...['数据表','表数据','索引','合计'].map(label=>h('th',{key:label,scope:'col'},label)))),h('tbody',null,...db.tables.map(row=>h('tr',{key:row.name},h('td',null,storageLabels[row.name]&&h('strong',null,storageLabels[row.name]),h('small',null,row.name)),h('td',null,backupBytes(row.table_bytes)),h('td',null,backupBytes(row.index_bytes)),h('td',null,backupBytes(row.total_bytes)))))))):h('p',{className:'onenew-help'},'当前无法读取表级占用（dbstat），仍可查看上方的文件大小。'));
+}
 const publicForm=c=>({enabled:!!c?.enabled,daily_time:c?.daily_time||'03:00',client_id:c?.client_id||'',folder_id:c?.folder_id||'',client_secret:'',refresh_token:'',password:'',password_confirmation:''});
 export function CloudBackup({react:React,get,post}){
  const h=React.createElement,[data,setData]=React.useState(null),[form,setForm]=React.useState(()=>publicForm(null)),[busy,setBusy]=React.useState(''),[error,setError]=React.useState(''),[message,setMessage]=React.useState('');
- const mounted=React.useRef(false),sequence=React.useRef(0),baseline=React.useRef(publicForm(null)),currentForm=React.useRef(form),busyRef=React.useRef(false);currentForm.current=form;
+  const [usage,setUsage]=React.useState(null),[usageBusy,setUsageBusy]=React.useState(false),[usageError,setUsageError]=React.useState(''),usageBusyRef=React.useRef(false);
+  const mounted=React.useRef(false),sequence=React.useRef(0),baseline=React.useRef(publicForm(null)),currentForm=React.useRef(form),busyRef=React.useRef(false);currentForm.current=form;
  async function load(initialize=false){const seq=++sequence.current;try{const value=await get(api,{baseURL:'/'});if(!mounted.current||seq!==sequence.current)return;setData(value);if(initialize||JSON.stringify(currentForm.current)===JSON.stringify(baseline.current)){baseline.current=publicForm(value.config);currentForm.current=baseline.current;setForm(baseline.current);}setError('')}catch(e){if(mounted.current&&seq===sequence.current)setError(e?.response?.data?.message||'无法读取云盘备份设置，请刷新重试')}}
  React.useEffect(()=>{mounted.current=true;load(true);const timer=setInterval(()=>{if(!busyRef.current)load()},5000);return()=>{mounted.current=false;sequence.current++;clearInterval(timer)}},[get]);
  const dirty=data&&JSON.stringify(form)!==JSON.stringify(baseline.current);
- const update=(key,value)=>setForm(v=>({...v,[key]:value}));
+  const update=(key,value)=>setForm(v=>({...v,[key]:value}));
+  async function checkUsage(){
+   if(usageBusyRef.current)return;usageBusyRef.current=true;setUsageBusy(true);setUsageError('');setUsage(null);
+   try{const value=await get(api+'/storage-usage',{baseURL:'/',headers:{'Cache-Control':'no-cache'}});if(mounted.current)setUsage(value)}
+   catch(e){if(mounted.current)setUsageError(e?.response?.data?.message||(e?.response?.status===429?'检查较频繁，请稍后再试':'无法检查当前数据大小，请稍后重试'))}
+   finally{usageBusyRef.current=false;if(mounted.current)setUsageBusy(false)}
+  }
  async function action(kind){
   if(busyRef.current)return;busyRef.current=true;setBusy(kind);setError('');setMessage('');sequence.current++;
   try{
@@ -48,7 +67,8 @@ export function CloudBackup({react:React,get,post}){
    h('p',{className:'onenew-help'},'备份密码用于恢复，请另外自行保管。密钥留空会保留原值；云盘文件夹 ID 留空则自动创建专用目录。'),
    h('div',{className:'onenew-backup-schedule'},h('label',{className:'onenew-backup-toggle'},h('input',{type:'checkbox',role:'switch',checked:form.enabled,disabled:!!busy||data.supported===false,onChange:e=>update('enabled',e.target.checked)}),'开启每天自动备份'),field('daily_time','每天备份时间（北京时间）','time')),
    h('p',{className:'onenew-help'},'下一次计划：'+(configured.enabled?backupTime(configured.next_run_at):'尚未开启')+'。修改后点击保存。'),
-   h('div',{className:'onenew-resource-actions'},button('settings','保存设置'),button('test','测试已保存配置',!!dirty||!configured.ready),button('run','立即备份并上传',!!dirty||!configured.ready||configured.restored_paused||data.supported===false||active.has(run?.state))),
+    h('div',{className:'onenew-resource-actions'},button('settings','保存设置'),button('test','测试已保存配置',!!dirty||!configured.ready),button('run','立即备份并上传',!!dirty||!configured.ready||configured.restored_paused||data.supported===false||active.has(run?.state)),h('button',{type:'button',className:'onenew-resource-button',disabled:!!busy||usageBusy,'aria-busy':usageBusy,onClick:checkUsage},usageBusy?'检查中…':'检查当前数据大小')),
+    usageBusy&&h('p',{role:'status',className:'onenew-help'},'正在读取当前数据大小…'),usageError&&h('p',{role:'alert',className:'onenew-error'},usageError),usage&&h(BackupStorageUsage,{react:React,usage}),
    h('details',{className:'onenew-backup-guide'},h('summary',null,'如何配置 Google OAuth'),h('ol',null,
     h('li',null,'在自己的 Google Cloud 项目启用 Google Drive API，并创建 OAuth Client ID 和 Client Secret。'),
     h('li',null,'通过 Google OAuth Playground 使用自己的 OAuth 凭据，授权 drive.file 范围并取得 Refresh Token；再将这三项填写到上方。'),
