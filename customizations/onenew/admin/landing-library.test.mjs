@@ -26,3 +26,8 @@ test('service toggles restore presets and preserve custom domains without touchi
  assert.ok(selected.includes('telegram.org'));assert.ok(selected.includes('custom.example'));
  assert.deepEqual(mod.toggleLandingService(selected,'8',false),original);assert.deepEqual(original,['custom.example']);
 });
+test('AI service preset includes Anthropic Auth0 authentication domain',()=>{
+ const selected=mod.toggleLandingService([],'a',true);
+ assert.ok(selected.includes('anthropic.auth0.com'));
+ assert.ok(selected.includes('openai.auth0.com'));
+});
