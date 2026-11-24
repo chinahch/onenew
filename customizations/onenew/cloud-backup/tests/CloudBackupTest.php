@@ -54,4 +54,30 @@ final class CloudBackupTest extends TestCase
         $c->save(['daily_time'=>'05:10']);self::assertFalse($c->view()['enabled']);
     }
 
+    public function test_storage_usage_requires_admin_without_starting_a_backup():void{
+        $this->getJson(self::ROOT.'/storage-usage')->assertForbidden();
+        $this->getJson(self::ROOT.'/storage-usage',$this->auth(false))->assertForbidden();
+        Bus::assertNotDispatched(BackupJob::class);
+    }
+
+    public function test_storage_usage_is_fresh_read_only_and_independent_of_saved_oauth_settings():void{
+        $root=sys_get_temp_dir().'/onenew-usage-'.Str::uuid();
+        mkdir($root.'/.docker/.data',0700,true);mkdir($root.'/plugins',0700);mkdir($root.'/storage/theme',0700,true);
+        $database=$root.'/.docker/.data/database.sqlite';
+        $pdo=new \PDO('sqlite:'.$database);$pdo->exec('CREATE TABLE fixture (id INTEGER PRIMARY KEY)');$pdo=null;
+        file_put_contents($root.'/plugins/fixture.php','12345');file_put_contents($root.'/storage/theme/fixture.css','1234567');
+        config(['onenew.migration_source'=>$root,'onenew.migration_database'=>$database]);$auth=$this->auth();$before=hash_file('sha256',$database);
+        try{
+            $response=$this->getJson(self::ROOT.'/storage-usage',$auth)->assertOk()->assertJsonPath('plugins.bytes',5)->assertJsonPath('theme.bytes',7)->assertJsonPath('complete',true);
+            self::assertStringContainsString('no-store',$response->headers->get('Cache-Control'));
+            self::assertSame(filesize($database)+12,$response->json('total_bytes'));self::assertStringNotContainsString($root,$response->getContent());
+            file_put_contents($root.'/plugins/fixture.php','123456789');
+            $this->getJson(self::ROOT.'/storage-usage',$auth)->assertOk()->assertJsonPath('plugins.bytes',9);
+            self::assertSame($before,hash_file('sha256',$database));self::assertSame(0,DB::table('onenew_cloud_backup_runs')->count());Bus::assertNotDispatched(BackupJob::class);
+        }finally{
+            foreach(['/plugins/fixture.php','/storage/theme/fixture.css','/.docker/.data/database.sqlite'] as $file)if(is_file($root.$file))unlink($root.$file);
+            foreach(['/storage/theme','/storage','/plugins','/.docker/.data','/.docker',''] as $directory)rmdir($root.$directory);
+        }
+    }
+
 }

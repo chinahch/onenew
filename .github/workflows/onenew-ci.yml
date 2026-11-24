@@ -78,6 +78,7 @@ jobs:
             php /opt/onenew/energy/tests/amount.php
             php /opt/onenew/domains/tests/domains.php
             php /opt/onenew/cloud-backup/tests/schedule.php
+            php /opt/onenew/cloud-backup/tests/storage-usage.php
             php /opt/onenew/geoip/tests/regions.php
             php /opt/onenew/web-restore/tests/core.php
             php /opt/onenew/ai-operations/tests/operator-engine-core.php
