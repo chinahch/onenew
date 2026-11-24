@@ -112,7 +112,7 @@ require $custom . '/traffic/install.php';
 applyOnenewTrafficPatch($root);
 replaceOnce($root . '/app/Console/Kernel.php',
     'app(PluginManager::class)->registerPluginSchedules($schedule);',
-    'app(PluginManager::class)->registerPluginSchedules($schedule);' . "\n        \$schedule->command('onenew:prune-telemetry')->dailyAt('03:10')->withoutOverlapping();\n        \$schedule->command('onenew:prune-migrations')->everyTenMinutes()->withoutOverlapping();\n        \$schedule->command('onenew:prune-ai-tasks')->everyTenMinutes()->withoutOverlapping();\n        \$schedule->command('onenew:prune-runtime-logs')->hourly()->withoutOverlapping();");
+    'app(PluginManager::class)->registerPluginSchedules($schedule);' . "\n        \$schedule->command('onenew:prune-telemetry')->dailyAt('02:00')->timezone('Asia/Shanghai')->withoutOverlapping();\n        \$schedule->command('onenew:prune-migrations')->everyTenMinutes()->withoutOverlapping();\n        \$schedule->command('onenew:prune-ai-tasks')->everyTenMinutes()->withoutOverlapping();\n        \$schedule->command('onenew:prune-runtime-logs')->dailyAt('02:00')->timezone('Asia/Shanghai')->withoutOverlapping();");
 foreach (['XboardInstall.php', 'XboardUpdate.php'] as $command) {
     replaceOnce($root . '/app/Console/Commands/' . $command,
         'PluginManager::installDefaultPlugins();',
