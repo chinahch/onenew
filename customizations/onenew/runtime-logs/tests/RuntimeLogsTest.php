@@ -44,7 +44,16 @@ final class RuntimeLogsTest extends TestCase
  }
  public function test_forbidden_successes_are_dropped_errors_sanitized_and_retention_prunes():void{
   foreach(['INFO [vless:25051] listener started','users added via UserManager added=4 total=9','node configuration applied successfully'] as $message)self::assertNull(LogFilter::message('info',$message));
-  $m=$this->machine();$s=app(Service::class);$s->accept($m,$this->batch($m));DB::table('onenew_runtime_log_entries')->update(['received_at'=>time()-604801]);$s->prune();self::assertSame(0,DB::table('onenew_runtime_log_entries')->count());
+  $m=$this->machine();$s=app(Service::class);$batch=$this->batch($m);$batch['entries'][0]['at']=time()-90000;
+  $s->accept($m,$batch);$this->assertDatabaseCount('onenew_runtime_log_entries',1);
+  DB::table('onenew_runtime_log_entries')->update(['at'=>time()-90000]);
+  DB::table('onenew_runtime_log_batches')->update(['received_at'=>time()-90000]);
+  DB::table('onenew_runtime_log_reads')->insert(['admin_id'=>1,'machine_id'=>$m->id,'machine_identity'=>$s->identity($m),'result_count'=>0,'created_at'=>time()-90000]);
+  $result=$s->query($m,[],1);self::assertSame(1,$result['retention_days']);self::assertSame([], $result['entries']);
+  $s->prune();$this->assertDatabaseCount('onenew_runtime_log_entries',0);$this->assertDatabaseCount('onenew_runtime_log_reads',1);$this->assertDatabaseCount('onenew_runtime_log_batches',0);
+  try{$s->accept($m,$batch);self::fail('Expired batch must not replay consumed log sequences');}
+  catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){self::assertSame(409,$e->getStatusCode());}
+  $this->assertDatabaseCount('onenew_runtime_log_entries',0);
  }
  public function test_batches_are_bounded_and_sequence_mismatch_rejected():void{
   $m=$this->machine();$b=$this->batch($m);$b['entries'][1]['seq']=5;$this->postJson('/api/v3/server/runtime-logs',$b,['Authorization'=>'Bearer '.$m->token])->assertStatus(422);self::assertSame(0,DB::table('onenew_runtime_log_entries')->count());

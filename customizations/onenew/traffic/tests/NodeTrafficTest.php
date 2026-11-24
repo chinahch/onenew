@@ -233,11 +233,12 @@ class NodeTrafficTest extends TestCase
         [$user, $server, $machine] = $this->fixture();
         $config = '/api/v3/server/domain-audit/config?machine_id=' . $machine->id;
         $this->withToken('wrong')->getJson($config)->assertForbidden();
-        $this->withToken($machine->token)->getJson($config)->assertOk()->assertJsonPath('enabled', false)->assertJsonPath('retention_days', 7);
+        admin_setting(['onenew_domain_audit_retention_days' => 7]);
+        $this->withToken($machine->token)->getJson($config)->assertOk()->assertJsonPath('enabled', false)->assertJsonPath('retention_days', 1);
         Sanctum::actingAs($user);
         $this->postJson('/api/onenew/admin/traffic/audit-config', ['enabled' => true, 'retention_days' => 1])->assertForbidden();
         $this->actingAdmin();
-        $this->postJson('/api/onenew/admin/traffic/audit-config', ['enabled' => true, 'retention_days' => 1])->assertOk()->assertJsonPath('enabled', true);
+        $this->postJson('/api/onenew/admin/traffic/audit-config', ['enabled' => true, 'retention_days' => 14])->assertOk()->assertJsonPath('enabled', true)->assertJsonPath('retention_days', 1);
         $this->postJson('/api/onenew/admin/traffic/audit-config', ['enabled' => true, 'retention_days' => 31])->assertUnprocessable();
         $body = ['machine_id' => $machine->id, 'node_id' => $server['id'], 'batch_id' => (string) \Illuminate\Support\Str::uuid(),
             'events' => [['user_id' => $user->id, 'domain' => 'example.com', 'observed_at' => time() - 86401]]];
