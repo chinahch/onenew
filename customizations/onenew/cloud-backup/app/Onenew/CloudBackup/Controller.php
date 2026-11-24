@@ -5,12 +5,22 @@ use App\Onenew\Migration\MigrationService;
 final class Controller
 {
     public function info(Service $service,MigrationService $migration){return response()->json($service->view()+['supported'=>$migration->info()['supported']])->header('Cache-Control','no-store');}
-    public function storageUsage(StorageUsage $usage,MigrationService $migration)
+    public function storageUsage(StorageUsage $usage,MigrationService $migration,StorageCleanup $cleanup)
     {
         try{[$database]=$migration->database();}
         catch(\RuntimeException){return response()->json(['message'=>'当前部署不支持检查数据大小，需要使用官方 SQLite 持久化目录。'],422)->header('Cache-Control','no-store');}
-        try{return response()->json($usage->inspect($migration->source(),$database))->header('Cache-Control','no-store');}
+        try{return response()->json($usage->inspect($migration->source(),$database)+['cleanup_days'=>$cleanup->policies()])->header('Cache-Control','no-store');}
         catch(\Throwable){return response()->json(['message'=>'暂时无法读取当前数据大小，请稍后重试。'],503)->header('Cache-Control','no-store');}
+    }
+    public function cleanupStorage(Request $request,MigrationService $migration,StorageCleanup $cleanup)
+    {
+        $data=$request->validate(['table'=>'required|string|max:64','retention_days'=>'required|integer|min:1|max:31','confirm'=>'required|accepted']);
+        try{$migration->database();}
+        catch(\RuntimeException){return response()->json(['message'=>'当前部署不支持清理。'],422)->header('Cache-Control','no-store');}
+        try{$result=$cleanup->prune($data['table'],(int)$data['retention_days']);}
+        catch(\Illuminate\Database\QueryException){return response()->json(['message'=>'暂时无法清理，请稍后重试。'],503)->header('Cache-Control','no-store');}
+        if($result===null)return response()->json(['message'=>'此表不支持清理，或保留天数已变更，请重新检查。'],422)->header('Cache-Control','no-store');
+        return response()->json($result)->header('Cache-Control','no-store');
     }
     public function save(Request $request,Config $config,Service $service)
     {

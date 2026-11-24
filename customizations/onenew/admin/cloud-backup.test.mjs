@@ -18,6 +18,16 @@ test('storage sizes distinguish zero and missing values and label an unavailable
  const tree=BackupStorageUsage({react:R,usage:{checked_at:1,total_bytes:100,complete:false,plugins:{bytes:0},theme:{bytes:0},database:{main_bytes:100,wal_bytes:0,shm_bytes:0,free_bytes:0,table_sizes_available:false,tables:[]}}});
  const text=JSON.stringify(tree);assert.ok(text.includes('至少 '));assert.ok(text.includes('dbstat'));assert.ok(text.includes('不重复计入合计'));
 });
+test('storage ranking shows a cleanup action only for supported data and passes the current retention',()=>{
+ const R={createElement:(type,props,...children)=>({type,props,children})},calls=[];
+ const row=name=>({name,table_bytes:1,index_bytes:2,total_bytes:3});
+ const usage={complete:true,plugins:{bytes:0},theme:{bytes:0},cleanup_days:{v2_onenew_domain_events:3},database:{table_sizes_available:true,tables:[row('v2_onenew_domain_events'),row('v2_onenew_traffic_receipts'),row('v2_user')]}};
+ const tree=BackupStorageUsage({react:R,usage,onCleanup:(...args)=>calls.push(args)});
+ function buttons(node){return !node||typeof node!=='object'?[]:node.type==='button'?[node]:(node.children||[]).flatMap(buttons)}
+ const result=buttons(tree);assert.equal(result.length,1);assert.equal(result[0].children[0],'清理过期');
+ result[0].props.onClick();assert.deepEqual(calls,[['v2_onenew_domain_events',3]]);
+ assert.ok(JSON.stringify(tree).includes('不支持清理'));
+});
 test('storage checks run only on explicit clicks, use GET and do not overwrite unsaved settings',async()=>{
  const states=[],refs=[],calls=[],effects=[];let stateIndex=0,refIndex=0;
  const R={Fragment:'fragment',createElement:(type,props,...children)=>({type,props:{...props,children}}),useState:init=>{const index=stateIndex++;if(!(index in states))states[index]=typeof init==='function'?init():init;return [states[index],value=>{states[index]=typeof value==='function'?value(states[index]):value}]},useRef:value=>refs[refIndex++]??(refs[refIndex-1]={current:value}),useEffect:effect=>{if(!effects.length)effects.push(effect)}};
