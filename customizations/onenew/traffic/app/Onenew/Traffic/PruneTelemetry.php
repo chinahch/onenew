@@ -7,16 +7,20 @@ use Illuminate\Support\Facades\DB;
 
 class PruneTelemetry extends Command
 {
-    public const BATCH_RETENTION_DAYS = 31;
+    public const BATCH_RETENTION_DAYS = 1;
+
+    public static function batchCutoff(int $now): int
+    {
+        // Even events at the maximum allowed future timestamp must have expired.
+        return $now - self::BATCH_RETENTION_DAYS * 86400 - DomainAuditController::FUTURE_SKEW_SECONDS;
+    }
     protected $signature = 'onenew:prune-telemetry';
     protected $description = 'Remove expired domain metadata while retaining traffic replay receipts';
 
     public function handle(): int
     {
         $count = $this->prune('v2_onenew_domain_events', 'observed_at', time() - DomainAuditController::retention() * 86400);
-        // The maximum accepted event age is 30 days. Keep replay receipts longer
-        // than that, so an original expired batch cannot be re-ingested after GC.
-        $count += $this->prune('v2_onenew_domain_batches', 'created_at', time() - self::BATCH_RETENTION_DAYS * 86400);
+        $count += $this->prune('v2_onenew_domain_batches', 'created_at', self::batchCutoff(time()));
         $this->info('Removed ' . $count . ' expired domain metadata rows.');
         return self::SUCCESS;
     }

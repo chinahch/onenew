@@ -65,15 +65,15 @@ final class CloudBackupTest extends TestCase
         mkdir($root.'/.docker/.data',0700,true);
         $database=$root.'/.docker/.data/database.sqlite';touch($database);
         config(['onenew.migration_source'=>$root,'onenew.migration_database'=>$database]);
-        $table='onenew_runtime_log_batches';$old=time()-8*86400;$recent=time()-6*86400;
+        $table='onenew_runtime_log_batches';$old=time()-90000;$recent=time()-82800;
         DB::table($table)->insert([['stream_id'=>1,'batch_id'=>'old','received_at'=>$old],['stream_id'=>1,'batch_id'=>'recent','received_at'=>$recent]]);
         DB::table('v2_onenew_traffic_receipts')->insert(['batch_id'=>'receipt','created_at'=>$old]);
-        $route=self::ROOT.'/storage-cleanup';$payload=['table'=>$table,'retention_days'=>7,'confirm'=>true];
+        $route=self::ROOT.'/storage-cleanup';$payload=['table'=>$table,'retention_days'=>1,'confirm'=>true];
         try{
             $this->postJson($route,$payload,$this->auth(false))->assertForbidden();
             $auth=$this->auth();
             $this->postJson($route,array_replace($payload,['confirm'=>false]),$auth)->assertUnprocessable();
-            $this->postJson($route,array_replace($payload,['retention_days'=>1]),$auth)->assertUnprocessable();
+            $this->postJson($route,array_replace($payload,['retention_days'=>7]),$auth)->assertUnprocessable();
             $this->postJson($route,array_replace($payload,['table'=>'v2_onenew_traffic_receipts']),$auth)->assertUnprocessable();
             $this->assertDatabaseCount($table,2);
             $this->postJson($route,$payload,$auth)->assertOk()->assertJsonPath('deleted',1)->assertJsonPath('remaining',false);

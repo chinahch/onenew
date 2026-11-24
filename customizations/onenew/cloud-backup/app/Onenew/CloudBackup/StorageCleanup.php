@@ -12,7 +12,7 @@ final class StorageCleanup
     private const FIELDS = [
         'v2_onenew_domain_events' => 'observed_at',
         'v2_onenew_domain_batches' => 'created_at',
-        'onenew_runtime_log_entries' => 'received_at',
+        'onenew_runtime_log_entries' => 'at',
         'onenew_runtime_log_batches' => 'received_at',
     ];
 
@@ -22,7 +22,7 @@ final class StorageCleanup
             'v2_onenew_domain_events' => DomainAuditController::retention(),
             'v2_onenew_domain_batches' => PruneTelemetry::BATCH_RETENTION_DAYS,
             'onenew_runtime_log_entries' => RuntimeLogs::RETENTION_DAYS,
-            'onenew_runtime_log_batches' => RuntimeLogs::RETENTION_DAYS,
+            'onenew_runtime_log_batches' => RuntimeLogs::BATCH_RETENTION_DAYS,
         ];
     }
 
@@ -33,7 +33,12 @@ final class StorageCleanup
             return null;
         }
         $field = self::FIELDS[$table];
-        $expired = DB::table($table)->where($field, '<', time() - $days * 86400);
+        $now = time();
+        $cutoff = $table === 'v2_onenew_domain_batches' ? PruneTelemetry::batchCutoff($now) : $now - $days * 86400;
+        $query = DB::table($table);
+        $expired = $table === 'onenew_runtime_log_entries'
+            ? RuntimeLogs::expiredEntries($query, $cutoff)
+            : $query->where($field, '<', $cutoff);
         // A bounded subquery avoids long write locks and SQLite parameter limits.
         $ids = (clone $expired)->select('id')->orderBy($field)->orderBy('id')->limit(self::LIMIT);
         $deleted = (clone $expired)->whereIn('id', $ids)->delete();

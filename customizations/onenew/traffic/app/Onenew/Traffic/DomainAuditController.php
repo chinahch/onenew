@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class DomainAuditController extends Controller
 {
+    public const FUTURE_SKEW_SECONDS = 300;
+
     public static function enabled(): bool
     {
         return (bool) admin_setting('onenew_domain_audit_enable', false);
@@ -19,7 +21,7 @@ class DomainAuditController extends Controller
 
     public static function retention(): int
     {
-        return max(1, min(30, (int) admin_setting('onenew_domain_audit_retention_days', 7)));
+        return 1;
     }
 
     public function ingest(Request $request): JsonResponse
@@ -37,7 +39,7 @@ class DomainAuditController extends Controller
             'events.*' => 'required|array:user_id,domain,observed_at',
             'events.*.user_id' => 'required|integer|min:1',
             'events.*.domain' => 'required|string|min:1|max:254',
-            'events.*.observed_at' => 'required|integer|min:' . (time() - self::retention() * 86400) . '|max:' . (time() + 300),
+            'events.*.observed_at' => 'required|integer|min:' . (time() - self::retention() * 86400) . '|max:' . (time() + self::FUTURE_SKEW_SECONDS),
         ]);
         $rows = [];
         foreach ($data['events'] as $event) {
@@ -78,8 +80,9 @@ class DomainAuditController extends Controller
     public function settings(Request $request): JsonResponse
     {
         if (!$request->isMethod('get')) {
-            $data = $request->validate(['enabled' => 'required|boolean', 'retention_days' => 'required|integer|min:1|max:30']);
-            admin_setting(['onenew_domain_audit_enable' => (int) $data['enabled'], 'onenew_domain_audit_retention_days' => (int) $data['retention_days']]);
+            // Older admin bundles may still send the previous retention value.
+            $data = $request->validate(['enabled' => 'required|boolean', 'retention_days' => 'sometimes|integer|min:1|max:30']);
+            admin_setting(['onenew_domain_audit_enable' => (int) $data['enabled']]);
         }
         return response()->json(['enabled' => self::enabled(), 'retention_days' => self::retention(),
             'metadata_only' => true])->header('Cache-Control', 'no-store');
