@@ -14,9 +14,11 @@ function applyOnenewExternalNodes(string $root): void
         . '$this->setSubscribeInfoToServers($serversFiltered, $user, count($servers) - count($serversFiltered));');
     replaceOnce($root.'/app/Support/AbstractProtocol.php', "    protected function isCompatible(\$server)\n    {",
         "    protected function isCompatible(\$server)\n    {\n        if (isset(\$server['onenew_external_link'])) return true;");
-    replaceOnce($root.'/app/Protocols/General.php', 'foreach ($servers as $item) {',
-        'foreach ($servers as $item) {' . "\n            if (isset(\$item['onenew_external_link'])) {\n"
-        . "                \$uri .= \\App\\Onenew\\External\\ShareLink::renamed(\$item['onenew_external_link'], \$item['name']).\"\\r\\n\";\n                continue;\n            }");
+    foreach (['General', 'Shadowrocket'] as $name) {
+        replaceOnce($root.'/app/Protocols/'.$name.'.php', 'foreach ($servers as $item) {',
+            'foreach ($servers as $item) {' . "\n            if (isset(\$item['onenew_external_link'])) {\n"
+            . "                \$uri .= \\App\\Onenew\\External\\ShareLink::renamed(\$item['onenew_external_link'], \$item['name']).\"\\r\\n\";\n                continue;\n            }");
+    }
     foreach (['Clash','ClashMeta'] as $name) {
         replaceOnce($root.'/app/Protocols/'.$name.'.php', 'foreach ($servers as $item) {',
             'foreach ($servers as $item) {' . "\n            if (isset(\$item['onenew_external_link'])) {\n"

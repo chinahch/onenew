@@ -42,12 +42,15 @@ final class ExternalNodes
     public static function validateClient(array $nodes, string $protocolClass): void
     {
         $declaring = (new \ReflectionMethod($protocolClass, 'handle'))->getDeclaringClass()->getName();
+        if (in_array($declaring, [\App\Protocols\General::class, \App\Protocols\Shadowrocket::class], true)) {
+            return;
+        }
         foreach ($nodes as $node) {
             if (!isset($node['onenew_external_link'])) continue;
-            abort_unless(in_array($declaring, [\App\Protocols\General::class,\App\Protocols\Clash::class,
+            abort_unless(in_array($declaring, [\App\Protocols\Clash::class,
                 \App\Protocols\ClashMeta::class,\App\Protocols\SingBox::class],true),422,'该订阅格式暂不支持外部节点，请使用通用链接、Mihomo 或 sing-box');
             if ($declaring === \App\Protocols\Clash::class) abort_unless(in_array($node['type'],['shadowsocks','vmess','trojan','socks','http'],true),422,'该外部节点需要 Mihomo，不支持旧版 Clash');
-            if ($declaring !== \App\Protocols\General::class) self::convert($node,$declaring===\App\Protocols\SingBox::class?'singbox':'clash');
+            self::convert($node,$declaring===\App\Protocols\SingBox::class?'singbox':'clash');
         }
     }
 }
