@@ -60,6 +60,32 @@ final class CloudBackupTest extends TestCase
         Bus::assertNotDispatched(BackupJob::class);
     }
 
+    public function test_storage_cleanup_is_confirmed_allowlisted_and_only_deletes_expired_rows():void{
+        $root=sys_get_temp_dir().'/onenew-cleanup-'.Str::uuid();
+        mkdir($root.'/.docker/.data',0700,true);
+        $database=$root.'/.docker/.data/database.sqlite';touch($database);
+        config(['onenew.migration_source'=>$root,'onenew.migration_database'=>$database]);
+        $table='onenew_runtime_log_batches';$old=time()-8*86400;$recent=time()-6*86400;
+        DB::table($table)->insert([['stream_id'=>1,'batch_id'=>'old','received_at'=>$old],['stream_id'=>1,'batch_id'=>'recent','received_at'=>$recent]]);
+        DB::table('v2_onenew_traffic_receipts')->insert(['batch_id'=>'receipt','created_at'=>$old]);
+        $route=self::ROOT.'/storage-cleanup';$payload=['table'=>$table,'retention_days'=>7,'confirm'=>true];
+        try{
+            $this->postJson($route,$payload,$this->auth(false))->assertForbidden();
+            $auth=$this->auth();
+            $this->postJson($route,array_replace($payload,['confirm'=>false]),$auth)->assertUnprocessable();
+            $this->postJson($route,array_replace($payload,['retention_days'=>1]),$auth)->assertUnprocessable();
+            $this->postJson($route,array_replace($payload,['table'=>'v2_onenew_traffic_receipts']),$auth)->assertUnprocessable();
+            $this->assertDatabaseCount($table,2);
+            $this->postJson($route,$payload,$auth)->assertOk()->assertJsonPath('deleted',1)->assertJsonPath('remaining',false);
+            $this->assertDatabaseMissing($table,['batch_id'=>'old']);
+            $this->assertDatabaseHas($table,['batch_id'=>'recent']);
+            $this->assertDatabaseHas('v2_onenew_traffic_receipts',['batch_id'=>'receipt']);
+            Bus::assertNotDispatched(BackupJob::class);
+        }finally{
+            unlink($database);rmdir(dirname($database));rmdir($root.'/.docker');rmdir($root);
+        }
+    }
+
     public function test_storage_usage_is_fresh_read_only_and_independent_of_saved_oauth_settings():void{
         $root=sys_get_temp_dir().'/onenew-usage-'.Str::uuid();
         mkdir($root.'/.docker/.data',0700,true);mkdir($root.'/plugins',0700);mkdir($root.'/storage/theme',0700,true);

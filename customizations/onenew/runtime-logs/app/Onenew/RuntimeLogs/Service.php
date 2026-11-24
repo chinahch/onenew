@@ -4,6 +4,7 @@ use App\Models\ServerMachine;
 use Illuminate\Support\Facades\{Cache,DB,Schema};
 final class Service
 {
+ public const RETENTION_DAYS=7;
  public function identity(ServerMachine $machine):string{return hash('sha256',$machine->id.'|'.$machine->onenew_identity.'|'.$machine->token);}
  public function accept(ServerMachine $machine,array $data):array{
   $identity=$this->identity($machine);$first=(int)$data['first_seq'];foreach($data['entries'] as $i=>$entry)abort_unless((int)$entry['seq']===$first+$i,422,'Log sequence must be contiguous.');
@@ -37,7 +38,7 @@ final class Service
   return ['machine_id'=>(int)$machine->id,'status'=>$last?($last>=time()-60?'collecting':'waiting'):'upgrade_required','last_received_at'=>$last?(int)$last:null,'dropped'=>(int)(clone $streams)->sum('dropped'),'filtered'=>(int)(clone $streams)->sum('filtered'),'retention_days'=>7,'entries'=>$entries,'next_before_id'=>$more&&$entries?$entries[array_key_last($entries)]['id']:null,'total'=>$total,'page'=>$page,'per_page'=>$limit,'pages'=>(int)ceil($total/$limit)];
  }
  public function prune():void{
-  $cutoff=time()-604800;foreach(['entries'=>'received_at','batches'=>'received_at','reads'=>'created_at'] as $table=>$field)DB::table('onenew_runtime_log_'.$table)->where($field,'<',$cutoff)->delete();
+  $cutoff=time()-self::RETENTION_DAYS*86400;foreach(['entries'=>'received_at','batches'=>'received_at','reads'=>'created_at'] as $table=>$field)DB::table('onenew_runtime_log_'.$table)->where($field,'<',$cutoff)->delete();
   // Keep only the newest capability marker for an offline current machine so it
   // remains "waiting", rather than falsely claiming its installed node is old.
   DB::table('onenew_runtime_log_streams')->where('last_received_at','<',$cutoff)->orderBy('id')->chunkById(100,function($rows){foreach($rows as $row){$machine=ServerMachine::find($row->machine_id);if(!$machine||!hash_equals($row->machine_identity,$this->identity($machine))||DB::table('onenew_runtime_log_streams')->where('machine_identity',$row->machine_identity)->where('id','>',$row->id)->exists())DB::table('onenew_runtime_log_streams')->where('id',$row->id)->delete();}});
