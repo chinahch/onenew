@@ -21,9 +21,12 @@ RUN pnpm install --frozen-lockfile
 COPY customizations/onenew/user-portal/ ./
 RUN pnpm test && pnpm build
 
+FROM alpine:3.22 AS su-exec-build
+RUN apk add --no-cache su-exec
+
 FROM upstream AS runtime
 WORKDIR /www
-RUN apk add --no-cache su-exec
+COPY --from=su-exec-build /sbin/su-exec /sbin/su-exec
 ARG ONENEW_REVISION=local
 COPY customizations/onenew /opt/onenew
 # Immutable local IPv4/IPv6 lookup data; no end-user IP is sent off-server.
