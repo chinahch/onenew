@@ -109,6 +109,24 @@ class ExternalNodesTest extends TestCase
         $this->assertSame(65535,$proxies[0]['server_port']);
     }
 
+    public function test_shadowrocket_subscription_includes_external_ipv6_link_and_managed_node(): void
+    {
+        $user = $this->user();
+        Sanctum::actingAs($this->user(true));
+        $link = 'vless://'.self::UUID.'@[2001:db8::39]:30311?encryption=none&security=tls&sni=edge.example&type=xhttp&path=%2Ftest&alpn=h3';
+        $this->save($user, $link.'#Imported', 'External IPv6');
+        Server::create(['name'=>'Managed','type'=>'vless','host'=>'managed.example','port'=>443,'server_port'=>443,
+            'rate'=>'1','group_ids'=>[(string)$user->group_id],'enabled'=>true,'show'=>true,'protocol_settings'=>['network'=>'tcp','tls'=>0]]);
+
+        $response = $this->subscribe($user, 'shadowrocket');
+        $this->assertSame(200, $response->getStatusCode());
+        $text = base64_decode($response->getContent(), true);
+        $this->assertIsString($text);
+        $this->assertStringStartsWith('STATUS=', $text);
+        $this->assertContains($link.'#External%20IPv6', explode("\r\n", $text));
+        $this->assertStringContainsString(base64_encode('auto:'.$user->uuid.'@managed.example:443'), $text);
+    }
+
     public function test_edit_disable_delete_and_sort_affect_next_subscription(): void
     {
         $user=$this->user();Sanctum::actingAs($this->user(true));

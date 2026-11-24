@@ -1,11 +1,7 @@
-# External subscription nodes
+# External nodes in Shadowrocket subscriptions
 
-Node management includes an **外部节点** manager. Paste up to 200 share links per import, select users and/or permission groups, then import. Assignment is OR; empty assignment grants nobody. Edit names, links, assignments and enabled state; move rows up/down to order external records. External nodes appear after managed nodes in authorized subscriptions and use the original external credentials. They are never installed or pushed to caddy, and their upstream traffic is not measured by this panel.
+The Shadowrocket (小火箭) subscription must keep the normal base64-wrapped Shadowrocket payload. External nodes are appended as their original share URIs inside that payload, in the same order as managed nodes. They are not converted to server-side credentials or treated as native nodes.
 
-Original links are encrypted with the panel APP_KEY. Keep the APP_KEY with the database backup. List APIs hide credentials; authenticated administrators can retrieve a link for editing. Administrators alone can manage records; ordinary user quota/expiry rules still apply to subscription requests.
+The external-node customization patches both the General and Shadowrocket URI builders, and bypasses conversion-only validation for these two URI-preserving clients. Mihomo, legacy Clash, and sing-box keep their existing native-conversion and validation paths.
 
-General URI output retains the original link (changing only its display name, including VMess `ps`). Mihomo and sing-box produce client-native objects from the original credentials, without substituting panel UUIDs. Supported share schemes: VLESS, VMess, SS/SS2022, Trojan, Hysteria2/hy2, AnyTLS, TUIC, SOCKS/SOCKS5 and HTTP/HTTPS. Unknown protocols and malformed links are rejected. Fields unsupported by the chosen structured format produce an explicit error rather than silently dropping parameters. Standard sing-box cannot represent VLESS native encryption or XHTTP; use General or compatible Mihomo for those links. Legacy Clash supports only its own older protocol subset.
-
-References: [Mihomo VLESS](https://wiki.metacubex.one/config/proxies/vless/), [sing-box VLESS](https://sing-box.sagernet.org/configuration/outbound/vless/), [sing-box transports](https://sing-box.sagernet.org/configuration/shared/v2ray-transport/).
-
-Import validates all lines before saving and is atomic. Ordering is transactional and rejects an outdated full-list order. No subscriptions or URLs are fetched by the parser.
+Regression coverage includes a mixed Shadowrocket subscription containing an external IPv6 VLESS XHTTP/H3 link and a managed VLESS node. The response must remain a valid base64 text subscription and retain both entries. Run `vendor/bin/phpunit --bootstrap vendor/autoload.php customizations/onenew/external/tests/ExternalNodesTest.php` with the Onenew provider installed and a disposable test database.
