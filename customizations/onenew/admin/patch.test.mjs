@@ -65,3 +65,14 @@ test('main node form and toolbar expose reusable landings without an advanced ro
  assert.ok(!advanced.includes('setValue(u,'));
 });
 
+test('uTLS fingerprint selector includes chrome140 (support x25519mlkem768)',()=>{
+ const patched=patchBundle(source,'');
+ const match=patched.match(/b4t=(\[[^\]]+\])/);
+ assert.ok(match,'uTLS fingerprint list b4t missing');
+ const options=vm.runInNewContext(`(${match[1]})`);
+ assert.deepEqual(JSON.parse(JSON.stringify(options.find(item=>item.value==='chrome140'))),{
+  value:'chrome140',
+  label:'chrome140 (support x25519mlkem768)',
+ });
+});
+

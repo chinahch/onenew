@@ -20,6 +20,10 @@ foreach (['socks'=>'a:???','ss'=>'aes-128-gcm:???'] as $scheme=>$credentials) {
 }
 $withoutFingerprint=str_replace('&fp=chrome','',$vless);
 if (ShareLink::convert($withoutFingerprint,'singbox','Reality')['tls']['utls']['fingerprint']!=='chrome') throw new RuntimeException('REALITY requires uTLS');
+$chrome140=str_replace('&fp=chrome','&fingerprint=Chrome140',$vless);
+$clash140=ShareLink::convert($chrome140,'clash','Reality140');
+if (($clash140['client-fingerprint']??null)!=='chrome' || ($clash140['reality-opts']['support-x25519mlkem768']??false)!==true) throw new RuntimeException('Chrome140 must enable support-x25519mlkem768 for Clash REALITY');
+if ((ShareLink::convert($chrome140,'singbox','Reality140')['tls']['utls']['fingerprint']??null)!=='chrome') throw new RuntimeException('Chrome140 must map to chrome for sing-box');
 foreach (['trojan'=>'password','anytls'=>'password','tuic'=>'11111111-2222-4333-8444-555555555555:password'] as $scheme=>$auth) {
     if (ShareLink::convert($scheme.'://'.$auth.'@proxy.example:443?sni=certificate.example','clash','TLS')['sni']!=='certificate.example') throw new RuntimeException('Protocol SNI field wrong');
 }
