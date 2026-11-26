@@ -3,7 +3,6 @@ import {computed,onMounted,onUnmounted,ref} from 'vue'
 import {NAlert,NEmpty,NIcon} from 'naive-ui'
 import {Server} from '@vicons/tabler'
 import {api,stamp} from '../api'
-import {connectionState} from '../serverState'
 import {nodeAvailability} from '../serverCards'
 import {probeEntryDetail,probeLandingSummary} from '../featureState'
 const rows=ref<any[]>([]),busy=ref(false),error=ref(''),now=ref(Date.now())
@@ -25,7 +24,7 @@ onMounted(load);onUnmounted(()=>{active=false;clearTimeout(timer)})
   <div v-for="node in rows" :key="node.id" class="status-row">
    <div class="node-name"><span class="node-symbol"><n-icon :component="Server" size="19"/></span><div><strong>{{node.name}}</strong><small class="muted">{{(node.type||node.protocol||'节点').toUpperCase()}} · #{{node.id}}</small></div></div>
     <div><span class="status-dot node-status-dot" :class="nodeAvailability(node,now).group==='online'?'good':nodeAvailability(node,now).group==='abnormal'?'bad':'waiting'" role="img" :aria-label="nodeAvailability(node,now).text" :title="nodeAvailability(node,now).text"/></div>
-   <div class="host-state"><i class="status-dot" :class="connectionState(node.machine_last_report_at,now)==='online'?'good':'waiting'"></i>{{connectionState(node.machine_last_report_at,now)==='online'?'在线':'未连接'}}</div>
+   <div class="host-state"><i class="status-dot" :class="node.machine_online?'good':'waiting'"></i>{{node.machine_online?'在线':'未连接'}}</div>
     <div class="probe-time"><span>{{node.latest_probe?stamp(node.latest_probe.finished_at||node.latest_probe.created_at):'等待自动检测'}}</span><small v-if="node.latest_probe?.error_code" class="muted">{{errors[node.latest_probe.error_code]||node.latest_probe.error_code}}</small><small v-if="node.latest_probe?.stages?.entry?.source" class="muted">{{node.latest_probe.stages.version===2?probeEntryDetail(node.latest_probe):probeSources[node.latest_probe.stages.entry.source]}}</small><small v-if="node.latest_probe?.stages?.version!==2 && node.latest_probe?.stages?.entry?.state && node.latest_probe.stages.entry.state!=='succeeded'" class="muted">节点完整链路未验证</small><small v-if="node.latest_probe?.stage_error==='upgrade_required'" class="muted">请升级节点以支持分阶段检测</small><small v-if="probeLandingSummary(node.latest_probe)" class="muted">{{probeLandingSummary(node.latest_probe)}}</small><small v-if="node.connector_status" class="muted">{{node.connector_status.kind}} · {{connectorLabels[node.connector_status.state]||'状态未知'}}</small></div>
   </div>
  </article>

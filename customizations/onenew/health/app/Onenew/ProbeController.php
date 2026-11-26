@@ -70,9 +70,11 @@ class ProbeController extends Controller
         // Use native visibility/group/quota rules, then project only public fields.
         $ids = array_column(ServerService::getAvailableServers($user), 'id');
         $nodes = Server::with('machine')->whereIn('id', $ids)->where('enabled', true)->orderBy('sort')->orderBy('id')->get();
+        $now = now()->timestamp;
         return response()->json($nodes->map(fn (Server $node) => [
             'id' => (int) $node->id, 'name' => $node->name, 'type' => $node->type, 'active' => (bool) $node->enabled,
             'machine_last_report_at' => $node->machine?->last_seen_at ? gmdate('Y-m-d\TH:i:s\Z', $node->machine->last_seen_at) : null,
+            'machine_online' => MachineConnectionStatus::forMachine($node->machine, $now) === 'online',
             'latest_probe' => $service->status($node),
         ])->values())->header('Cache-Control', 'no-store');
     }

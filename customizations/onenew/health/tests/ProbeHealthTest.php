@@ -394,10 +394,15 @@ class ProbeHealthTest extends TestCase
         Sanctum::actingAs($user);
         $response = $this->getJson('/api/onenew/user/nodes')->assertOk()->assertJsonCount(1);
         $this->assertSame($node->id, $response->json('0.id'));
-        $this->assertSame(['id', 'name', 'type', 'active', 'machine_last_report_at', 'latest_probe'], array_keys($response->json('0')));
+        $this->assertSame(['id', 'name', 'type', 'active', 'machine_last_report_at', 'machine_online', 'latest_probe'], array_keys($response->json('0')));
+        $this->assertTrue($response->json('0.machine_online'));
         foreach ([$user->uuid, $machine->token, 'secret.example', 'outbound', 'lease', 'ciphertext'] as $secret) {
             $this->assertStringNotContainsString($secret, $response->getContent());
         }
+        $machine->update(['last_seen_at' => now()->timestamp - 46]);
+        $this->getJson('/api/onenew/user/nodes')->assertJsonPath('0.machine_online', true);
+        $machine->update(['last_seen_at' => now()->timestamp - 300]);
+        $this->getJson('/api/onenew/user/nodes')->assertJsonPath('0.machine_online', false);
         $user->update(['u' => $user->transfer_enable]);
         $this->getJson('/api/onenew/user/nodes')->assertExactJson([]);
     }

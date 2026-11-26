@@ -108,6 +108,8 @@ if ($upgradeCount !== 1) {
     throw new RuntimeException('Pinned machine upgrade command anchor changed');
 }
 file_put_contents($machineController, $machineSource);
+replaceOnce($machineController, "                    'last_seen_at' => \$machine->last_seen_at,",
+    "                    'last_seen_at' => \$machine->last_seen_at,\n                    'connection_status' => \\App\\Onenew\\MachineConnectionStatus::forMachine(\$machine, now()->timestamp),");
 require $custom . '/traffic/install.php';
 applyOnenewTrafficPatch($root);
 replaceOnce($root . '/app/Console/Kernel.php',
