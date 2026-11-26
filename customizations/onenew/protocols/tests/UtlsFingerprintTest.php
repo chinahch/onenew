@@ -62,7 +62,8 @@ final class UtlsFingerprintTest extends TestCase
         $this->assertSame('chrome', $clash['client-fingerprint'] ?? null);
         $this->assertTrue($clash['reality-opts']['support-x25519mlkem768'] ?? false);
 
-        $sb = (new SingBox($this->createMock(User::class), [$server]))->buildVless($uuid, $server);
+        $sbMethod = new \ReflectionMethod(SingBox::class, 'buildVless');
+        $sb = $sbMethod->invoke(new SingBox($this->createMock(User::class), [$server]), $uuid, $server);
         $this->assertSame('chrome', $sb['tls']['utls']['fingerprint'] ?? null);
 
         $genQuery = $this->query(General::buildVless($uuid, $server));
