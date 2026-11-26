@@ -9,6 +9,13 @@ const source=fs.readFileSync(process.env.ONENEW_ADMIN_UPSTREAM?path.join(process
 test('patch refuses unexpected upstream bytes before modifying anything',()=>{
   assert.throws(()=>patchBundle(source+'\n',''),/SHA256/);
 });
+test('machine list prefers the shared server status and supports older API responses',()=>{
+  const patched=patchBundle(source,'');
+  const status=vm.runInNewContext(`(${patched.slice(patched.indexOf('function g5t('),patched.indexOf('function p5t('))})`);
+  assert.equal(status({connection_status:'online',is_active:true,last_seen_at:1}),'online');
+  assert.equal(status({connection_status:'offline',is_active:true,last_seen_at:Date.now()/1000}),'offline');
+  assert.equal(status({is_active:true,last_seen_at:Date.now()/1000-46}),'online');
+});
 test('patched advanced component keeps TLS, multiplex and commits draft only through save',()=>{
   const patched=patchBundle(source,'');const a=patched.indexOf('function l5t('),b=patched.indexOf('const c5t=',a);
   const state=[true,'outbounds','[{"tag":"new"}]',null,'[{"outbound":"new"}]',null,''];let cursor=0;const saved=[];

@@ -101,6 +101,7 @@ export function patchBundle(source,runtime){
   machine=replaceOnce(machine,'disabled:l||!s.formState.isValid','disabled:l||!s.formState.isValid||("edit"===i&&!onenewEgressReady)');
   machine=replaceOnce(machine,'className:"max-w-md gap-0 overflow-hidden p-0 sm:rounded-2xl"','className:"max-w-xl max-h-[90vh] gap-0 overflow-y-auto p-0 sm:rounded-2xl"');
   source=source.slice(0,machineStart)+machine+source.slice(machineEnd);
+  source=replaceOnce(source,'function g5t(e){if(!e.is_active)', 'function g5t(e){if(e.connection_status)return e.connection_status;if(!e.is_active)');
   source=replaceOnce(source,'cell:({row:e})=>Q.jsx(s3t,{machine:e.original,t:t}),filterFn:', 'cell:({row:e})=>Q.jsxs("div",{className:"flex items-center gap-2",children:[Q.jsx(s3t,{machine:e.original,t:t}),Q.jsx(OnenewAdmin.RuntimeLogs,{react:H,get:IL,machineId:e.original.id})]}),filterFn:');
   const installStart=source.indexOf('function R3t('),installEnd=source.indexOf('function O3t(',installStart);
   if(installStart<0||installEnd<0)throw new Error('服务器安装命令组件不存在');
