@@ -1,7 +1,7 @@
 # Onenew overlays the exact audited upstream app image; it never reclones a moving branch.
 FROM ghcr.io/cedar2025/xboard@sha256:493c71b7c991c40eb3e114ccc6cbeda89d42b31e5a6341dd3eb9d7929dd7c13f AS upstream
 
-FROM --platform=$BUILDPLATFORM node:24.22.1-alpine AS admin-build
+FROM --platform=$BUILDPLATFORM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS admin-build
 WORKDIR /build/admin
 RUN corepack enable && corepack prepare pnpm@11.25.0 --activate
 COPY customizations/onenew/admin/package.json customizations/onenew/admin/pnpm-lock.yaml customizations/onenew/admin/pnpm-workspace.yaml ./
@@ -13,7 +13,7 @@ ADD --checksum=sha256:2f163cb99195d9176ccceadbd71a1b85259f3ba3dbe56646012d67287f
 RUN mkdir /build/upstream-admin && tar -xzf /tmp/onenew-admin.tar.gz --strip-components=1 -C /build/upstream-admin
 RUN ONENEW_ADMIN_UPSTREAM=/build/upstream-admin pnpm test && pnpm build --upstream-dir /build/upstream-admin
 
-FROM --platform=$BUILDPLATFORM node:24.22.1-alpine AS user-build
+FROM --platform=$BUILDPLATFORM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS user-build
 WORKDIR /build/user
 RUN corepack enable && corepack prepare pnpm@11.25.0 --activate
 COPY customizations/onenew/user-portal/package.json customizations/onenew/user-portal/pnpm-lock.yaml customizations/onenew/user-portal/pnpm-workspace.yaml ./
@@ -21,7 +21,7 @@ RUN pnpm install --frozen-lockfile
 COPY customizations/onenew/user-portal/ ./
 RUN pnpm test && pnpm build
 
-FROM alpine:3.22 AS su-exec-build
+FROM alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f AS su-exec-build
 RUN apk add --no-cache su-exec
 
 FROM upstream AS runtime

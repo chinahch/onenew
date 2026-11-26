@@ -13,5 +13,5 @@ Route::middleware(['api', 'admin'])->prefix('/api/onenew/admin/traffic')->group(
     Route::get('/audit-config', [DomainAuditController::class, 'settings']);
     Route::post('/audit-config', [DomainAuditController::class, 'settings']);
 });
-Route::post('/api/v3/server/domain-audit', [DomainAuditController::class, 'ingest'])->middleware('api');
-Route::get('/api/v3/server/domain-audit/config', [DomainAuditController::class, 'configuration'])->middleware('api');
+Route::post('/api/v3/server/domain-audit', [DomainAuditController::class, 'ingest'])->middleware(['api', 'throttle:onenew-domain-audit-machine']);
+Route::get('/api/v3/server/domain-audit/config', [DomainAuditController::class, 'configuration'])->middleware(['api', 'throttle:onenew-domain-audit-machine']);

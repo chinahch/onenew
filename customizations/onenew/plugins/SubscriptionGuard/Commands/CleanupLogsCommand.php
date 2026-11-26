@@ -18,11 +18,9 @@ class CleanupLogsCommand extends Command
             return self::INVALID;
         }
         $before = now()->subDays($days);
-
-        $logCount = DB::table('v2_subscribe_log')
-            ->where('created_at', '<', $before)
-            ->delete();
-        DB::table('v2_subscribe_abuse')->where('created_at', '<', $before)->delete();
+        require_once __DIR__ . '/../Plugin.php';
+        $logCount = \Plugin\SubscriptionGuard\Plugin::pruneBefore('v2_subscribe_log', $before);
+        \Plugin\SubscriptionGuard\Plugin::pruneBefore('v2_subscribe_abuse', $before);
 
         $this->info("已清理 {$logCount} 条订阅拉取日志 ({$days}天前)");
 

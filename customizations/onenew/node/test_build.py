@@ -51,4 +51,15 @@ class BuildTest(unittest.TestCase):
             path.write_text(json.dumps(manifest))
             self.assertEqual(builder.validate_source(root), manifest)
 
+    def test_version_metadata_matches_installer_and_release_catalog(self):
+        meta = json.loads((HERE / 'version.json').read_text(encoding='utf-8'))
+        self.assertEqual(builder.VERSION, meta['binary_version'])
+        self.assertEqual(meta['binary_version'], 'onenew-v' + meta['version'])
+        self.assertEqual(meta['release_tag'], 'node-v' + meta['version'])
+        installer = (HERE / 'install.sh').read_text(encoding='utf-8')
+        self.assertIn(f"VERSION={meta['binary_version']}\n", installer)
+        self.assertIn(f"RELEASE={meta['release_tag']}\n", installer)
+        catalog = json.loads((HERE.parent / 'remote-upgrade/app/Onenew/RemoteUpgrade/catalog.json').read_text(encoding='utf-8'))
+        self.assertIn('v' + meta['version'], catalog)
+
 if __name__ == '__main__': unittest.main()

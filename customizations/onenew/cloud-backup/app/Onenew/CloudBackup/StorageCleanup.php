@@ -32,16 +32,38 @@ final class StorageCleanup
         if ($days === null || $days !== $confirmedDays) {
             return null;
         }
-        $field = self::FIELDS[$table];
         $now = time();
         $cutoff = $table === 'v2_onenew_domain_batches' ? PruneTelemetry::batchCutoff($now) : $now - $days * 86400;
-        $query = DB::table($table);
-        $expired = $table === 'onenew_runtime_log_entries'
-            ? RuntimeLogs::expiredEntries($query, $cutoff)
-            : $query->where($field, '<', $cutoff);
-        // A bounded subquery avoids long write locks and SQLite parameter limits.
-        $ids = (clone $expired)->select('id')->orderBy($field)->orderBy('id')->limit(self::LIMIT);
-        $deleted = (clone $expired)->whereIn('id', $ids)->delete();
-        return ['deleted' => $deleted, 'remaining' => $deleted === self::LIMIT && $expired->exists()];
+        if ($table === 'onenew_runtime_log_entries') {
+            // Query each indexed timestamp column separately so SQLite never falls back to a full table scan on OR.
+            $ids = DB::table($table)->where('received_at', '<', $cutoff)->orderBy('received_at')->orderBy('id')->limit(self::LIMIT)->pluck('id')->all();
+            if (count($ids) < self::LIMIT) {
+                $more = DB::table($table)->where('at', '<', $cutoff)->where('received_at', '>=', $cutoff)
+                    ->orderBy('at')->orderBy('id')->limit(self::LIMIT - count($ids))->pluck('id')->all();
+                $ids = array_merge($ids, $more);
+            }
+            $deleted = 0;
+            foreach (array_chunk($ids, 500) as $chunk) {
+                $deleted += DB::table($table)->whereIn('id', $chunk)->delete();
+            }
+            $remaining = count($ids) === self::LIMIT && (
+                DB::table($table)->where('received_at', '<', $cutoff)->exists() ||
+                DB::table($table)->where('at', '<', $cutoff)->exists()
+            );
+        } else {
+            $field = self::FIELDS[$table];
+            $expired = DB::table($table)->where($field, '<', $cutoff);
+            // Bounded batches avoid long write locks and SQLite parameter limits.
+            $ids = (clone $expired)->orderBy($field)->orderBy('id')->limit(self::LIMIT)->pluck('id')->all();
+            $deleted = 0;
+            foreach (array_chunk($ids, 500) as $chunk) {
+                $deleted += DB::table($table)->whereIn('id', $chunk)->delete();
+            }
+            $remaining = count($ids) === self::LIMIT && $expired->exists();
+        }
+        if ($deleted > 0 && !$remaining && DB::connection()->getDriverName() === 'sqlite' && DB::connection()->getDatabaseName() !== ':memory:') {
+            try { DB::statement('PRAGMA wal_checkpoint(PASSIVE)'); } catch (\Throwable) {}
+        }
+        return ['deleted' => $deleted, 'remaining' => $remaining];
     }
 }

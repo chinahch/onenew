@@ -1,15 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+cat >&2 <<'EOF'
+ERROR: Upstream init.sh is disabled in onenew.
 
-rm -rf composer.phar
-wget https://github.com/composer/composer/releases/latest/download/composer.phar -O composer.phar
-php composer.phar install -vvv
-git submodule update --init --recursive --force
-php artisan xboard:install
-
-if [ -f "/etc/init.d/bt" ] || [ -f "/.dockerenv" ]; then
-  chown -R www:www $(pwd);
-fi
-
-if [ -d ".docker/.data" ]; then
-  chmod -R 777 .docker/.data
-fi
+Deploy using compose.onenew.sample.yaml and php artisan onenew:install as documented in customizations/onenew/DEPLOY.md.
+EOF
+exit 1

@@ -20,10 +20,11 @@ final class Service
    if(!$stream){$id=DB::table('onenew_runtime_log_streams')->insertGetId(['machine_id'=>$machine->id,'machine_identity'=>$identity,'deployment_id'=>$data['deployment_id'],'version'=>$data['version'],'last_received_at'=>time()]);$stream=DB::table('onenew_runtime_log_streams')->where('id',$id)->first();}
    if(DB::table('onenew_runtime_log_batches')->where('stream_id',$stream->id)->where('batch_id',$data['batch_id'])->exists())return ['accepted'=>true,'last_seq'=>(int)$stream->last_seq,'duplicate'=>true];
    abort_if($data['entries']&&$first<=(int)$stream->last_seq,409,'Stale log batch. Keep batch identity on retry.');
-   $accepted=0;$filtered=0;$last=(int)$stream->last_seq;$now=time();
+   $accepted=0;$filtered=0;$last=(int)$stream->last_seq;$now=time();$rows=[];
    foreach($data['entries'] as $entry){$last=(int)$entry['seq'];$message=LogFilter::message($entry['level'],$entry['message'],[$machine->token]);if($message===null||$message===''||(int)$entry['at']<$now-self::RETENTION_DAYS*86400){$filtered++;continue;}
-    DB::table('onenew_runtime_log_entries')->insert(['machine_id'=>$machine->id,'machine_identity'=>$identity,'stream_id'=>$stream->id,'seq'=>$entry['seq'],'level'=>$entry['level'],'at'=>$entry['at'],'message'=>$message,'received_at'=>$now]);$accepted++;
+    $rows[]=['machine_id'=>$machine->id,'machine_identity'=>$identity,'stream_id'=>$stream->id,'seq'=>$entry['seq'],'level'=>$entry['level'],'at'=>$entry['at'],'message'=>$message,'received_at'=>$now];$accepted++;
    }
+   foreach(array_chunk($rows,100) as $chunk)DB::table('onenew_runtime_log_entries')->insert($chunk);
    DB::table('onenew_runtime_log_batches')->insert(['stream_id'=>$stream->id,'batch_id'=>$data['batch_id'],'received_at'=>$now]);
    DB::table('onenew_runtime_log_streams')->where('id',$stream->id)->update(['last_seq'=>$last,'dropped'=>(int)$stream->dropped+(int)$data['dropped'],'filtered'=>(int)$stream->filtered+$filtered,'last_received_at'=>$now,'version'=>$data['version']]);
    return ['accepted'=>true,'last_seq'=>$last,'count'=>$accepted,'filtered'=>$filtered];
@@ -45,11 +46,19 @@ final class Service
  }
  public function prune():void{
   $now=time();$logCutoff=$now-self::RETENTION_DAYS*86400;$cutoff=$now-self::STREAM_RETENTION_DAYS*86400;
-  self::expiredEntries(DB::table('onenew_runtime_log_entries'),$logCutoff)->delete();
-  DB::table('onenew_runtime_log_reads')->where('created_at','<',$logCutoff)->delete();
-  DB::table('onenew_runtime_log_batches')->where('received_at','<',$now-self::BATCH_RETENTION_DAYS*86400)->delete();
+  $this->pruneByIds('onenew_runtime_log_entries','received_at',$logCutoff);
+  $this->pruneByIds('onenew_runtime_log_entries','at',$logCutoff);
+  $this->pruneByIds('onenew_runtime_log_reads','created_at',$logCutoff);
+  $this->pruneByIds('onenew_runtime_log_batches','received_at',$now-self::BATCH_RETENTION_DAYS*86400);
   // Keep only the newest capability marker for an offline current machine so it
   // remains "waiting", rather than falsely claiming its installed node is old.
   DB::table('onenew_runtime_log_streams')->where('last_received_at','<',$cutoff)->orderBy('id')->chunkById(100,function($rows){foreach($rows as $row){$machine=ServerMachine::find($row->machine_id);if(!$machine||!hash_equals($row->machine_identity,$this->identity($machine))||DB::table('onenew_runtime_log_streams')->where('machine_identity',$row->machine_identity)->where('id','>',$row->id)->exists())DB::table('onenew_runtime_log_streams')->where('id',$row->id)->delete();}});
+ }
+ private function pruneByIds(string $table,string $field,int $cutoff):void{
+  do{
+   $ids=DB::table($table)->where($field,'<',$cutoff)->orderBy($field)->orderBy('id')->limit(500)->pluck('id');
+   if($ids->isEmpty())break;
+   DB::table($table)->whereIn('id',$ids)->delete();
+  }while(true);
  }
 }

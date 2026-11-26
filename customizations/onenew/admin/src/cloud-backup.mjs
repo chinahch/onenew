@@ -15,7 +15,7 @@ export function BackupStorageUsage({react:React,usage,onCleanup,cleaning,disable
  const metric=(label,value)=>h(React.Fragment,{key:label},h('dt',null,label),h('dd',null,backupBytes(value)));
  return h('div',{className:'onenew-backup-storage','aria-label':'当前数据大小'},
   h('div',{className:'onenew-backup-heading'},h('h4',null,'当前数据大小'),h('span',{className:'onenew-help'},'检查时间：'+backupTime(usage.checked_at)+'（北京时间）')),
-  h('dl',{className:'onenew-backup-meta'},h('dt',null,'文件合计'),h('dd',null,h('strong',null,(usage.complete?'':'至少 ')+backupBytes(usage.total_bytes))),metric('数据库主文件',db.main_bytes),metric('数据库 WAL',db.wal_bytes),metric('数据库 SHM',db.shm_bytes),metric('插件',usage.plugins.bytes),metric('主题',usage.theme.bytes),metric('可复用空闲页',db.free_bytes)),
+  h('dl',{className:'onenew-backup-meta'},h('dt',null,'文件合计'),h('dd',null,h('strong',null,(usage.complete?'':'至少 ')+backupBytes(usage.total_bytes))),metric('数据库主文件',db.main_bytes),metric('数据库 WAL',db.wal_bytes),metric('数据库 SHM',db.shm_bytes),Number.isFinite(db.effective_bytes)&&metric('数据库有效数据',db.effective_bytes),metric('插件',usage.plugins.bytes),metric('主题',usage.theme.bytes),metric('可复用空闲页',db.free_bytes)),
   !usage.complete&&h('p',{className:'onenew-notice'},'部分目录无法完整统计，或包含未跟随的符号链接；显示的是已读取文件的大小。'),
   h('p',{className:'onenew-help'},'按检查时的文件大小统计，包含数据库 WAL/SHM，不含临时备份包和单独保存的本地备份。空闲页已包含在数据库中，不重复计入合计；最终 .onm 文件大小可能不同。'),
   db.table_sizes_available?h('details',null,h('summary',null,'数据库占用排行（表及索引合计，前 15 项）'),h('div',{className:'onenew-table-scroll'},h('table',{className:'onenew-resource-table'},h('thead',null,h('tr',null,...['数据表','表数据','索引','合计','操作'].map(label=>h('th',{key:label,scope:'col'},label)))),h('tbody',null,...db.tables.map(row=>{

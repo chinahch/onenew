@@ -1,8 +1,22 @@
 name: Verify onenew native domain metadata
 on:
   pull_request:
+    paths:
+      - '.github/workflows/onenew-node-ci.yml'
+      - 'customizations/onenew/node/**'
+      - 'customizations/onenew/health/**'
+      - 'customizations/onenew/migration/**'
+      - 'customizations/onenew/remote-upgrade/**'
+      - 'customizations/onenew/runtime/app/Onenew/NodeInstallCommand.php'
   push:
     branches: [master]
+    paths:
+      - '.github/workflows/onenew-node-ci.yml'
+      - 'customizations/onenew/node/**'
+      - 'customizations/onenew/health/**'
+      - 'customizations/onenew/migration/**'
+      - 'customizations/onenew/remote-upgrade/**'
+      - 'customizations/onenew/runtime/app/Onenew/NodeInstallCommand.php'
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,7 +35,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.10'
-          cache: false
+          cache: true
+          cache-dependency-path: onenew/customizations/onenew/node/updater/go.sum
       - name: Restore immutable prepared native source and apply Onenew runtime overlays
         run: |
           curl --fail --location --retry 3 https://github.com/chinahch/onenew-releases/releases/download/node-v0.1.10/onenew-node-source.tar.gz -o baseline.tar.gz
@@ -89,10 +104,11 @@ jobs:
       - name: Verify amd64 executable version and CLI configuration
         if: matrix.arch == 'amd64'
         run: |
-          dist/amd64/caddy -v | grep '^caddy onenew-v0.1.17 '
+          EXPECTED_BIN_VER=$(python3 -c 'import json; print(json.load(open("onenew/customizations/onenew/node/version.json"))["binary_version"])')
+          dist/amd64/caddy -v | grep "^caddy ${EXPECTED_BIN_VER} "
           grep -aFq 'https://www.cloudflare.com/cdn-cgi/trace' dist/amd64/caddy
           mkdir -m 700 /tmp/onenew-fixture
-          dist/amd64/caddyctl config init --mode machine --panel-url https://panel.example.test --token fixture-disposable-token --machine-id 7 --kernel singbox --health-port 65530 --version onenew-v0.1.17 --output /tmp/onenew-fixture/config.yml --credentials-out /tmp/onenew-fixture/credentials.env --meta /tmp/onenew-fixture/install-meta.json --install-root /etc/caddy
+          dist/amd64/caddyctl config init --mode machine --panel-url https://panel.example.test --token fixture-disposable-token --machine-id 7 --kernel singbox --health-port 65530 --version "$EXPECTED_BIN_VER" --output /tmp/onenew-fixture/config.yml --credentials-out /tmp/onenew-fixture/credentials.env --meta /tmp/onenew-fixture/install-meta.json --install-root /etc/caddy
           test -s /tmp/onenew-fixture/config.yml
           test -s /tmp/onenew-fixture/credentials.env
       - name: Exercise real v15 to v17 asset upgrade and rollback
@@ -111,6 +127,7 @@ jobs:
           cp onenew/customizations/onenew/node/BUILDING.md prepared/ONENEW-BUILDING.md
           cp -R onenew/customizations/onenew/node/updater prepared/onenew-updater
           cp onenew/customizations/onenew/node/build.py prepared/onenew-build.py
+          cp onenew/customizations/onenew/node/version.json prepared/version.json
           tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --exclude=.git -czf dist/onenew-node-source.tar.gz -C prepared .
           (cd dist && sha256sum onenew-node-source.tar.gz > SHA256SUMS-source)
       - uses: actions/upload-artifact@v4
@@ -143,16 +160,18 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "$GH_TOKEN" ] || { echo 'Set ONENEW_RELEASE_TOKEN with Contents write access to chinahch/onenew-releases'; exit 1; }
-          if gh release view node-v0.1.17 >/dev/null 2>&1; then
+          NODE_VER=$(python3 -c 'import json; print(json.load(open("onenew/customizations/onenew/node/version.json"))["version"])')
+          RELEASE_TAG="node-v${NODE_VER}"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             # Never replace binary assets. Source publication is additive only.
-            assets=$(gh release view node-v0.1.17 --json assets --jq '.assets[].name')
+            assets=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
             for file in onenew-node-source.tar.gz SHA256SUMS-source; do
-              if ! printf '%s\n' "$assets" | grep -Fxq "$file"; then gh release upload node-v0.1.17 "dist/$file"; fi
+              if ! printf '%s\n' "$assets" | grep -Fxq "$file"; then gh release upload "$RELEASE_TAG" "dist/$file"; fi
             done
             mkdir verify-source
-            gh release download node-v0.1.17 --dir verify-source --pattern onenew-node-source.tar.gz --pattern SHA256SUMS-source
+            gh release download "$RELEASE_TAG" --dir verify-source --pattern onenew-node-source.tar.gz --pattern SHA256SUMS-source
             (cd verify-source && sha256sum -c SHA256SUMS-source)
           else
-            gh release create node-v0.1.17 dist/*.tar.gz dist/caddy-updater-linux-* dist/SHA256SUMS-* dist/build-info-*.json --target main --title 'Onenew native node v0.1.17' --prerelease --notes 'Fix XHTTP/H3 UDP socket leaks and protocol-switch port conflicts. Explicit kernel stop releases listeners synchronously; listener topology edits stop before rebinding, and failed restarts can restore the prior applied configuration. Native binary packages and corresponding source include SHA256 checksums. Service and process name remain caddy.'
+            gh release create "$RELEASE_TAG" dist/*.tar.gz dist/caddy-updater-linux-* dist/SHA256SUMS-* dist/build-info-*.json --target main --title "Onenew native node v${NODE_VER}" --prerelease --notes 'Fix XHTTP/H3 UDP socket leaks and protocol-switch port conflicts. Explicit kernel stop releases listeners synchronously; listener topology edits stop before rebinding, and failed restarts can restore the prior applied configuration. Native binary packages and corresponding source include SHA256 checksums. Service and process name remain caddy.'
           fi
           python3 onenew/customizations/onenew/node/publish_distribution.py --root onenew

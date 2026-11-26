@@ -102,7 +102,8 @@ class SubscriptionGuardController extends Controller
     public function cleanLogs(Request $request)
     {
         $v=$request->validate(['days'=>'required|integer|min:1|max:365','confirmed'=>'required|accepted']);
-        $deleted=DB::table('v2_subscribe_log')->where('created_at','<',now()->subDays($v['days']))->delete();
+        require_once __DIR__.'/../Plugin.php';
+        $deleted=\Plugin\SubscriptionGuard\Plugin::pruneBefore('v2_subscribe_log',now()->subDays($v['days']));
         return response()->json(['message'=>'已清理 '.$deleted.' 条日志']);
     }
 }
