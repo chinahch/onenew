@@ -59,6 +59,7 @@ final class StorageUsage
             'shm_bytes' => $shm,
             'total_bytes' => $main + $wal + $shm,
             'page_bytes' => $pageSize * $pageCount,
+            'effective_bytes' => max(0, $pageSize * ($pageCount - $freePages)),
             'free_bytes' => $pageSize * $freePages,
             'table_sizes_available' => $tables !== null,
             'tables' => $tables ?? [],

@@ -80,6 +80,14 @@ final class CloudBackupTest extends TestCase
             $this->assertDatabaseMissing($table,['batch_id'=>'old']);
             $this->assertDatabaseHas($table,['batch_id'=>'recent']);
             $this->assertDatabaseHas('v2_onenew_traffic_receipts',['batch_id'=>'receipt']);
+            DB::table('onenew_runtime_log_entries')->insert([
+                ['machine_id'=>1,'machine_identity'=>str_repeat('1',64),'stream_id'=>1,'seq'=>1,'level'=>'info','at'=>$recent,'message'=>'old-received','received_at'=>$old],
+                ['machine_id'=>1,'machine_identity'=>str_repeat('1',64),'stream_id'=>1,'seq'=>2,'level'=>'info','at'=>$old,'message'=>'old-at','received_at'=>$recent],
+                ['machine_id'=>1,'machine_identity'=>str_repeat('1',64),'stream_id'=>1,'seq'=>3,'level'=>'info','at'=>$recent,'message'=>'fresh','received_at'=>$recent],
+            ]);
+            $this->postJson($route,['table'=>'onenew_runtime_log_entries','retention_days'=>1,'confirm'=>true],$auth)->assertOk()->assertJsonPath('deleted',2)->assertJsonPath('remaining',false);
+            $this->assertDatabaseCount('onenew_runtime_log_entries',1);
+            $this->assertDatabaseHas('onenew_runtime_log_entries',['message'=>'fresh']);
             Bus::assertNotDispatched(BackupJob::class);
         }finally{
             unlink($database);rmdir(dirname($database));rmdir($root.'/.docker');rmdir($root);

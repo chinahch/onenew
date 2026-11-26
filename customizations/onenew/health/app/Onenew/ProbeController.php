@@ -70,12 +70,13 @@ class ProbeController extends Controller
         // Use native visibility/group/quota rules, then project only public fields.
         $ids = array_column(ServerService::getAvailableServers($user), 'id');
         $nodes = Server::with('machine')->whereIn('id', $ids)->where('enabled', true)->orderBy('sort')->orderBy('id')->get();
+        $statuses = $service->statuses($nodes);
         $now = now()->timestamp;
         return response()->json($nodes->map(fn (Server $node) => [
             'id' => (int) $node->id, 'name' => $node->name, 'type' => $node->type, 'active' => (bool) $node->enabled,
             'machine_last_report_at' => $node->machine?->last_seen_at ? gmdate('Y-m-d\TH:i:s\Z', $node->machine->last_seen_at) : null,
             'machine_online' => MachineConnectionStatus::forMachine($node->machine, $now) === 'online',
-            'latest_probe' => $service->status($node),
+            'latest_probe' => $statuses[(int) $node->id],
         ])->values())->header('Cache-Control', 'no-store');
     }
 
@@ -88,7 +89,10 @@ class ProbeController extends Controller
         // Same native ServerMachine token source and active check as V2 machine auth.
         // Bearer-only: no token in query strings, URLs, task payloads or logs.
         abort_unless($machine && $machine->is_active && hash_equals((string) $machine->token, $token), 403, 'Machine not found or disabled');
-        $machine->forceFill(['last_seen_at' => now()->timestamp])->saveQuietly();
+        $now = now()->timestamp;
+        if (!$machine->last_seen_at || abs($now - (int) $machine->last_seen_at) >= 15) {
+            $machine->forceFill(['last_seen_at' => $now])->saveQuietly();
+        }
         return $machine;
     }
 }

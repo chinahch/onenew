@@ -15,8 +15,8 @@ test('opening the component never posts credentials or starts an upload',()=>{
 test('storage sizes distinguish zero and missing values and label an unavailable dbstat',()=>{
  assert.equal(backupBytes(0),'0.00 MiB');assert.equal(backupBytes(1048576),'1.00 MiB');assert.equal(backupBytes(null),'—');assert.equal(backupBytes(-1),'—');
  const R={createElement:(type,props,...children)=>({type,props,children})};
- const tree=BackupStorageUsage({react:R,usage:{checked_at:1,total_bytes:100,complete:false,plugins:{bytes:0},theme:{bytes:0},database:{main_bytes:100,wal_bytes:0,shm_bytes:0,free_bytes:0,table_sizes_available:false,tables:[]}}});
- const text=JSON.stringify(tree);assert.ok(text.includes('至少 '));assert.ok(text.includes('dbstat'));assert.ok(text.includes('不重复计入合计'));
+ const tree=BackupStorageUsage({react:R,usage:{checked_at:1,total_bytes:100,complete:false,plugins:{bytes:0},theme:{bytes:0},database:{main_bytes:100,wal_bytes:0,shm_bytes:0,effective_bytes:80,free_bytes:20,table_sizes_available:false,tables:[]}}});
+ const text=JSON.stringify(tree);assert.ok(text.includes('至少 '));assert.ok(text.includes('dbstat'));assert.ok(text.includes('不重复计入合计'));assert.ok(text.includes('数据库有效数据'));
 });
 test('storage ranking shows a cleanup action only for supported data and passes the current retention',()=>{
  const R={createElement:(type,props,...children)=>({type,props,children})},calls=[];

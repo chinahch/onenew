@@ -179,7 +179,7 @@ $entry = str_replace(['xboard:', 'xboard-ws-server'], ['onenew:', 'onenew-ws'], 
 $entry = str_replace('chown redis:redis /data 2>/dev/null || true',
     'chown redis:www /data && chmod 0750 /data', $entry);
 $entry = str_replace("set -e\n", "set -e\nphp /opt/onenew/web-restore/agent.php --recover\n", $entry);
-$entry = str_replace('exec "$@"', 'php /opt/onenew/seed-plugins.php /www' . "\n" . 'exec "$@"', $entry);
+$entry = str_replace('exec "$@"', 'if [ ! -e /www/plugins/SubscriptionGuard ]; then php /opt/onenew/seed-plugins.php /www; fi' . "\n" . 'exec "$@"', $entry);
 // A single wrapper preserves the entrypoint's temporary fallback environment for
 // BOTH seed and Artisan. A shell "seed && artisan" only scoped it to seed.
 $updateCommand='php /www/artisan onenew:update --no-interaction';

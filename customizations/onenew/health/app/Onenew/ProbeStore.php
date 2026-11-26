@@ -40,6 +40,24 @@ class ProbeStore
         return $this->cache()->get('onenew:probe:node:' . $node);
     }
 
+    public function latestMany(array $nodeIds): array
+    {
+        if ($nodeIds === []) {
+            return [];
+        }
+        $keys = [];
+        foreach ($nodeIds as $id) {
+            $keys['onenew:probe:node:' . (int) $id] = (int) $id;
+        }
+        $values = $this->cache()->many(array_keys($keys));
+        $result = [];
+        foreach ($keys as $cacheKey => $id) {
+            $value = $values[$cacheKey] ?? null;
+            $result[$id] = is_array($value) ? $value : null;
+        }
+        return $result;
+    }
+
     public function active(int $machine): ?array
     {
         $id = $this->cache()->get('onenew:probe:active:' . $machine);

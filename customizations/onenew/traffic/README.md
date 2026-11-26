@@ -81,8 +81,10 @@ timezone reinterpretation and handles calendar days without assuming 86400 secon
   `unavailable` or `expired`, with reason and `retention_days`. An empty response
   proves no recorded metadata is available; it does not prove no domains were used.
 * `GET` / `POST /api/onenew/admin/traffic/audit-config` gets or changes
-  `{enabled:boolean,retention_days:1..30}`. Responses also report
-  `metadata_only:true`. Collection defaults to disabled and seven-day retention.
+  `{enabled:boolean,retention_days?:1..30}`. Responses also report
+  `metadata_only:true` and fixed `retention_days:1`. Collection defaults to
+  disabled with a fixed one-day retention window (legacy `1..30` inputs are
+  accepted for backward compatibility without extending retention).
   The admin domains tab must only change this after an explicit administrator
   action. Existing `domain-settings` GET/PUT aliases expose the same settings.
 
@@ -128,10 +130,11 @@ Only the normalized hostname, timestamp, user/node IDs and node label/type snaps
 are stored. Bounded collector drops or connections without domain metadata create
 gaps; the API does not claim complete browsing history or classify legality.
 
-`onenew:prune-telemetry` deletes expired domain rows in 500-row batches and audit
-replay receipts after 31 days (longer than maximum accepted event age). Queries
-exclude expired events immediately even before the scheduled deletion. Changing
-retention or disabling collection does not invent or backfill historical records.
+`onenew:prune-telemetry` deletes expired domain rows (older than 1 day) and
+expired domain batch receipts (older than 1 day plus the 5-minute future clock
+skew allowance) in 500-row batches, scheduled daily at 02:00 Asia/Shanghai.
+Queries exclude expired events immediately even before the scheduled deletion.
+Changing settings or disabling collection does not invent or backfill historical records.
 
 ## Verification
 

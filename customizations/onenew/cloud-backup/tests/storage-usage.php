@@ -37,6 +37,7 @@ try {
     checkUsage($first['complete'], 'ordinary directories must be complete');
     checkUsage($first['plugins']['bytes'] === 128 && $first['theme']['bytes'] === 256, 'resource sizes must be exact');
     checkUsage($first['database']['free_bytes'] === $expectedFree, 'free pages must be measured');
+    checkUsage($first['database']['effective_bytes'] === $first['database']['page_bytes'] - $expectedFree, 'effective database bytes must exclude free pages');
     checkUsage($first['total_bytes'] === filesize($database) + 384, 'temporary backup packages and free pages must not be counted twice');
     checkUsage(hash_file('sha256', $database) === $before, 'inspection must not change the database');
     checkUsage(!str_contains(json_encode($first), $root), 'response must not expose absolute paths');

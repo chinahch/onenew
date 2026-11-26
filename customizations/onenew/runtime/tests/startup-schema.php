@@ -12,14 +12,16 @@ if($connection->getDriverName()!=='sqlite'||!$database||!$base||!str_starts_with
 $migration='2026_11_18_000001_create_onenew_ai_config';
 $dependent='2026_11_18_000002_add_ai_repository_key';
 $runtimeMigration='2026_11_18_000020_create_onenew_runtime_logs';
+$runtimeIndexMigration='2026_11_26_000001_index_runtime_log_entries_at';
 $runtimeTables=['onenew_runtime_log_entries','onenew_runtime_log_streams','onenew_runtime_log_batches','onenew_runtime_log_reads'];
 if($argv[1]==='prepare'){
     Illuminate\Support\Facades\Schema::dropIfExists('onenew_ai_config');
     foreach($runtimeTables as $table)Illuminate\Support\Facades\Schema::dropIfExists($table);
-    Illuminate\Support\Facades\DB::table('migrations')->whereIn('migration',[$migration,$dependent,$runtimeMigration])->delete();
+    Illuminate\Support\Facades\DB::table('migrations')->whereIn('migration',[$migration,$dependent,$runtimeMigration,$runtimeIndexMigration])->delete();
 }else{
     if(!Illuminate\Support\Facades\Schema::hasTable('onenew_ai_config')||!Illuminate\Support\Facades\Schema::hasColumn('onenew_ai_config','encrypted_repo_key')||!Illuminate\Support\Facades\DB::table('migrations')->where('migration',$migration)->exists())throw new RuntimeException('Startup did not install pending AI migration');
     foreach($runtimeTables as $table)if(!Illuminate\Support\Facades\Schema::hasTable($table))throw new RuntimeException('Startup did not install pending runtime log tables');
-    if(!Illuminate\Support\Facades\DB::table('migrations')->where('migration',$runtimeMigration)->exists())throw new RuntimeException('Runtime log migration was not recorded');
+    if(!Illuminate\Support\Facades\Schema::hasIndex('onenew_runtime_log_entries','runtime_entry_at'))throw new RuntimeException('Startup did not install runtime log timestamp index');
+    if(!Illuminate\Support\Facades\DB::table('migrations')->where('migration',$runtimeMigration)->exists()||!Illuminate\Support\Facades\DB::table('migrations')->where('migration',$runtimeIndexMigration)->exists())throw new RuntimeException('Runtime log migration was not recorded');
 }
 echo 'users='.Illuminate\Support\Facades\DB::table('v2_user')->count()."\n";

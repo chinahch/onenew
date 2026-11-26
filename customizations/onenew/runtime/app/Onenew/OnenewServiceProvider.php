@@ -26,6 +26,12 @@ class OnenewServiceProvider extends ServiceProvider
         // Fleet agents commonly share an egress IP; isolate quotas by credential without exposing it.
         \Illuminate\Support\Facades\RateLimiter::for('onenew-upgrade-machine',fn (\Illuminate\Http\Request $request) =>
             \Illuminate\Cache\RateLimiting\Limit::perMinute(30)->by(hash('sha256',(string)$request->input('machine_id').'|'.(string)$request->bearerToken())));
+        \Illuminate\Support\Facades\RateLimiter::for('onenew-probe-machine',fn (\Illuminate\Http\Request $r) =>
+            \Illuminate\Cache\RateLimiting\Limit::perMinute(120)->by(hash('sha256',(string)$r->input('machine_id').'|'.(string)$r->bearerToken())));
+        \Illuminate\Support\Facades\RateLimiter::for('onenew-domain-audit-machine',fn (\Illuminate\Http\Request $r) =>
+            \Illuminate\Cache\RateLimiting\Limit::perMinute(60)->by(hash('sha256',(string)$r->input('machine_id').'|'.(string)$r->bearerToken())));
+        \Illuminate\Support\Facades\RateLimiter::for('onenew-user-nodes',fn (\Illuminate\Http\Request $r) =>
+            \Illuminate\Cache\RateLimiting\Limit::perMinute(60)->by('user-nodes:'.(string)($r->user()?->id ?? $r->ip())));
         $root = '/opt/onenew';
         \Illuminate\Support\Facades\RateLimiter::for('onenew-runtime-logs-machine',fn(\Illuminate\Http\Request $r)=>\Illuminate\Cache\RateLimiting\Limit::perMinute(12)->by(hash('sha256',(string)$r->input('machine_id').'|'.(string)$r->bearerToken())));
         $this->loadMigrationsFrom($root . '/user-portal/backend/database/migrations');

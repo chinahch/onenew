@@ -95,11 +95,21 @@ class Plugin extends AbstractPlugin
         // Interception is after the committed transaction and released lock.
         if($decision['action']!=='alert_only')$this->intercept(response('',403,['Content-Type'=>'text/plain']));
     }
+    public static function pruneBefore(string $table, $before):int
+    {
+        $deleted=0;
+        do{
+            $ids=DB::table($table)->where('created_at','<',$before)->orderBy('id')->limit(500)->pluck('id');
+            if($ids->isEmpty())break;
+            $deleted+=DB::table($table)->whereIn('id',$ids)->delete();
+        }while(true);
+        return $deleted;
+    }
     public function cleanupOldLogs(int $days):void
     {
         if($days<1||$days>365)throw new \InvalidArgumentException('Retention must be 1–365 days');
         $before=now()->subDays($days);
-        DB::table('v2_subscribe_log')->where('created_at','<',$before)->delete();
-        DB::table('v2_subscribe_abuse')->where('created_at','<',$before)->delete();
+        self::pruneBefore('v2_subscribe_log',$before);
+        self::pruneBefore('v2_subscribe_abuse',$before);
     }
 }

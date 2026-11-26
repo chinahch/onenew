@@ -162,7 +162,36 @@ class ProbeService
 
     public function status(Server $node): array
     {
-        $task = $this->store->latest((int) $node->id);
+        return $this->projectStatus($node, $this->store->latest((int) $node->id));
+    }
+
+    public function statuses(iterable $nodes): array
+    {
+        $list = is_array($nodes) ? $nodes : iterator_to_array($nodes);
+        if ($list === []) {
+            return [];
+        }
+        $latestByNode = $this->store->latestMany(array_map(fn (Server $node) => (int) $node->id, $list));
+        $routeCache = [];
+        foreach ($list as $node) {
+            $routeIds = $node->route_ids ?? [];
+            if ($routeIds !== []) {
+                $key = json_encode($routeIds, JSON_THROW_ON_ERROR);
+                if (!array_key_exists($key, $routeCache)) {
+                    $routeCache[$key] = $this->resolveRoutes($routeIds);
+                }
+            }
+        }
+        $result = [];
+        foreach ($list as $node) {
+            $id = (int) $node->id;
+            $result[$id] = $this->projectStatus($node, $latestByNode[$id] ?? null, $routeCache);
+        }
+        return $result;
+    }
+
+    private function projectStatus(Server $node, ?array $task, ?array $routeCache = null): array
+    {
         $source = $this->builder->cdnProbeHost($node) !== null
             ? 'node machine · 原CDN优先，备用 ip.sb:443' : 'node machine · 本地监听自测';
         $pending = ['state' => 'pending', 'finished_at' => null, 'created_at' => null,
@@ -170,7 +199,7 @@ class ProbeService
         if (!$this->nodeAvailable($node) || !$node->machine_id || !$node->machine?->is_active) {
             return array_replace($pending, ['error_code' => 'machine_unavailable']);
         }
-        if (!$task || $task['machine_id'] !== (int) $node->machine_id || !hash_equals($task['revision'], $this->revision($node))) {
+        if (!$task || $task['machine_id'] !== (int) $node->machine_id || !hash_equals($task['revision'], $this->revision($node, $routeCache))) {
             return $pending;
         }
         $state = $task['state'];
@@ -224,7 +253,7 @@ class ProbeService
         return (bool) $node->enabled && (!$node->transfer_enable || (int) $node->u + (int) $node->d < (int) $node->transfer_enable);
     }
 
-    private function revision(Server $node): string
+    private function revision(Server $node, ?array $routeCache = null): string
     {
         $fields = ['onenew_identity', 'machine_id', 'enabled', 'type', 'host', 'port', 'server_port', 'parent_id',
             'node_speed_limit_mbps', 'onenew_landing_bindings', 'protocol_settings', 'group_ids', 'custom_outbounds', 'custom_routes', 'route_ids', 'cert_config'];
@@ -251,13 +280,25 @@ class ProbeService
         // independently sorting by node IDs or administrator labels. Fixed field
         // order makes the snapshot deterministic; metadata is not kernel input.
         $routeIds = $node->route_ids ?? [];
-        $values['resolved_routes'] = empty($routeIds) ? [] : ServerService::getRoutes($routeIds)
+        if (empty($routeIds)) {
+            $values['resolved_routes'] = [];
+        } else {
+            $routeKey = $routeCache !== null ? json_encode($routeIds, JSON_THROW_ON_ERROR) : null;
+            $values['resolved_routes'] = ($routeKey !== null && array_key_exists($routeKey, $routeCache))
+                ? $routeCache[$routeKey]
+                : $this->resolveRoutes($routeIds);
+        }
+        return hash('sha256', json_encode($values, JSON_THROW_ON_ERROR));
+    }
+
+    private function resolveRoutes(array $routeIds): array
+    {
+        return ServerService::getRoutes($routeIds)
             ->map(fn ($route) => [
                 'match' => $route->match,
                 'action' => $route->action,
                 'action_value' => $route->action_value,
             ])->values()->all();
-        return hash('sha256', json_encode($values, JSON_THROW_ON_ERROR));
     }
 
     private function iso(?int $timestamp): ?string
