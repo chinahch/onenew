@@ -84,7 +84,7 @@ final class ShareLink
     {
         if (!in_array($format, ['clash','singbox'], true)) self::fail('未支持的外部节点订阅格式');
         $n = self::parse($link); $p = $n['params']; $sb = $format === 'singbox'; $type = $n['type'];
-        $allowed = ['encryption','flow','security','sni','peer','servername','fp','pbk','sid','spx','alpn','allowInsecure','insecure',
+        $allowed = ['encryption','flow','security','sni','peer','servername','fp','fingerprint','pbk','sid','spx','alpn','allowInsecure','insecure',
             'type','headerType','host','path','serviceName','mode','extra','obfs','obfs-password','upmbps','downmbps',
             'congestion_control','congestion-controller','udp_relay_mode','disable_sni','allow_insecure'];
         foreach ($p as $key=>$value) if (!in_array($key, $allowed, true)) self::fail('不支持参数 '.$key.'，请使用通用链接订阅或修改链接');
@@ -115,7 +115,8 @@ final class ShareLink
         if (!in_array($security, ['none','tls','reality'], true)) self::fail('不支持的 TLS 安全模式');
         $names = array_filter([$p['sni'] ?? '', $p['peer'] ?? '', $p['servername'] ?? ''],fn ($name)=>$name!=='');
         if (count(array_unique($names))>1) self::fail('SNI 参数互相冲突');
-        if ($security === 'none' && array_intersect(['sni','peer','servername','fp','pbk','sid','spx','alpn'],array_keys($p))) self::fail('未启用 TLS 的链接含 TLS 参数');
+        if ($security === 'none' && array_intersect(['sni','peer','servername','fp','fingerprint','pbk','sid','spx','alpn'],array_keys($p))) self::fail('未启用 TLS 的链接含 TLS 参数');
+        if (isset($p['fp'], $p['fingerprint']) && strtolower($p['fp']) !== strtolower($p['fingerprint'])) self::fail('TLS 指纹参数互相冲突');
         if ($security !== 'reality' && array_intersect(['pbk','sid','spx'],array_keys($p))) self::fail('非 REALITY 链接含 REALITY 参数');
         $insecure = false;
         foreach (['allowInsecure','insecure','allow_insecure'] as $key) if (isset($p[$key])) {
@@ -126,7 +127,9 @@ final class ShareLink
             $sni = $p['sni'] ?? $p['peer'] ?? $p['servername'] ?? $n['host'];
             $tls = ['enabled'=>true, 'server_name'=>$sni, 'insecure'=>$insecure];
             if (isset($p['alpn'])) $tls['alpn'] = explode(',', $p['alpn']);
-            if (isset($p['fp'])) $tls['utls'] = ['enabled'=>true,'fingerprint'=>$p['fp']];
+            $rawFp = $p['fp'] ?? $p['fingerprint'] ?? null;
+            $chrome140 = $rawFp !== null && strtolower(trim($rawFp)) === 'chrome140';
+            if ($rawFp !== null) $tls['utls'] = ['enabled'=>true,'fingerprint'=>$chrome140 ? 'chrome' : $rawFp];
             if ($security === 'reality') {
                 if (!preg_match('/^[A-Za-z0-9_-]{43}$/', $p['pbk'] ?? '') || !preg_match('/^(?:[a-f0-9]{2}){0,8}$/i', $p['sid'] ?? '')) self::fail('REALITY 公钥或 short ID 无效');
                 $tls['reality'] = ['enabled'=>true,'public_key'=>$p['pbk'],'short_id'=>$p['sid'] ?? ''];
@@ -139,7 +142,10 @@ final class ShareLink
                 $out['skip-cert-verify'] = $insecure;
                 if (isset($tls['alpn'])) $out['alpn'] = $tls['alpn'];
                 if (isset($tls['utls'])) $out['client-fingerprint'] = $tls['utls']['fingerprint'];
-                if ($security === 'reality') $out['reality-opts'] = ['public-key'=>$p['pbk'],'short-id'=>$p['sid'] ?? ''];
+                if ($security === 'reality') {
+                    $out['reality-opts'] = ['public-key'=>$p['pbk'],'short-id'=>$p['sid'] ?? ''];
+                    if ($chrome140) $out['reality-opts']['support-x25519mlkem768'] = true;
+                }
             }
         }
         $network = ['raw'=>'tcp','splithttp'=>'xhttp'][$p['type'] ?? ''] ?? ($p['type'] ?? 'tcp');

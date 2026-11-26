@@ -19,13 +19,17 @@ namespace {
     function data_get($target, $key, $default = null) { foreach (explode('.', $key) as $segment) { if (is_array($target) && array_key_exists($segment, $target)) $target=$target[$segment]; elseif (is_object($target) && isset($target->$segment)) $target=$target->$segment; else return $default; } return $target; }
     function expect($yes, $message) { if (!$yes) throw new \RuntimeException($message); }
     $root=dirname(__DIR__,3); $work=__DIR__.'/.test-work';
-    foreach (['app/Models/Server.php','app/Services/ServerService.php','app/Protocols/General.php','app/Protocols/Shadowrocket.php','app/Protocols/ClashMeta.php'] as $file) {
+    foreach (['app/Models/Server.php','app/Services/ServerService.php','app/Protocols/General.php','app/Protocols/Shadowrocket.php','app/Protocols/ClashMeta.php','app/Utils/Helper.php','app/Http/Requests/Admin/ServerSave.php'] as $file) {
         @mkdir(dirname($work.'/'.$file),0777,true); copy($root.'/'.$file,$work.'/'.$file);
     }
     if (is_file(__DIR__.'/install.php')) { require __DIR__.'/install.php'; applyOnenewProtocolPatch($work); }
+    if (is_file(__DIR__.'/fragment-install.php')) { require __DIR__.'/fragment-install.php'; applyOnenewFragmentPatch($work); }
     if (is_file(__DIR__.'/clash-xhttp-alpn-install.php')) { require __DIR__.'/clash-xhttp-alpn-install.php'; applyOnenewClashXhttpAlpnPatch($work); }
+    if (is_file(__DIR__.'/utls-install.php')) { require __DIR__.'/utls-install.php'; applyOnenewUtlsFingerprintPatch($work); }
     if (is_file(__DIR__.'/app/Onenew/Protocols/ProtocolSettings.php')) require __DIR__.'/app/Onenew/Protocols/ProtocolSettings.php';
-    require $work.'/app/Models/Server.php'; require $root.'/app/Utils/Helper.php';
+    if (is_file(__DIR__.'/app/Onenew/Protocols/TlsFragment.php')) require __DIR__.'/app/Onenew/Protocols/TlsFragment.php';
+    if (is_file(__DIR__.'/app/Onenew/Protocols/UtlsFingerprint.php')) require __DIR__.'/app/Onenew/Protocols/UtlsFingerprint.php';
+    require $work.'/app/Models/Server.php'; require $work.'/app/Utils/Helper.php';
     require $work.'/app/Services/ServerService.php'; require $work.'/app/Protocols/General.php'; require $work.'/app/Protocols/ClashMeta.php';
     require $work.'/app/Protocols/Shadowrocket.php';
     $settings=['utls'=>['enabled'=>false],'tls'=>1,'network'=>'xhttp','network_settings'=>['host'=>'example.com','path'=>'/','mode'=>'auto','alpn'=>'h3','extra'=>['headers'=>[],'xPaddingBytes'=>'100-1000','noGRPCHeader'=>false,'noSSEHeader'=>false,'xmux'=>[],'downloadSettings'=>['tlsSettings'=>[],'sockopt'=>[],'xhttpSettings'=>['extra'=>['headers'=>[]]]],'list'=>[],'hosts'=>['a','b'],'extensions'=>['ordered'=>[]]]]];
@@ -64,5 +68,12 @@ namespace {
         $node->protocol_settings=['network'=>'ws','network_settings'=>['headers'=>[],'path'=>[]]];
         expect(json_decode($node->raw('protocol_settings'))->network_settings->headers===[], 'non-XHTTP headers unchanged');
     }
-    echo "PASS model save/read, node payload, VMess/VLESS/Trojan shares, H3 ALPN, lists and raw JSON objects\n";
+    $reality = ['tls'=>2,'network'=>'tcp','utls'=>['enabled'=>true,'fingerprint'=>'chrome140'],'reality_settings'=>['server_name'=>'www.microsoft.com','public_key'=>str_repeat('A',43),'short_id'=>'1234']];
+    expect(\App\Utils\Helper::getTlsFingerprint($reality['utls'])==='chrome', 'chrome140 maps to chrome for generic engines');
+    $srLink = \App\Protocols\Shadowrocket::buildVless('00000000-0000-4000-8000-000000000001',['protocol_settings'=>$reality,'host'=>'example.com','port'=>443,'name'=>'r140']);
+    parse_str(parse_url(trim($srLink),PHP_URL_QUERY),$srQ);
+    expect(($srQ['fingerprint']??null)==='Chrome140' && !isset($srQ['fp']), 'Shadowrocket emits fingerprint=Chrome140');
+    $cm = \App\Protocols\ClashMeta::buildVless('00000000-0000-4000-8000-000000000001',['protocol_settings'=>$reality,'host'=>'example.com','port'=>443,'name'=>'r140']);
+    expect(($cm['client-fingerprint']??null)==='chrome' && ($cm['reality-opts']['support-x25519mlkem768']??false)===true, 'ClashMeta emits support-x25519mlkem768');
+    echo "PASS model save/read, node payload, VMess/VLESS/Trojan shares, H3 ALPN, lists, raw JSON objects and chrome140 uTLS\n";
 }
