@@ -38,12 +38,20 @@ final class Library
         return ['link'=>$link,'variants'=>$variants];
     }
     public static function core(Server $node): string {
-        $m=$node->metrics??[];$time=$m['updated_at']??null;
+        abort_if($node->exists && $node->isDirty('machine_id'),422,'请先保存归属服务器变更，等待新服务器上报内核后再设置落地');
+        $m=$node->metrics??[];
+        if(empty($m) && $node->exists && ($node->isDirty('type') || $node->isDirty('parent_id'))){
+            $origType=strtoupper((string)$node->getOriginal('type'));
+            $origId=$node->getOriginal('parent_id')?:$node->id;
+            if($origType!=='' && $origId){
+                $m=\Illuminate\Support\Facades\Cache::get(\App\Utils\CacheKey::get("SERVER_{$origType}_METRICS",$origId))??[];
+            }
+        }
+        $time=$m['updated_at']??null;
         abort_unless(is_numeric($time) && (int)$time>=now()->timestamp-600 && (int)$time<=now()->timestamp+60,422,'节点 '.$node->id.' 缺少最新内核上报');
         $core=match($m['kernel_type']??null){'singbox'=>'singbox','xray'=>($m['onenew_runtime']??false)===true?'xray-caddy':'xray',default=>null};
         abort_unless($core,422,'节点 '.$node->id.' 内核未知');
         abort_if($core==='singbox' && in_array(data_get($node->protocol_settings,'network'),['xhttp','splithttp'],true),422,'传输方式与实际上报内核不一致，请等待运行内核更新');
-        abort_if($node->exists && $node->isDirty('machine_id'),422,'请先保存归属服务器变更，等待新服务器上报内核后再设置落地');
         return $core;
     }
     public static function compile(Server $node,?array $override=null): array {
