@@ -103,4 +103,19 @@ class LandingLibraryTest extends TestCase
         $this->getJson(self::URL.'/'.$id2)->assertJsonPath('name','自定义名称');
     }
 
+    public function test_protocol_switch_uses_original_runtime_metrics_when_compiling_landings(): void {
+        $this->admin();
+        $id=$this->postJson(self::URL,$this->draft())->assertOk()->json('id');
+        $node=Server::create(['name'=>'Switch','type'=>'hysteria','host'=>'ingress.example','port'=>443,'server_port'=>443,'rate'=>1,'group_ids'=>[],'enabled'=>true]);
+        ServerService::updateMetrics($node,['kernel_type'=>'singbox','onenew_runtime'=>true]);
+        $node->onenew_landing_bindings=[['landing_id'=>$id,'global'=>true,'domains'=>[]]];
+        $node->save();
+        $node->type='vless';
+        $node->protocol_settings=['tls'=>2,'network'=>'tcp','reality_settings'=>['server_name'=>'www.microsoft.com','public_key'=>str_repeat('A',43),'short_id'=>'1234']];
+        $node->save();
+        $fresh=$node->fresh();
+        $this->assertSame('vless',$fresh->type);
+        $this->assertSame('landing_'.$id,$fresh->custom_outbounds[0]['tag']);
+    }
+
 }
