@@ -22,6 +22,22 @@ export function selfStealPayload(action,rawDomain='',rawPort=8443){
   return {action};
 }
 
+const progressMeta={pending:{pct:25,tone:'active',step:'1/3 等待服务器助手认领…'},leased:{pct:50,tone:'active',step:'2/3 助手已领取任务，准备执行…'},running:{pct:78,tone:'active',step:'3/3 正在服务器上执行中…'},succeeded:{pct:100,tone:'ok',step:'已完成'},failed:{pct:100,tone:'err',step:'执行失败'},expired:{pct:100,tone:'err',step:'任务已过期'},cancelled:{pct:100,tone:'muted',step:'已取消'}};
+
+function renderJobProgress(h,job,nowSec){
+  if(!job)return null;
+  const meta=progressMeta[job.state]||{pct:100,tone:'muted',step:stateLabels[job.state]||job.state};
+  const active=live.has(job.state);
+  const elapsed=active&&job.created_at?Math.max(0,nowSec-Number(job.created_at)):null;
+  return h('div',{className:`onenew-job-box onenew-job-${meta.tone}`},
+    h('div',{className:'onenew-job-head'},
+      h('span',{className:'onenew-job-title'},`${actionLabels[job.action]||job.action} · ${meta.step}`),
+      h('span',{className:'onenew-job-pct'},elapsed!==null?`${meta.pct}% · ${elapsed}s`:`${meta.pct}%`)),
+    h('div',{className:'onenew-job-track',role:'progressbar','aria-valuenow':meta.pct,'aria-valuemin':0,'aria-valuemax':100},
+      h('div',{className:`onenew-job-fill onenew-job-fill-${meta.tone}`,style:{width:`${meta.pct}%`}})),
+    job.error_code&&h('p',{role:'alert',className:'onenew-job-err-msg'},errorLabels[job.error_code]||job.error_code));
+}
+
 export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive=false}){
   const h=R.createElement;
   const [open,setOpen]=R.useState(false);
@@ -32,17 +48,20 @@ export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive
   const [busy,setBusy]=R.useState(false);
   const [error,setError]=R.useState('');
   const [notice,setNotice]=R.useState('');
+  const [nowSec,setNowSec]=R.useState(()=>Math.floor(Date.now()/1000));
   const dialog=R.useRef(null);
 
   const load=async(isCurrent=()=>true)=>{
     const res=await get(`${root}/${Number(machineId)}`,{baseURL:'/'});
-    if(!isCurrent())return;
+    if(!isCurrent())return null;
     const payload=res?.data??res;
     setData(payload);
+    if(payload?.job&&!live.has(payload.job.state))setNotice('');
     if(!touched&&payload?.domain){
       setDomain(payload.domain);
       if(payload.port)setPort(String(payload.port));
     }
+    return payload;
   };
 
   R.useEffect(()=>{
@@ -55,12 +74,26 @@ export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive
     if(!open)return;
     let active=true,timer;
     const poll=async()=>{
-      try{await load(()=>active)}catch{if(active)setError('无法读取伪装站状态，请重试')}
-      if(active)timer=setTimeout(poll,5000);
+      let nextDelay=5000;
+      try{
+        const payload=await load(()=>active);
+        if(payload?.job&&live.has(payload.job.state))nextDelay=2000;
+      }catch{if(active)setError('无法读取伪装站状态，请重试')}
+      if(active)timer=setTimeout(poll,nextDelay);
     };
     poll();
     return()=>{active=false;clearTimeout(timer)};
   },[open,machineId]);
+
+  const job=data?.job||null;
+  const activeJob=!!(job&&live.has(job.state));
+
+  R.useEffect(()=>{
+    if(!open||!activeJob)return;
+    setNowSec(Math.floor(Date.now()/1000));
+    const iv=setInterval(()=>setNowSec(Math.floor(Date.now()/1000)),1000);
+    return()=>clearInterval(iv);
+  },[open,activeJob]);
 
   const submit=async action=>{
     setError('');setNotice('');
@@ -87,8 +120,6 @@ export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive
   const hasSite=data?!!(data.installed||data.running):!!siteActive;
   const trigger=h('button',{type:'button',className:hasSite?'onenew-resource-button onenew-tunnel-active':'onenew-resource-button',onClick:e=>{e?.stopPropagation?.();setOpen(true);setTouched(false);setError('');setNotice('')}},'伪装站');
 
-  const job=data?.job||null;
-  const activeJob=!!(job&&live.has(job.state));
   const title=machineName?`${machineName} (SID:${machineId})`:`服务器 #${machineId}`;
   const isExisting=data?.version==='existing-h2-tls13';
   const statusText=!data?'读取中…':!data.capable?'需更新助手':data.running?(isExisting?'复用本机站点 · H2/TLS1.3':'运行中 · H2/TLS1.3'):data.installed?(isExisting?'本机站点检测未通过':'已停止'):'未部署';
@@ -104,7 +135,7 @@ export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive
       h('div',{className:'onenew-up-body'},
         h('p',{className:'onenew-up-tip'},'通过升级助手自动在目标机部署独立的 Caddy 伪装站（onenew-disguise），自动签发并续期 TLS 1.3 + HTTP/2 证书。默认回落端口 8443 仅监听 127.0.0.1（不暴露公网端口），80 端口用于自动签证书。'),
         error&&h('p',{role:'alert',className:'onenew-up-alert'},error),
-        notice&&h('p',{role:'status',className:'onenew-up-tip'},notice),
+        notice&&!job&&h('p',{role:'status',className:'onenew-up-tip'},notice),
         !data?h('p',{className:'onenew-up-loading'},'正在读取伪装站状态…'):h(R.Fragment,null,
           !data.capable&&h('p',{className:'onenew-up-alert'},'该服务器尚未上报伪装站助手状态。请先在「远程升级」或服务器终端更新升级助手后即可一键部署。'),
           h('div',{className:'onenew-tunnel-cards'},
@@ -117,7 +148,7 @@ export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive
             h('div',{className:'onenew-tunnel-card'},
               h('span',{className:'onenew-tunnel-card-label'},'已绑定域名'),
               h('span',{className:'onenew-tunnel-card-val'},data.domain||'—'))),
-          job&&h('p',{className:'onenew-up-tip'},`最近任务：${actionLabels[job.action]||job.action} · ${stateLabels[job.state]||job.state}${job.error_code?`（${errorLabels[job.error_code]||job.error_code}）`:''}`),
+          renderJobProgress(h,job,nowSec),
           h('div',{className:'onenew-row'},
             h('label',{className:'onenew-field'},
               h('span',null,'伪装域名（需已解析到此服务器 IP，关闭小黄云）'),
