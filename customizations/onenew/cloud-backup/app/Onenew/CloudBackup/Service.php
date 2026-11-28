@@ -71,7 +71,7 @@ final class Service
         if(!$run)return null;$result=[];foreach(['id','trigger','state','created_at','started_at','finished_at','filename','bytes','uploaded_bytes','sha256','revision','error_code','attempts'] as $field)$result[$field]=$run->$field;
         if($run->deployment_id!==$this->config->identity()&&in_array($run->state,self::ACTIVE,true)){$result['state']='paused';$result['error_code']='restored_paused';}
         $result['error']=$result['error_code']?BackupFailure::message($result['error_code']):'';
-        $result['drive_url']=$run->state==='success'&&is_string($run->file_id)&&preg_match('/^[A-Za-z0-9_-]{1,200}$/D',$run->file_id)?'https://drive.google.com/file/d/'.$run->file_id.'/view':null;return $result;
+        $result['object_key']=$run->state==='success'&&is_string($run->file_id)&&$run->file_id!==''?$run->file_id:null;return $result;
     }
     public function view():array
     {

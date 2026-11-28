@@ -32,9 +32,8 @@ final class BackupJob implements ShouldQueue
                 $service->patch($this->id,$lease,['bytes'=>$run['bytes'],'sha256'=>$run['sha256'],'md5'=>$run['md5'],'revision'=>$revision,'encrypted_session'=>null,'uploaded_bytes'=>0]);$exportLock->release();$exportLock=null;
             }
             $secret['password']='';$service->patch($this->id,$lease,['state'=>'uploading']);
-            $drive=new DriveClient($secret);$folder=$drive->ensureFolder();$secret['folder_id']=$folder;app(Config::class)->rememberFolder($folder,(int)($secret['config_version']??0));
-            $drive=new DriveClient($secret);$run['session_uri']=$run['encrypted_session']?Crypt::decryptString($run['encrypted_session']):'';
-            $drive->upload($path,$run,fn($data)=>$service->patch($this->id,$lease,$data));$service->finish($this->id,$lease);
+            $s3=new S3Client($secret);
+            $s3->upload($path,$run,fn($data)=>$service->patch($this->id,$lease,$data));$service->finish($this->id,$lease);
         }catch(\Throwable $e){$reason=$e instanceof BackupFailure?$e->reason:'local_error';$service->finish($this->id,$lease,$reason);Log::warning('Cloud backup attempt failed',['id'=>$this->id,'reason'=>$reason]);}
         finally{if($exportLock)$exportLock->release();unset($secret);}
     }
