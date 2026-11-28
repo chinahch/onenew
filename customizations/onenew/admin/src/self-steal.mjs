@@ -2,7 +2,7 @@ const root='/api/onenew/admin/self-steal';
 const live=new Set(['pending','leased','running']);
 const actionLabels={install:'部署 / 更新伪装站',restart:'重启伪装站',uninstall:'卸载清理'};
 const stateLabels={pending:'等待服务器认领',leased:'已领取',running:'执行中',succeeded:'已完成',failed:'执行失败',cancelled:'已取消',expired:'已过期'};
-const errorLabels={download_failed:'Caddy 二进制下载失败',install_failed:'伪装站配置写入失败',service_failed:'伪装站服务未能正常启动（请检查端口冲突或 80 端口连通性）',uninstall_failed:'卸载失败',invalid_domain:'伪装域名格式无效',invalid_port:'本地回落端口无效（需为 1–65535 且不能为 80）',invalid_task:'任务或服务器绑定已变化',unsupported:'当前系统服务管理器暂不支持（需 systemd）',expired:'任务已过期',internal_error:'助手执行异常'};
+const errorLabels={download_failed:'Caddy 二进制下载失败',install_failed:'伪装站配置写入失败',service_failed:'伪装站服务未能正常启动（请检查端口冲突或 80 端口连通性）',uninstall_failed:'卸载失败',invalid_domain:'伪装域名格式无效',invalid_port:'本地回落端口无效（需为 1–65535 且不能为 80）',port_80_in_use:'本机 80 端口已被其他 Web 服务（如 OpenResty/Nginx）占用，无法自动签证书；请先在现有 Web 服务中为该域名配置 HTTPS 并开启 TLS 1.3 + HTTP/2，然后重试即可自动识别复用',cert_invalid:'检测到本机 443 已有现有网站，但该域名的 TLS 证书无效或不匹配，请在 OpenResty/Nginx 中检查证书后重试',missing_tls13:'检测到本机 443 已有现有网站，但未开启 TLS 1.3；请在 OpenResty/Nginx 中配置 ssl_protocols TLSv1.2 TLSv1.3; 后重试',missing_http2:'检测到本机 443 已有现有网站，但未开启 HTTP/2（当前仅 HTTP/1.1）；请在 OpenResty/Nginx 中开启 http2 后重试',invalid_task:'任务或服务器绑定已变化',unsupported:'当前系统服务管理器暂不支持（需 systemd）',expired:'任务已过期',internal_error:'助手执行异常'};
 const domainRE=/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
 
 export function validSelfStealDomain(raw){
@@ -90,7 +90,8 @@ export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive
   const job=data?.job||null;
   const activeJob=!!(job&&live.has(job.state));
   const title=machineName?`${machineName} (SID:${machineId})`:`服务器 #${machineId}`;
-  const statusText=!data?'读取中…':!data.capable?'需更新助手':data.running?'运行中 · H2/TLS1.3':data.installed?'已停止':'未部署';
+  const isExisting=data?.version==='existing-h2-tls13';
+  const statusText=!data?'读取中…':!data.capable?'需更新助手':data.running?(isExisting?'复用本机站点 · H2/TLS1.3':'运行中 · H2/TLS1.3'):data.installed?(isExisting?'本机站点检测未通过':'已停止'):'未部署';
   const statusTone=!data?'muted':!data.capable?'warn':data.running?'ok':data.installed?'err':'muted';
 
   return h(R.Fragment,null,trigger,

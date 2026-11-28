@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const assistantVersion = "v0.1.20"
+const assistantVersion = "v0.1.21"
 const officialBase = "https://github.com/chinahch/onenew-releases/releases/download/"
 
 var versionRE = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
@@ -59,6 +59,8 @@ type Updater struct {
 	DisguiseBase       string
 	DisguiseDir        string
 	DisguiseUnit       string
+	ProbeTLS           func(domain string, port int) tlsProbeResult
+	PortInUse          func(port int) bool
 }
 
 func normalizeVersion(s string) string {
