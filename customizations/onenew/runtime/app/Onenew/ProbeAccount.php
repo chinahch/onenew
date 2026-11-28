@@ -6,6 +6,9 @@ use App\Models\User;
 
 final class ProbeAccount
 {
+    /** Minimum single-report raw bytes (64 KiB) to treat a traffic push as real active usage rather than a client url-test/ping. */
+    public const MIN_ACTIVE_REPORT_BYTES = 65536;
+
     /**
      * Return IDs of dedicated internal health-probe accounts.
      *
@@ -37,10 +40,17 @@ final class ProbeAccount
 
     public static function countRealUsers(array $trafficMap): int
     {
-        $probeIds = self::ids();
-        if (empty($probeIds)) {
-            return count($trafficMap);
+        $probeMap = array_flip(self::ids());
+        $count = 0;
+        foreach ($trafficMap as $uid => $pair) {
+            if (isset($probeMap[(int) $uid])) {
+                continue;
+            }
+            $bytes = is_array($pair) ? ((int) ($pair[0] ?? 0) + (int) ($pair[1] ?? 0)) : 0;
+            if ($bytes >= self::MIN_ACTIVE_REPORT_BYTES) {
+                $count++;
+            }
         }
-        return count(array_diff_key($trafficMap, array_flip($probeIds)));
+        return $count;
     }
 }

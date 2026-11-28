@@ -45,7 +45,13 @@ class NodeTrafficLedger
                 DB::table('v2_onenew_user_node_traffic')->where($key)->incrementEach($bytes, $metadata);
             }
         });
-        $this->recordActiveUsers((int) $server['id'], array_keys($increments));
+        $activeUids = [];
+        foreach ($increments as $uid => $bytes) {
+            if (($bytes['raw_u'] + $bytes['raw_d']) >= \App\Onenew\ProbeAccount::MIN_ACTIVE_REPORT_BYTES) {
+                $activeUids[] = $uid;
+            }
+        }
+        $this->recordActiveUsers((int) $server['id'], $activeUids);
     }
 
     private function recordActiveUsers(int $serverId, array $userIds): void
