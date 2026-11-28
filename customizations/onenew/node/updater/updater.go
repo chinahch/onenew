@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const assistantVersion = "v0.1.16"
+const assistantVersion = "v0.1.18"
 const officialBase = "https://github.com/chinahch/onenew-releases/releases/download/"
 
 var versionRE = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
