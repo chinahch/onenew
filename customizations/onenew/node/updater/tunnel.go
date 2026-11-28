@@ -17,7 +17,7 @@ import (
 
 const cloudflaredBase = "https://github.com/cloudflare/cloudflared/releases/latest/download/"
 
-var tunnelTokenRE = regexp.MustCompile(`^[A-Za-z0-9_-]{32,1024}={0,2}$`)
+var tunnelTokenRE = regexp.MustCompile(`^[A-Za-z0-9_-]+={0,2}$`)
 var cloudflaredVersionRE = regexp.MustCompile(`([0-9]{4}\.[0-9]+\.[0-9]+)`)
 
 type TunnelJob struct {
@@ -161,7 +161,7 @@ func (u *Updater) executeTunnel(j TunnelJob) error {
 
 	switch j.Action {
 	case "install":
-		if !tunnelTokenRE.MatchString(j.Token) {
+		if len(j.Token) < 32 || len(j.Token) > 1024 || !tunnelTokenRE.MatchString(j.Token) {
 			return u.reportTunnel(j, "failed", "invalid_token")
 		}
 		if err := u.downloadCloudflared(); err != nil {
