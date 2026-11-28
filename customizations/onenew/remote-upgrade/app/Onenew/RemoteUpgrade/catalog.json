@@ -1,4 +1,14 @@
 {
+  "v0.1.19": {
+    "amd64": {
+      "sha256": "c8454f2b34fabeb8663f3f8edc4d1c38f80dec5a5180b287bf1798419b79b60d",
+      "url": "https://github.com/chinahch/onenew-releases/releases/download/node-v0.1.19/onenew-node-linux-amd64.tar.gz"
+    },
+    "arm64": {
+      "sha256": "9da1f5622779d07d460d0c720afb7205a2d00bf1370ae863281df2486c8c5928",
+      "url": "https://github.com/chinahch/onenew-releases/releases/download/node-v0.1.19/onenew-node-linux-arm64.tar.gz"
+    }
+  },
   "v0.1.18": {
     "amd64": {
       "sha256": "ac512b367cc6768c2e5fba71f40fecbdba16c8a00141e0aa2fdfe539e2f8caa6",
