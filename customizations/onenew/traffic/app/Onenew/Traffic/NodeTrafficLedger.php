@@ -2,11 +2,14 @@
 
 namespace App\Onenew\Traffic;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class NodeTrafficLedger
 {
+    public const ACTIVE_USERS_PREFIX = 'onenew:node_active_users:';
+
     public function applyBatch(string $batchId, array $server, array $data, string $protocol, int $recordAt, callable $nativeArchive): void
     {
         $rate = (float) ($server['rate'] ?? -1);
@@ -42,5 +45,26 @@ class NodeTrafficLedger
                 DB::table('v2_onenew_user_node_traffic')->where($key)->incrementEach($bytes, $metadata);
             }
         });
+        $this->recordActiveUsers((int) $server['id'], array_keys($increments));
+    }
+
+    private function recordActiveUsers(int $serverId, array $userIds): void
+    {
+        if ($serverId <= 0 || empty($userIds)) {
+            return;
+        }
+        try {
+            $now = time();
+            $window = max(300, (int) admin_setting('server_push_interval', 60) * 3);
+            $key = self::ACTIVE_USERS_PREFIX . $serverId;
+            $existing = Cache::get($key);
+            $map = is_array($existing) ? array_filter($existing, fn ($ts) => is_int($ts) && ($now - $ts) <= $window) : [];
+            foreach ($userIds as $uid) {
+                $map[(int) $uid] = $now;
+            }
+            Cache::put($key, $map, $window);
+        } catch (\Throwable) {
+            // Never let active-user cache tracking interfere with traffic accounting.
+        }
     }
 }

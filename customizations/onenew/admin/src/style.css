@@ -71,3 +71,19 @@
 .onenew-tunnel-card-val{font-size:13px;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
 .onenew-tunnel-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 @media(max-width:640px){.onenew-tunnel-cards{grid-template-columns:1fr}}
+.onenew-node-users-btn{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:3px 9px;border-radius:6px;border:1px solid transparent;background:transparent;color:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:background .15s,border-color .15s}
+.onenew-node-users-btn:hover{background:hsl(var(--muted));border-color:hsl(var(--border))}
+.onenew-node-users-btn-active{border-color:#2563eb44;background:#3b82f612;color:#2563eb}
+.onenew-node-users-btn-active:hover{background:#3b82f622;border-color:#2563eb88}
+.onenew-node-users-icon{width:15px;height:15px;flex-shrink:0}
+.onenew-node-users-num{font-variant-numeric:tabular-nums}
+.onenew-node-users-dialog{width:min(760px,96vw);max-height:86vh;padding:0;margin:auto;border-radius:12px;border:1px solid hsl(var(--border));background:hsl(var(--background));color:hsl(var(--foreground));box-shadow:0 20px 50px #00000038;overflow:hidden;display:flex;flex-direction:column}
+.onenew-node-users-dialog::backdrop{background:#00000073;backdrop-filter:blur(2px)}
+.onenew-node-users-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:10px 20px 0;border-bottom:1px solid hsl(var(--border))}
+.onenew-node-users-tabs{display:flex;align-items:center;gap:16px}
+.onenew-node-users-tab{padding:6px 2px 10px;border:0;border-bottom:2px solid transparent;background:transparent;color:hsl(var(--muted-foreground));font-size:13px;font-weight:500;cursor:pointer}
+.onenew-node-users-tab:hover{color:hsl(var(--foreground))}
+.onenew-node-users-tab.is-active{border-bottom-color:hsl(var(--primary));color:hsl(var(--foreground))}
+.onenew-node-users-dates{display:flex;align-items:center;gap:6px;padding-bottom:8px}
+.onenew-node-users-ips{display:flex;flex-wrap:wrap;gap:4px}
+.onenew-node-users-ip{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;padding:1px 6px;border-radius:4px;background:hsl(var(--muted));border:1px solid hsl(var(--border))}
