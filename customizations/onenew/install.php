@@ -74,6 +74,7 @@ applyOnenewUtlsFingerprintPatch($root);
 copyOverlay($custom . '/exit-probe/app', $root . '/app');
 copyOverlay($custom . '/remote-upgrade/app', $root . '/app');
 copyOverlay($custom . '/cloudflared/app', $root . '/app');
+copyOverlay($custom . '/self-steal/app', $root . '/app');
 copyOverlay($custom . '/ai-operations/app', $root . '/app');
 copyOverlay($custom . '/runtime-logs/app', $root . '/app');
 copyOverlay($custom . '/landing-library/app', $root . '/app');
@@ -86,6 +87,14 @@ replaceOnce($root . '/app/Services/ServerService.php',
     "            'kernel_status' => (bool) (\$metrics['kernel_status'] ?? false),\n"
     . "            'kernel_type' => in_array(\$metrics['kernel_type'] ?? null, ['xray', 'singbox'], true) ? \$metrics['kernel_type'] : null,\n"
     . "            'onenew_runtime' => (\$metrics['onenew_runtime'] ?? null) === true,");
+$serverServicePath = $root . '/app/Services/ServerService.php';
+$serverServiceSrc = str_replace("\r\n", "\n", file_get_contents($serverServicePath));
+$realityNeedle = "2 => \$protocolSettings['reality_settings'],";
+$realityUpdated = str_replace($realityNeedle, "2 => \\App\\Onenew\\SelfSteal\\SelfStealService::applyRealityDest(\$protocolSettings['reality_settings']),", $serverServiceSrc, $realityCount);
+if ($realityCount !== 2) {
+    throw new RuntimeException('Pinned ServerService reality_settings anchor changed (expected 2, got ' . $realityCount . ')');
+}
+file_put_contents($serverServicePath, $realityUpdated);
 replaceOnce($root . '/app/Observers/ServerObserver.php', "            'server_port',", "            'host',\n            'server_port',");
 // The native controller previously pointed at cedar2025's stock installer.
 $machineController = $root . '/app/Http/Controllers/V2/Admin/Server/MachineController.php';
@@ -112,7 +121,7 @@ if ($upgradeCount !== 1) {
 }
 file_put_contents($machineController, $machineSource);
 replaceOnce($machineController, "                    'last_seen_at' => \$machine->last_seen_at,",
-    "                    'last_seen_at' => \$machine->last_seen_at,\n                    'connection_status' => \\App\\Onenew\\MachineConnectionStatus::forMachine(\$machine, now()->timestamp),\n                    'tunnel_installed' => \\App\\Onenew\\Cloudflared\\TunnelService::isInstalledForMachine(\$machine),");
+    "                    'last_seen_at' => \$machine->last_seen_at,\n                    'connection_status' => \\App\\Onenew\\MachineConnectionStatus::forMachine(\$machine, now()->timestamp),\n                    'tunnel_installed' => \\App\\Onenew\\Cloudflared\\TunnelService::isInstalledForMachine(\$machine),\n                    'self_steal_installed' => \\App\\Onenew\\SelfSteal\\SelfStealService::summaryForMachine(\$machine)['installed'],\n                    'self_steal_domain' => \\App\\Onenew\\SelfSteal\\SelfStealService::summaryForMachine(\$machine)['domain'],\n                    'self_steal_port' => \\App\\Onenew\\SelfSteal\\SelfStealService::summaryForMachine(\$machine)['port'],");
 require $custom . '/traffic/install.php';
 applyOnenewTrafficPatch($root);
 replaceOnce($root . '/app/Console/Kernel.php',

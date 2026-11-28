@@ -87,3 +87,6 @@
 .onenew-node-users-dates{display:flex;align-items:center;gap:6px;padding-bottom:8px}
 .onenew-node-users-ips{display:flex;flex-wrap:wrap;gap:4px}
 .onenew-node-users-ip{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;padding:1px 6px;border-radius:4px;background:hsl(var(--muted));border:1px solid hsl(var(--border))}
+.onenew-self-steal-box{margin-top:10px;padding:10px 12px;border-radius:8px;border:1px solid hsl(var(--border));background:hsl(var(--muted)/.25);display:grid;gap:6px;font-size:12px}
+.onenew-self-steal-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.onenew-self-steal-preview{display:grid;gap:2px;padding:6px 8px;border-radius:6px;background:hsl(var(--background));border:1px solid hsl(var(--border));font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px}
