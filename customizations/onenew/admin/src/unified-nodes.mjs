@@ -1,3 +1,4 @@
+import {NodeUsersTrigger} from './node-users.mjs';
 const root='/api/onenew/admin/external-nodes';
 export async function fetchManagedNodes(nativeFetch,get){
  const [native,external]=await Promise.all([nativeFetch(),get(root,{baseURL:'/'})]);
@@ -23,4 +24,8 @@ function ExternalCell({react:React,column,row,post,refetch}){
  if(id==='actions')return btn('编辑',()=>window.dispatchEvent(new CustomEvent('onenew-external-edit',{detail:row})));
  return '—';
 }
-export function managedColumns(columns,React,post,refetch){return columns.map(column=>({...column,cell:props=>props.row.original.onenew_external_id?React.createElement(ExternalCell,{react:React,column,row:props.row.original,post,refetch}):typeof column.cell==='function'?column.cell(props):column.cell}))}
+export function managedColumns(columns,React,post,refetch,get){return columns.map(column=>({...column,cell:props=>{
+ if(props.row.original.onenew_external_id)return React.createElement(ExternalCell,{react:React,column,row:props.row.original,post,refetch});
+ if(get&&(column.accessorKey==='online'||column.id==='online'))return React.createElement(NodeUsersTrigger,{react:React,get,node:props.row.original});
+ return typeof column.cell==='function'?column.cell(props):column.cell;
+}}))}

@@ -83,7 +83,7 @@ export function patchBundle(source,runtime){
   source=replaceOnce(source,'const t=x.getValues(),n=parseFloat(t.transfer_enable_gb||"0")','const t=x.getValues();if(t.onenew_landing_bindings!=null){const e=OnenewAdmin.validateLandingBindings(t.onenew_landing_bindings);if(e)return void gE.error(e)}const n=parseFloat(t.transfer_enable_gb||"0")');
   source=replaceOnce(source,'queryKey:["nodeList"],queryFn:async()=>{const{data:e}=await $L();return e}','queryKey:["nodeList"],queryFn:()=>OnenewAdmin.fetchManagedNodes($L,IL)');
   source=replaceOnce(source,'H.useEffect(()=>{!g&&Array.isArray(x)&&v(x)},[x,g]);','H.useEffect(()=>{const t=()=>w();window.addEventListener("onenew-external-changed",t);return()=>window.removeEventListener("onenew-external-changed",t)},[w]);H.useEffect(()=>{!g&&Array.isArray(x)&&v(x)},[x,g]);');
-  source=replaceOnce(source,'columns:Z5t(w,e,b)','columns:OnenewAdmin.managedColumns(Z5t(w,e,b),H,RL,w)');
+  source=replaceOnce(source,'columns:Z5t(w,e,b)','columns:OnenewAdmin.managedColumns(Z5t(w,e,b),H,RL,w,IL)');
   const tableStart=source.indexOf('function X5t('),tableEnd=source.indexOf('function Q5t(',tableStart);
   let nodeTable=source.slice(tableStart,tableEnd);
   nodeTable=replaceOnce(nodeTable,'enableRowSelection:!0','enableRowSelection:e=>!e.original.onenew_external_id');

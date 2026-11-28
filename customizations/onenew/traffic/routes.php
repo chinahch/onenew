@@ -1,12 +1,14 @@
 <?php
 
 use App\Onenew\Traffic\DomainAuditController;
+use App\Onenew\Traffic\NodeUsersController;
 use App\Onenew\Traffic\TrafficController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['api', 'admin'])->prefix('/api/onenew/admin/traffic')->group(function () {
     Route::get('/records', [TrafficController::class, 'records']);
     Route::get('/nodes', [TrafficController::class, 'nodes']);
+    Route::get('/node-users', [NodeUsersController::class, 'show']);
     Route::get('/domains', [TrafficController::class, 'domains']);
     Route::get('/domain-settings', [DomainAuditController::class, 'settings']);
     Route::put('/domain-settings', [DomainAuditController::class, 'settings']);
