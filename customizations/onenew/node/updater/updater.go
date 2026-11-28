@@ -55,6 +55,7 @@ type Updater struct {
 	Sleep              func(time.Duration)
 	Now                func() time.Time
 	Base               string
+	CloudflaredBase    string
 }
 
 func normalizeVersion(s string) string {

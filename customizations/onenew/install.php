@@ -73,6 +73,7 @@ require $custom . '/protocols/utls-install.php';
 applyOnenewUtlsFingerprintPatch($root);
 copyOverlay($custom . '/exit-probe/app', $root . '/app');
 copyOverlay($custom . '/remote-upgrade/app', $root . '/app');
+copyOverlay($custom . '/cloudflared/app', $root . '/app');
 copyOverlay($custom . '/ai-operations/app', $root . '/app');
 copyOverlay($custom . '/runtime-logs/app', $root . '/app');
 copyOverlay($custom . '/landing-library/app', $root . '/app');
