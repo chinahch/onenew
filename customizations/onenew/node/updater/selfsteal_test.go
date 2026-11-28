@@ -86,9 +86,16 @@ func TestExecuteSelfStealInstallAndUninstall(t *testing.T) {
 		DisguiseBase: dlSrv.URL + "/",
 		DisguiseDir:  disguiseDir,
 		DisguiseUnit: unitPath,
+		ProbeTLS:     func(string, int) tlsProbeResult { return tlsProbeResult{} },
+		PortInUse:    func(int) bool { return false },
 		Command: func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			if strings.HasSuffix(name, "onenew-disguise") {
 				return []byte("v2.9.1 h1:abc\n"), nil
+			}
+			if name == "systemctl" && len(args) > 0 && args[0] == "is-active" {
+				if _, err := os.Stat(unitPath); err != nil {
+					return nil, os.ErrNotExist
+				}
 			}
 			return []byte("ok"), nil
 		},
@@ -124,5 +131,63 @@ func TestExecuteSelfStealInstallAndUninstall(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(binDir, "onenew-disguise")); !os.IsNotExist(err) {
 		t.Fatalf("expected binary removed")
+	}
+}
+
+func TestExecuteSelfStealAutoDetectsExistingSiteAndChecksTLS13HTTP2(t *testing.T) {
+	var lastCode, lastState string
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if s, ok := body["state"].(string); ok {
+			lastState = s
+		}
+		if c, ok := body["error_code"].(string); ok {
+			lastCode = c
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer apiSrv.Close()
+
+	tmp := t.TempDir()
+	u := &Updater{
+		Root:         tmp,
+		Bin:          filepath.Join(tmp, "bin"),
+		Manager:      "systemd",
+		Binding:      Binding{Panel: apiSrv.URL, Machine: 1, Token: "tok"},
+		Client:       apiSrv.Client(),
+		DisguiseDir:  filepath.Join(tmp, "etc-disguise"),
+		DisguiseUnit: filepath.Join(tmp, "onenew-disguise.service"),
+		Command: func(ctx context.Context, name string, args ...string) ([]byte, error) {
+			return nil, os.ErrNotExist
+		},
+	}
+	job := SelfStealJob{
+		ID:     "11111111-2222-3333-4444-555555555555",
+		Lease:  strings.Repeat("b", 64),
+		Action: "install",
+		Domain: "bitsflow.example.com",
+		Port:   8443,
+	}
+
+	// Missing HTTP/2 on existing local 443 site -> explicit error
+	u.ProbeTLS = func(string, int) tlsProbeResult {
+		return tlsProbeResult{Reachable: true, CertValid: true, TLS13: true, HTTP2: false}
+	}
+	if err := u.executeSelfSteal(job); err == nil || lastCode != "missing_http2" {
+		t.Fatalf("expected missing_http2, got err=%v code=%s", err, lastCode)
+	}
+
+	// Existing local 443 site with valid cert + TLS 1.3 + HTTP/2 -> auto-reused without installing Caddy
+	u.ProbeTLS = func(string, int) tlsProbeResult {
+		return tlsProbeResult{Reachable: true, CertValid: true, TLS13: true, HTTP2: true}
+	}
+	if err := u.executeSelfSteal(job); err != nil || lastState != "succeeded" {
+		t.Fatalf("expected existing reuse success, got err=%v state=%s", err, lastState)
+	}
+	st := u.selfStealStatus()
+	if !st.Installed || !st.Running || st.Port != 443 || st.Version != "existing-h2-tls13" {
+		t.Fatalf("unexpected existing status: %+v", st)
 	}
 }

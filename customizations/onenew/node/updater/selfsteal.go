@@ -4,10 +4,12 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -43,8 +45,63 @@ type SelfStealStatus struct {
 }
 
 type selfStealState struct {
+	Mode   string `json:"mode,omitempty"` // "existing" or "managed"
 	Domain string `json:"domain"`
 	Port   int    `json:"port"`
+}
+
+type tlsProbeResult struct {
+	Reachable bool
+	CertValid bool
+	TLS13     bool
+	HTTP2     bool
+}
+
+func probeLocalTLS(domain string, port int) tlsProbeResult {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{
+		ServerName: domain,
+		NextProtos: []string{"h2", "http/1.1"},
+		MinVersion: tls.VersionTLS12,
+	})
+	if err == nil {
+		cs := conn.ConnectionState()
+		_ = conn.Close()
+		return tlsProbeResult{
+			Reachable: true,
+			CertValid: true,
+			TLS13:     cs.Version == tls.VersionTLS13,
+			HTTP2:     cs.NegotiatedProtocol == "h2",
+		}
+	}
+	// Distinguish TCP connection refused/timeout from TLS certificate mismatch/expiry
+	insecConn, err2 := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{
+		ServerName:         domain,
+		NextProtos:         []string{"h2", "http/1.1"},
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: true,
+	})
+	if err2 == nil {
+		cs := insecConn.ConnectionState()
+		_ = insecConn.Close()
+		return tlsProbeResult{
+			Reachable: true,
+			CertValid: false,
+			TLS13:     cs.Version == tls.VersionTLS13,
+			HTTP2:     cs.NegotiatedProtocol == "h2",
+		}
+	}
+	return tlsProbeResult{}
+}
+
+func localPortInUse(port int) bool {
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return true
+	}
+	_ = ln.Close()
+	return false
 }
 
 func validDisguiseDomain(raw string) (string, bool) {
@@ -87,33 +144,56 @@ func (u *Updater) disguiseUnitPath() string {
 	return "/etc/systemd/system/onenew-disguise.service"
 }
 
+func (u *Updater) probeTLS(domain string, port int) tlsProbeResult {
+	if u.ProbeTLS != nil {
+		return u.ProbeTLS(domain, port)
+	}
+	return probeLocalTLS(domain, port)
+}
+
+func (u *Updater) portInUse(port int) bool {
+	if u.PortInUse != nil {
+		return u.PortInUse(port)
+	}
+	return localPortInUse(port)
+}
+
+func (u *Updater) isManagedDisguiseRunning() bool {
+	ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
+	defer c()
+	if u.Manager == "systemd" {
+		_, err := u.Command(ctx, "systemctl", "is-active", "--quiet", "onenew-disguise.service")
+		return err == nil
+	}
+	_, err := u.Command(ctx, "rc-service", "onenew-disguise", "status")
+	return err == nil
+}
+
 func (u *Updater) selfStealStatus() SelfStealStatus {
 	ctx, c := context.WithTimeout(context.Background(), 10*time.Second)
 	defer c()
 	var st SelfStealStatus
+	var saved selfStealState
+	if raw, err := os.ReadFile(filepath.Join(u.disguiseDir(), "state.json")); err == nil {
+		_ = json.Unmarshal(raw, &saved)
+		st.Domain = saved.Domain
+		st.Port = saved.Port
+	}
+	if saved.Mode == "existing" && saved.Domain != "" && saved.Port > 0 {
+		st.Installed = true
+		st.Version = "existing-h2-tls13"
+		res := u.probeTLS(saved.Domain, saved.Port)
+		st.Running = res.Reachable && res.CertValid && res.TLS13 && res.HTTP2
+		return st
+	}
 	if out, err := u.Command(ctx, u.disguiseBin(), "version"); err == nil {
 		st.Installed = true
 		if m := disguiseVersionRE.FindStringSubmatch(string(out)); len(m) == 2 {
 			st.Version = m[1]
 		}
 	}
-	if raw, err := os.ReadFile(filepath.Join(u.disguiseDir(), "state.json")); err == nil {
-		var saved selfStealState
-		if json.Unmarshal(raw, &saved) == nil {
-			st.Domain = saved.Domain
-			st.Port = saved.Port
-		}
-	}
 	if st.Installed {
-		if u.Manager == "systemd" {
-			if _, err := u.Command(ctx, "systemctl", "is-active", "--quiet", "onenew-disguise.service"); err == nil {
-				st.Running = true
-			}
-		} else {
-			if _, err := u.Command(ctx, "rc-service", "onenew-disguise", "status"); err == nil {
-				st.Running = true
-			}
-		}
+		st.Running = u.isManagedDisguiseRunning()
 	}
 	return st
 }
@@ -269,6 +349,36 @@ func (u *Updater) executeSelfSteal(j SelfStealJob) error {
 		if port < 1 || port > 65535 || port == 80 {
 			return fail("invalid_port")
 		}
+
+		// Auto-detect an existing local HTTPS server (e.g. OpenResty/Nginx on 127.0.0.1:443)
+		// before attempting to spin up a new Caddy instance on port 80/8443.
+		if !u.isManagedDisguiseRunning() {
+			checkPort := 443
+			if existing := u.probeTLS(domain, checkPort); existing.Reachable {
+				if !existing.CertValid {
+					return fail("cert_invalid")
+				}
+				if !existing.TLS13 {
+					return fail("missing_tls13")
+				}
+				if !existing.HTTP2 {
+					return fail("missing_http2")
+				}
+				dir := u.disguiseDir()
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					return fail("install_failed")
+				}
+				stateBytes, _ := json.Marshal(selfStealState{Mode: "existing", Domain: domain, Port: checkPort})
+				if err := os.WriteFile(filepath.Join(dir, "state.json"), stateBytes, 0644); err != nil {
+					return fail("install_failed")
+				}
+				return u.reportSelfSteal(j, "succeeded", "")
+			}
+			if u.portInUse(80) {
+				return fail("port_80_in_use")
+			}
+		}
+
 		if _, err := os.Stat(u.disguiseBin()); err != nil {
 			if err := u.downloadDisguiseBinary(); err != nil {
 				return fail("download_failed")
@@ -293,7 +403,7 @@ func (u *Updater) executeSelfSteal(j SelfStealJob) error {
 		if err := os.WriteFile(filepath.Join(dir, "Caddyfile"), []byte(caddyfile), 0644); err != nil {
 			return fail("install_failed")
 		}
-		stateBytes, _ := json.Marshal(selfStealState{Domain: domain, Port: port})
+		stateBytes, _ := json.Marshal(selfStealState{Mode: "managed", Domain: domain, Port: port})
 		if err := os.WriteFile(filepath.Join(dir, "state.json"), stateBytes, 0644); err != nil {
 			return fail("install_failed")
 		}
@@ -325,14 +435,40 @@ WantedBy=multi-user.target
 		if _, err := u.Command(ctx, "systemctl", "restart", "onenew-disguise.service"); err != nil {
 			return fail("service_failed")
 		}
+		if u.Sleep != nil {
+			u.Sleep(2 * time.Second)
+		}
 		if _, err := u.Command(ctx, "systemctl", "is-active", "--quiet", "onenew-disguise.service"); err != nil {
 			return fail("service_failed")
 		}
 		return u.reportSelfSteal(j, "succeeded", "")
 
 	case "restart":
+		var saved selfStealState
+		if raw, err := os.ReadFile(filepath.Join(u.disguiseDir(), "state.json")); err == nil {
+			_ = json.Unmarshal(raw, &saved)
+		}
+		if saved.Mode == "existing" {
+			res := u.probeTLS(saved.Domain, saved.Port)
+			if !res.Reachable {
+				return fail("service_failed")
+			}
+			if !res.CertValid {
+				return fail("cert_invalid")
+			}
+			if !res.TLS13 {
+				return fail("missing_tls13")
+			}
+			if !res.HTTP2 {
+				return fail("missing_http2")
+			}
+			return u.reportSelfSteal(j, "succeeded", "")
+		}
 		if _, err := u.Command(ctx, "systemctl", "restart", "onenew-disguise.service"); err != nil {
 			return fail("service_failed")
+		}
+		if u.Sleep != nil {
+			u.Sleep(2 * time.Second)
 		}
 		if _, err := u.Command(ctx, "systemctl", "is-active", "--quiet", "onenew-disguise.service"); err != nil {
 			return fail("service_failed")
