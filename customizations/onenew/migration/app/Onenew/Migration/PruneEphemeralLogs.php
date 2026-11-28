@@ -11,11 +11,11 @@ final class PruneEphemeralLogs extends Command
     protected $description = 'Daily cleanup of ephemeral telemetry/log tables and SQLite WAL truncation';
 
     private const TARGETS = [
-        ['table' => 'v2_onenew_traffic_receipts', 'column' => 'created_at'],
-        ['table' => 'v2_onenew_domain_events', 'column' => 'observed_at'],
-        ['table' => 'v2_onenew_domain_batches', 'column' => 'created_at'],
-        ['table' => 'onenew_runtime_log_entries', 'column' => 'received_at'],
-        ['table' => 'onenew_runtime_log_batches', 'column' => 'received_at'],
+        ['table' => 'v2_onenew_traffic_receipts', 'column' => 'created_at', 'pk' => 'batch_id'],
+        ['table' => 'v2_onenew_domain_events', 'column' => 'observed_at', 'pk' => 'id'],
+        ['table' => 'v2_onenew_domain_batches', 'column' => 'created_at', 'pk' => 'id'],
+        ['table' => 'onenew_runtime_log_entries', 'column' => 'received_at', 'pk' => 'id'],
+        ['table' => 'onenew_runtime_log_batches', 'column' => 'received_at', 'pk' => 'id'],
     ];
 
     public function handle(): int
@@ -32,10 +32,11 @@ final class PruneEphemeralLogs extends Command
                 continue;
             }
             $col = $target['column'];
+            $pk = $target['pk'];
             do {
-                $ids = DB::table($table)->where($col, '<', $cutoff)->orderBy('id')->limit(2000)->pluck('id');
+                $ids = DB::table($table)->where($col, '<', $cutoff)->orderBy($pk)->limit(2000)->pluck($pk);
                 if ($ids->isEmpty()) break;
-                $total += DB::table($table)->whereIn('id', $ids)->delete();
+                $total += DB::table($table)->whereIn($pk, $ids)->delete();
             } while (true);
         }
 
