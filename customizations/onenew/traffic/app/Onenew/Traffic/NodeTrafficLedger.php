@@ -45,32 +45,6 @@ class NodeTrafficLedger
                 DB::table('v2_onenew_user_node_traffic')->where($key)->incrementEach($bytes, $metadata);
             }
         });
-        $activeUids = [];
-        foreach ($increments as $uid => $bytes) {
-            if (($bytes['raw_u'] + $bytes['raw_d']) >= \App\Onenew\ProbeAccount::MIN_ACTIVE_REPORT_BYTES) {
-                $activeUids[] = $uid;
-            }
-        }
-        $this->recordActiveUsers((int) $server['id'], $activeUids);
-    }
-
-    private function recordActiveUsers(int $serverId, array $userIds): void
-    {
-        if ($serverId <= 0 || empty($userIds)) {
-            return;
-        }
-        try {
-            $now = time();
-            $window = max(300, (int) admin_setting('server_push_interval', 60) * 3);
-            $key = self::ACTIVE_USERS_PREFIX . $serverId;
-            $existing = Cache::get($key);
-            $map = is_array($existing) ? array_filter($existing, fn ($ts) => is_int($ts) && ($now - $ts) <= $window) : [];
-            foreach ($userIds as $uid) {
-                $map[(int) $uid] = $now;
-            }
-            Cache::put($key, $map, $window);
-        } catch (\Throwable) {
-            // Never let active-user cache tracking interfere with traffic accounting.
-        }
+        \App\Onenew\ProbeAccount::recordTrafficPush((int) $server['id'], $data);
     }
 }

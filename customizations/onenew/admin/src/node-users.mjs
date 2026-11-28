@@ -132,7 +132,7 @@ export function NodeUsersTrigger({react:R,get,node}){
                 h('td',{className:'onenew-up-col-act onenew-up-sub'},u.device_count>0?String(u.device_count):'—'),
                 h('td',{className:'onenew-up-col-act onenew-up-sub'},formatNodeBytes(u.today_total)))))))
             :h('p',{className:'onenew-up-loading'},'当前暂无用户在线（可切换到「按日使用明细」查看今日或历史使用记录）'),
-          h('p',{className:'onenew-up-tip'},'实时在线合并节点设备心跳与近期流量上报（约 1–5 分钟窗口）；未开启设备数限制的用户可能仅显示在线状态而不上报具体 IP。')),
+          h('p',{className:'onenew-up-tip'},'统计最近 3 分钟内产生 ≥ 64 KiB 真实流量的在线用户（已自动排除探针号与测速心跳，与列表在线人数完全一致）；未开启设备数限制的用户仅显示在线状态而不上报具体 IP。')),
         data&&tab==='daily'&&h(R.Fragment,null,
           h('div',{className:'onenew-tunnel-cards'},
             h('div',{className:'onenew-tunnel-card'},

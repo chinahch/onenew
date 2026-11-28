@@ -71,30 +71,25 @@ final class NodeUsersTest extends TestCase
         $today = Carbon::now($tz)->startOfDay();
         $yesterday = $today->copy()->subDay();
 
-        // Mock DeviceStateService returning alice with 2 IPs
+        // Mock DeviceStateService returning alice with 2 IPs and charlie with a stale IP (charlie has no recent >=64KiB push)
         $mock = $this->mock(DeviceStateService::class);
         $mock->shouldReceive('getNodeDevices')->with($node->id)->andReturn([
             $alice->id => ['183.14.22.91', '112.96.48.10'],
+            $charlie->id => ['198.51.100.7'],
         ]);
 
-        // Record a traffic batch for bob (>= 64 KiB so bob is active via traffic push even without device_limit IPs)
+        // Record a traffic batch for alice and bob (>= 64 KiB each, so both are in the unified 3-minute active window)
         app(NodeTrafficLedger::class)->applyBatch(
             (string) Str::uuid(),
             ['id' => $node->id, 'name' => $node->name, 'rate' => 1, 'onenew_identity' => $node->onenew_identity],
-            [$bob->id => [20000, 50000]],
+            [$alice->id => [30000, 40000], $bob->id => [20000, 50000]],
             'vless',
             $today->timestamp,
             fn () => null
         );
 
-        // Insert today's traffic for alice (2 rate rows to test grouping) and charlie (offline)
+        // Insert additional today traffic for alice (2nd rate row to test grouping) and charlie (offline / stale IP only)
         DB::table('v2_onenew_user_node_traffic')->insert([
-            [
-                'user_id' => $alice->id, 'server_id' => $node->id, 'node_identity' => $node->onenew_identity,
-                'server_type' => 'vless', 'node_name' => $node->name, 'record_at' => $today->timestamp,
-                'server_rate' => '1.00000000', 'raw_u' => 5000, 'raw_d' => 10000, 'u' => 5000, 'd' => 10000,
-                'created_at' => time(), 'updated_at' => time(),
-            ],
             [
                 'user_id' => $alice->id, 'server_id' => $node->id, 'node_identity' => $node->onenew_identity,
                 'server_type' => 'vless', 'node_name' => $node->name, 'record_at' => $today->timestamp,
@@ -123,27 +118,30 @@ final class NodeUsersTest extends TestCase
             ],
         ]);
 
+        // Server::$online must match the modal online count identically
+        self::assertSame(2, $node->online);
+
         $res = $this->getJson('/api/onenew/admin/traffic/node-users?server_id=' . $node->id, $this->headers($admin))
             ->assertOk()
             ->assertJsonPath('node.id', $node->id)
             ->assertJsonPath('node.online', 2)
             ->assertJsonPath('daily.summary.active_users', 3)
-            ->assertJsonPath('daily.summary.total', 100000);
+            ->assertJsonPath('daily.summary.total', 155000);
 
         $online = $res->json('online_users');
         self::assertCount(2, $online);
-        self::assertSame($bob->id, $online[0]['user_id']);
-        self::assertSame([], $online[0]['ips']);
-        self::assertSame(70000, $online[0]['today_total']);
+        self::assertSame($alice->id, $online[0]['user_id']);
+        self::assertSame(['183.14.22.91', '112.96.48.10'], $online[0]['ips']);
+        self::assertSame(2, $online[0]['device_count']);
+        self::assertSame(76000, $online[0]['today_total']);
 
-        self::assertSame($alice->id, $online[1]['user_id']);
-        self::assertSame(['183.14.22.91', '112.96.48.10'], $online[1]['ips']);
-        self::assertSame(2, $online[1]['device_count']);
-        self::assertSame(21000, $online[1]['today_total']);
+        self::assertSame($bob->id, $online[1]['user_id']);
+        self::assertSame([], $online[1]['ips']);
+        self::assertSame(70000, $online[1]['today_total']);
 
         $daily = $res->json('daily.data');
         self::assertCount(3, $daily);
-        self::assertSame([$bob->id, $alice->id, $charlie->id], array_column($daily, 'user_id'));
+        self::assertSame([$alice->id, $bob->id, $charlie->id], array_column($daily, 'user_id'));
         self::assertTrue($daily[0]['is_online']);
         self::assertTrue($daily[1]['is_online']);
         self::assertFalse($daily[2]['is_online']);
