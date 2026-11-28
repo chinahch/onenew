@@ -20,6 +20,22 @@ export function tunnelPayload(action,rawToken=''){
   return {action};
 }
 
+const progressMeta={pending:{pct:25,tone:'active',step:'1/3 等待服务器助手认领…'},leased:{pct:50,tone:'active',step:'2/3 助手已领取任务，准备执行…'},running:{pct:78,tone:'active',step:'3/3 正在服务器上执行中…'},succeeded:{pct:100,tone:'ok',step:'已完成'},failed:{pct:100,tone:'err',step:'执行失败'},expired:{pct:100,tone:'err',step:'任务已过期'},cancelled:{pct:100,tone:'muted',step:'已取消'}};
+
+function renderTunnelProgress(h,job,nowSec){
+  if(!job)return null;
+  const meta=progressMeta[job.state]||{pct:100,tone:'muted',step:stateLabels[job.state]||job.state};
+  const active=live.has(job.state);
+  const elapsed=active&&job.created_at?Math.max(0,nowSec-Number(job.created_at)):null;
+  return h('div',{className:`onenew-job-box onenew-job-${meta.tone}`},
+    h('div',{className:'onenew-job-head'},
+      h('span',{className:'onenew-job-title'},`${actionLabels[job.action]||job.action} · ${meta.step}`),
+      h('span',{className:'onenew-job-pct'},elapsed!==null?`${meta.pct}% · ${elapsed}s`:`${meta.pct}%`)),
+    h('div',{className:'onenew-job-track',role:'progressbar','aria-valuenow':meta.pct,'aria-valuemin':0,'aria-valuemax':100},
+      h('div',{className:`onenew-job-fill onenew-job-fill-${meta.tone}`,style:{width:`${meta.pct}%`}})),
+    job.error_code&&h('p',{role:'alert',className:'onenew-job-err-msg'},errorLabels[job.error_code]||job.error_code));
+}
+
 export function CloudflaredTunnel({react:R,get,post,machineId,machineName,tunnelActive=false}){
   const h=R.createElement;
   const [open,setOpen]=R.useState(false);
@@ -28,12 +44,16 @@ export function CloudflaredTunnel({react:R,get,post,machineId,machineName,tunnel
   const [busy,setBusy]=R.useState(false);
   const [error,setError]=R.useState('');
   const [notice,setNotice]=R.useState('');
+  const [nowSec,setNowSec]=R.useState(()=>Math.floor(Date.now()/1000));
   const dialog=R.useRef(null);
 
   const load=async(isCurrent=()=>true)=>{
     const res=await get(`${root}/${Number(machineId)}`,{baseURL:'/'});
-    if(!isCurrent())return;
-    setData(res?.data??res);
+    if(!isCurrent())return null;
+    const payload=res?.data??res;
+    setData(payload);
+    if(payload?.job&&!live.has(payload.job.state))setNotice('');
+    return payload;
   };
 
   R.useEffect(()=>{
@@ -46,12 +66,26 @@ export function CloudflaredTunnel({react:R,get,post,machineId,machineName,tunnel
     if(!open)return;
     let active=true,timer;
     const poll=async()=>{
-      try{await load(()=>active)}catch{if(active)setError('无法读取隧道状态，请重试')}
-      if(active)timer=setTimeout(poll,5000);
+      let nextDelay=5000;
+      try{
+        const payload=await load(()=>active);
+        if(payload?.job&&live.has(payload.job.state))nextDelay=2000;
+      }catch{if(active)setError('无法读取隧道状态，请重试')}
+      if(active)timer=setTimeout(poll,nextDelay);
     };
     poll();
     return()=>{active=false;clearTimeout(timer)};
   },[open,machineId]);
+
+  const job=data?.job||null;
+  const activeJob=!!(job&&live.has(job.state));
+
+  R.useEffect(()=>{
+    if(!open||!activeJob)return;
+    setNowSec(Math.floor(Date.now()/1000));
+    const iv=setInterval(()=>setNowSec(Math.floor(Date.now()/1000)),1000);
+    return()=>clearInterval(iv);
+  },[open,activeJob]);
 
   const submit=async action=>{
     setError('');setNotice('');
@@ -79,8 +113,6 @@ export function CloudflaredTunnel({react:R,get,post,machineId,machineName,tunnel
   const hasTunnel=data?!!(data.installed||data.running):!!tunnelActive;
   const trigger=h('button',{type:'button',className:hasTunnel?'onenew-resource-button onenew-tunnel-active':'onenew-resource-button',onClick:e=>{e?.stopPropagation?.();setOpen(true);setError('');setNotice('')}},'隧道');
 
-  const job=data?.job||null;
-  const activeJob=!!(job&&live.has(job.state));
   const title=machineName?`${machineName} (SID:${machineId})`:`服务器 #${machineId}`;
   const statusText=!data?'读取中…':!data.capable?'需更新助手':data.running?'运行中 (active)':data.installed?'已停止':'未安装';
   const statusTone=!data?'muted':!data.capable?'warn':data.running?'ok':data.installed?'err':'muted';
@@ -95,7 +127,7 @@ export function CloudflaredTunnel({react:R,get,post,machineId,machineName,tunnel
       h('div',{className:'onenew-up-body'},
         h('p',{className:'onenew-up-tip'},'通过服务器上的升级助手安全下发 cloudflared 连接器（仅校验并传递 Tunnel Token，不执行任意 Shell 命令）。支持无公网 SSH 端口的服务器。'),
         error&&h('p',{role:'alert',className:'onenew-up-alert'},error),
-        notice&&h('p',{role:'status',className:'onenew-up-tip'},notice),
+        notice&&!job&&h('p',{role:'status',className:'onenew-up-tip'},notice),
         !data?h('p',{className:'onenew-up-loading'},'正在读取隧道状态…'):h(R.Fragment,null,
           !data.capable&&h('p',{className:'onenew-up-alert'},'该服务器尚未上报隧道助手状态。请先在服务器执行最新升级助手刷新命令（--refresh-assistant）后即可远程下发。'),
           h('div',{className:'onenew-tunnel-cards'},
@@ -108,7 +140,7 @@ export function CloudflaredTunnel({react:R,get,post,machineId,machineName,tunnel
             h('div',{className:'onenew-tunnel-card'},
               h('span',{className:'onenew-tunnel-card-label'},'最近任务'),
               h('span',{className:'onenew-tunnel-card-val'},job?`${actionLabels[job.action]||job.action} · ${stateLabels[job.state]||job.state}`:'无'))),
-          job?.error_code&&h('p',{role:'alert',className:'onenew-up-alert'},`最近错误：${errorLabels[job.error_code]||job.error_code}`),
+          renderTunnelProgress(h,job,nowSec),
           h('label',{className:'onenew-field'},
             h('span',null,'Cloudflare Tunnel Token（支持直接粘贴 cloudflared service install 命令）'),
             h('input',{type:'password',autoComplete:'off',spellCheck:false,'aria-label':'Cloudflare Tunnel Token',placeholder:'eyJhIjoi...',value:token,disabled:busy||!data.capable||activeJob,onChange:e=>setToken(e.target.value)})),
