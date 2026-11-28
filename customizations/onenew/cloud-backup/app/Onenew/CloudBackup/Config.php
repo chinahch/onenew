@@ -28,21 +28,20 @@ final class Config
     {
         $row??=$this->row();return empty($row['encrypted_config'])?[]:json_decode(Crypt::decryptString($row['encrypted_config']),true,32,JSON_THROW_ON_ERROR);
     }
-    public function ready(array $secret):bool{foreach(['client_id','client_secret','refresh_token','password'] as $k)if(empty($secret[$k]))return false;return true;}
+    public function ready(array $secret):bool{foreach(['endpoint','bucket','access_key_id','secret_access_key','password'] as $k)if(empty($secret[$k]))return false;return true;}
     public function view(?array $row=null):array
     {
         $row??=$this->row();$secret=$this->secrets($row);$paused=!empty($row['deployment_id'])&&!hash_equals($row['deployment_id'],$this->identity());
-        return ['client_id'=>$secret['client_id']??'','folder_id'=>$secret['folder_id']??'','client_secret_configured'=>!empty($secret['client_secret']),'refresh_token_configured'=>!empty($secret['refresh_token']),'password_configured'=>!empty($secret['password']),'ready'=>$this->ready($secret),'enabled'=>(bool)$row['enabled']&&!$paused,'daily_time'=>$row['daily_time'],'timezone'=>'Asia/Shanghai','next_run_at'=>$paused?null:$row['next_run_at'],'restored_paused'=>$paused,'version'=>(int)$row['version']];
+        return ['endpoint'=>$secret['endpoint']??'','bucket'=>$secret['bucket']??'','access_key_id'=>$secret['access_key_id']??'','prefix'=>$secret['prefix']??'','secret_access_key_configured'=>!empty($secret['secret_access_key']),'password_configured'=>!empty($secret['password']),'ready'=>$this->ready($secret),'enabled'=>(bool)$row['enabled']&&!$paused,'daily_time'=>$row['daily_time'],'timezone'=>'Asia/Shanghai','next_run_at'=>$paused?null:$row['next_run_at'],'restored_paused'=>$paused,'version'=>(int)$row['version']];
     }
     public function save(array $input):array
     {
         return DB::transaction(function()use($input){
             $this->row();$row=(array)DB::table('onenew_cloud_backup_config')->where('id',1)->lockForUpdate()->first();$secret=$this->secrets($row);
-            foreach(['client_id','client_secret','refresh_token','password'] as $k)if(isset($input[$k])&&$input[$k]!=='')$secret[$k]=$input[$k];
-            if(array_key_exists('folder_id',$input))$secret['folder_id']=$input['folder_id']??'';
+            foreach(['endpoint','bucket','access_key_id','secret_access_key','password'] as $k)if(isset($input[$k])&&$input[$k]!=='')$secret[$k]=trim((string)$input[$k]);
+            if(array_key_exists('prefix',$input))$secret['prefix']=trim((string)($input['prefix']??'')," \t\n\r\0\x0B/");
             if(!empty($input['password'])&&($input['password_confirmation']??'')!==$input['password'])throw ValidationException::withMessages(['password'=>'两次备份密码不一致。']);
             $identity=$this->identity();$time=$input['daily_time']??$row['daily_time'];$paused=!empty($row['deployment_id'])&&$row['deployment_id']!==$identity;$enabled=(bool)($input['enabled']??($paused?false:$row['enabled']));
-            $secret['folder_key']??=bin2hex(random_bytes(16));
             if($enabled&&!$this->ready($secret))throw ValidationException::withMessages(['enabled'=>BackupFailure::message('not_configured')]);
             $next=$enabled?((($row['deployment_id']??'')===$identity&&$row['enabled']&&$time===$row['daily_time']&&$row['next_run_at'])?$row['next_run_at']:Schedule::next($time,now()->toDateTimeImmutable())):null;
             DB::table('onenew_cloud_backup_config')->where('id',1)->update(['encrypted_config'=>Crypt::encryptString(json_encode($secret,JSON_THROW_ON_ERROR)),'daily_time'=>$time,'enabled'=>$enabled,'deployment_id'=>$identity,'next_run_at'=>$next,'version'=>$row['version']+1]);return $this->view();
