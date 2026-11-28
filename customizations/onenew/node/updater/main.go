@@ -83,6 +83,15 @@ func main() {
 					e = u.executeTunnel(*tj)
 				}
 			}
+			if e == nil {
+				operation = "self_steal_poll"
+				var sj *SelfStealJob
+				sj, e = u.pollSelfSteal()
+				if e == nil && sj != nil {
+					operation = "self_steal_execute"
+					e = u.executeSelfSteal(*sj)
+				}
+			}
 		}
 		if errors.Is(e, ErrUnauthorized) {
 			fmt.Fprintln(os.Stderr, "Updater disabled: machine authorization rejected")

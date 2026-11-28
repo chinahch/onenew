@@ -53,10 +53,10 @@ func TestRealV15ToV17Assets(t *testing.T) {
 			h.sum = hex.EncodeToString(sum[:])
 			writeTest(t, filepath.Join(h.u.Root, "config.yml"), "preserve-config-and-certificates")
 			h.unhealthy = rollback
-			if e = h.u.execute(h.job("v0.1.19")); e != nil {
+			if e = h.u.execute(h.job("v0.1.20")); e != nil {
 				t.Fatal(e)
 			}
-			expected := "v0.1.19"
+			expected := "v0.1.20"
 			state := "succeeded"
 			if rollback {
 				expected = "v0.1.15"
