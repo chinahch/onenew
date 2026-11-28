@@ -76,6 +76,11 @@ final class SelfStealTest extends TestCase
             'self_steal' => false,
         ]);
         self::assertArrayNotHasKey('dest', $off);
+
+        // ServerSave validation must accept reality_settings.self_steal
+        $req = new \App\Http\Requests\Admin\ServerSave(['type' => 'vless']);
+        $rules = $req->rules();
+        self::assertArrayHasKey('protocol_settings.reality_settings.self_steal', $rules);
     }
 
     public function test_self_steal_agent_poll_dispatch_and_status_lifecycle(): void

@@ -95,6 +95,9 @@ if ($realityCount !== 2) {
     throw new RuntimeException('Pinned ServerService reality_settings anchor changed (expected 2, got ' . $realityCount . ')');
 }
 file_put_contents($serverServicePath, $realityUpdated);
+replaceOnce($root . '/app/Http/Requests/Admin/ServerSave.php',
+    "        'reality_settings.short_id' => 'nullable|string',",
+    "        'reality_settings.short_id' => 'nullable|string',\n        'reality_settings.self_steal' => 'nullable|boolean',");
 replaceOnce($root . '/app/Observers/ServerObserver.php', "            'server_port',", "            'host',\n            'server_port',");
 // The native controller previously pointed at cedar2025's stock installer.
 $machineController = $root . '/app/Http/Controllers/V2/Admin/Server/MachineController.php';
