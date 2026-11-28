@@ -42,6 +42,21 @@ final class TunnelService
         ];
     }
 
+    public static function isInstalledForMachine(ServerMachine $m): bool
+    {
+        try {
+            $row = DB::table(self::AGENTS)->where('machine_id', $m->id)->first();
+            if (!$row || (!$row->installed && !$row->running)) {
+                return false;
+            }
+            $identity = (string) $m->onenew_identity;
+            $credHash = hash('sha256', (string) $m->token);
+            return hash_equals((string) $row->identity, $identity) && hash_equals((string) $row->credential_hash, $credHash);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     private function current(ServerMachine $authenticated): ServerMachine
     {
         $m = ServerMachine::lockForUpdate()->find($authenticated->id);

@@ -20,7 +20,7 @@ export function tunnelPayload(action,rawToken=''){
   return {action};
 }
 
-export function CloudflaredTunnel({react:R,get,post,machineId,machineName}){
+export function CloudflaredTunnel({react:R,get,post,machineId,machineName,tunnelActive=false}){
   const h=R.createElement;
   const [open,setOpen]=R.useState(false);
   const [data,setData]=R.useState(null);
@@ -76,7 +76,8 @@ export function CloudflaredTunnel({react:R,get,post,machineId,machineName}){
   };
 
   const stop=e=>{e?.stopPropagation?.()};
-  const trigger=h('button',{type:'button',className:'onenew-resource-button',onClick:e=>{e?.stopPropagation?.();setOpen(true);setError('');setNotice('')}},'隧道');
+  const hasTunnel=data?!!(data.installed||data.running):!!tunnelActive;
+  const trigger=h('button',{type:'button',className:hasTunnel?'onenew-resource-button onenew-tunnel-active':'onenew-resource-button',onClick:e=>{e?.stopPropagation?.();setOpen(true);setError('');setNotice('')}},'隧道');
 
   const job=data?.job||null;
   const activeJob=!!(job&&live.has(job.state));
