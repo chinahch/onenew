@@ -50,7 +50,7 @@ import {patchBundle} from './patch.mjs';
 const source=fs.readFileSync(path.join(process.env.ONENEW_ADMIN_UPSTREAM||'../../../../xboard-admin-dist','assets/index-CEIYH7i8.js'),'utf8');
 test('machine status has an adjacent runtime log modal entry and detail retains an entry',()=>{
  const patched=patchBundle(source,'');
- assert.ok(patched.includes('children:[Q.jsx(s3t,{machine:e.original,t:t}),Q.jsx(OnenewAdmin.RuntimeLogs,{react:H,get:IL,machineId:e.original.id}),Q.jsx(OnenewAdmin.CloudflaredTunnel,{react:H,get:IL,post:RL,machineId:e.original.id,machineName:e.original.name})]'));
+ assert.ok(patched.includes('children:[Q.jsx(s3t,{machine:e.original,t:t}),Q.jsx(OnenewAdmin.RuntimeLogs,{react:H,get:IL,machineId:e.original.id}),Q.jsx(OnenewAdmin.CloudflaredTunnel,{react:H,get:IL,post:RL,machineId:e.original.id,machineName:e.original.name,tunnelActive:!!e.original.tunnel_installed})]'));
  assert.ok(patched.includes('Q.jsx(OnenewAdmin.RuntimeLogs,{react:H,get:IL,machineId:e.id})'));
 });
 

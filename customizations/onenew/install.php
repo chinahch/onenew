@@ -112,7 +112,7 @@ if ($upgradeCount !== 1) {
 }
 file_put_contents($machineController, $machineSource);
 replaceOnce($machineController, "                    'last_seen_at' => \$machine->last_seen_at,",
-    "                    'last_seen_at' => \$machine->last_seen_at,\n                    'connection_status' => \\App\\Onenew\\MachineConnectionStatus::forMachine(\$machine, now()->timestamp),");
+    "                    'last_seen_at' => \$machine->last_seen_at,\n                    'connection_status' => \\App\\Onenew\\MachineConnectionStatus::forMachine(\$machine, now()->timestamp),\n                    'tunnel_installed' => \\App\\Onenew\\Cloudflared\\TunnelService::isInstalledForMachine(\$machine),");
 require $custom . '/traffic/install.php';
 applyOnenewTrafficPatch($root);
 replaceOnce($root . '/app/Console/Kernel.php',

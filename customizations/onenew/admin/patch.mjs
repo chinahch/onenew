@@ -103,7 +103,7 @@ export function patchBundle(source,runtime){
   machine=replaceOnce(machine,'className:"max-w-md gap-0 overflow-hidden p-0 sm:rounded-2xl"','className:"max-w-xl max-h-[90vh] gap-0 overflow-y-auto p-0 sm:rounded-2xl"');
   source=source.slice(0,machineStart)+machine+source.slice(machineEnd);
   source=replaceOnce(source,'function g5t(e){if(!e.is_active)', 'function g5t(e){if(e.connection_status)return e.connection_status;if(!e.is_active)');
-  source=replaceOnce(source,'cell:({row:e})=>Q.jsx(s3t,{machine:e.original,t:t}),filterFn:', 'cell:({row:e})=>Q.jsxs("div",{className:"flex items-center gap-2",children:[Q.jsx(s3t,{machine:e.original,t:t}),Q.jsx(OnenewAdmin.RuntimeLogs,{react:H,get:IL,machineId:e.original.id}),Q.jsx(OnenewAdmin.CloudflaredTunnel,{react:H,get:IL,post:RL,machineId:e.original.id,machineName:e.original.name})]}),filterFn:');
+  source=replaceOnce(source,'cell:({row:e})=>Q.jsx(s3t,{machine:e.original,t:t}),filterFn:', 'cell:({row:e})=>Q.jsxs("div",{className:"flex items-center gap-2",children:[Q.jsx(s3t,{machine:e.original,t:t}),Q.jsx(OnenewAdmin.RuntimeLogs,{react:H,get:IL,machineId:e.original.id}),Q.jsx(OnenewAdmin.CloudflaredTunnel,{react:H,get:IL,post:RL,machineId:e.original.id,machineName:e.original.name,tunnelActive:!!e.original.tunnel_installed})]}),filterFn:');
   const installStart=source.indexOf('function R3t('),installEnd=source.indexOf('function O3t(',installStart);
   if(installStart<0||installEnd<0)throw new Error('服务器安装命令组件不存在');
   let install=source.slice(installStart,installEnd);
@@ -112,7 +112,7 @@ export function patchBundle(source,runtime){
   install=install.slice(0,-installSuffix.length)+',Q.jsx(OnenewAdmin.UpgradeCommand,{react:H,command:a?.upgrade_command,loading:l})'+installSuffix;
   source=source.slice(0,installStart)+install+source.slice(installEnd);
   source=replaceOnce(source,'Q.jsx(n3t,{refetch:t}),Q.jsx(u8e,','Q.jsx(n3t,{refetch:t}),Q.jsx(OnenewAdmin.RemoteUpgrade,{react:H,get:IL,post:RL,table:e}),Q.jsx(u8e,');
-  source=replaceOnce(source,'Q.jsx(R3t,{machineId:e.id,open:t,t:i}),','Q.jsx(R3t,{machineId:e.id,open:t,t:i}),Q.jsx(OnenewAdmin.RemoteUpgrade,{react:H,get:IL,post:RL,machineId:e.id}),Q.jsx(OnenewAdmin.RuntimeLogs,{react:H,get:IL,machineId:e.id}),Q.jsx(OnenewAdmin.CloudflaredTunnel,{react:H,get:IL,post:RL,machineId:e.id,machineName:e.name}),');
+  source=replaceOnce(source,'Q.jsx(R3t,{machineId:e.id,open:t,t:i}),','Q.jsx(R3t,{machineId:e.id,open:t,t:i}),Q.jsx(OnenewAdmin.RemoteUpgrade,{react:H,get:IL,post:RL,machineId:e.id}),Q.jsx(OnenewAdmin.RuntimeLogs,{react:H,get:IL,machineId:e.id}),Q.jsx(OnenewAdmin.CloudflaredTunnel,{react:H,get:IL,post:RL,machineId:e.id,machineName:e.name,tunnelActive:!!e.tunnel_installed}),');
   source=replaceOnce(source,'const KGt=[','const KGt=[{title:"能量补充审核",key:"energy",icon:Q.jsx(Zm,{size:18}),href:"/config/system/energy",description:"审核用户补充申请"},{title:"备份与恢复",key:"migration",icon:Q.jsx(Zm,{size:18}),href:"/config/system/migration",description:"加密备份、云盘上传及网页恢复"},');
   source=replaceOnce(source,'{path:"subscribe-template",element:Q.jsx(WQe,{})}',
     '{path:"energy",element:Q.jsx(OnenewAdmin.EnergyRequests,{react:H,get:IL,post:RL})},{path:"migration",element:Q.jsx(OnenewAdmin.MigrationPage,{react:H,get:IL,post:RL})},{path:"subscribe-template",element:Q.jsx(WQe,{})}');
