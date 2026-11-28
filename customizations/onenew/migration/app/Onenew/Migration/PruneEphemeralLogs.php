@@ -40,13 +40,16 @@ final class PruneEphemeralLogs extends Command
             } while (true);
         }
 
-        if (config('database.connections.' . config('database.default') . '.driver') === 'sqlite') {
+        if (config('database.connections.' . config('database.default') . '.driver') === 'sqlite'
+            && DB::transactionLevel() === 0) {
             $pdo = DB::connection()->getPdo();
-            $pdo->exec('PRAGMA busy_timeout = 30000');
-            if ($this->option('vacuum')) {
-                $pdo->exec('VACUUM');
+            if (!$pdo->inTransaction()) {
+                $pdo->exec('PRAGMA busy_timeout = 30000');
+                if ($this->option('vacuum')) {
+                    $pdo->exec('VACUUM');
+                }
+                $pdo->query('PRAGMA wal_checkpoint(TRUNCATE)')->fetchAll();
             }
-            $pdo->query('PRAGMA wal_checkpoint(TRUNCATE)')->fetchAll();
         }
 
         $this->info('Pruned ' . $total . ' ephemeral log/telemetry rows.');
