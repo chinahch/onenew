@@ -61,6 +61,8 @@
 .onenew-up-err{font-size:11px;color:#dc2626}
 .onenew-up-col-act{text-align:right;white-space:nowrap}
 .onenew-up-dash{color:hsl(var(--muted-foreground))}
+.onenew-tunnel-dialog{width:min(620px,96vw);max-height:86vh;padding:0;margin:auto;border-radius:12px;border:1px solid hsl(var(--border));background:hsl(var(--background));color:hsl(var(--foreground));box-shadow:0 20px 50px #00000038;overflow:hidden}
+.onenew-tunnel-dialog::backdrop{background:#00000073;backdrop-filter:blur(2px)}
 .onenew-tunnel-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .onenew-tunnel-card{padding:10px 12px;border-radius:8px;border:1px solid hsl(var(--border));background:hsl(var(--muted)/.3);display:grid;gap:4px}
 .onenew-tunnel-card-label{font-size:11px;color:hsl(var(--muted-foreground))}
