@@ -32,7 +32,7 @@ final class NodeUsersTest extends TestCase
 
     private function headers(User $user): array
     {
-        return ['Authorization' => AuthService::generateAuthData($user)['auth_data']];
+        return ['Authorization' => (new AuthService($user))->generateAuthData()['auth_data']];
     }
 
     private function node(string $name = 'JP-AI'): Server
