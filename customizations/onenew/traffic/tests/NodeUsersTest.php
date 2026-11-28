@@ -157,4 +157,39 @@ final class NodeUsersTest extends TestCase
 
         Cache::forget(NodeTrafficLedger::ACTIVE_USERS_PREFIX . $node->id);
     }
+
+    public function test_excludes_dedicated_probe_accounts_from_online_and_daily_stats(): void
+    {
+        $admin = $this->user(true, 'admin2@example.test');
+        $probe = $this->user(false, '节点探针@qq.com');
+        $real = $this->user(false, 'real@example.test');
+        $node = $this->node('SG-AI');
+        $today = Carbon::now(config('app.timezone', 'UTC'))->startOfDay();
+
+        $mock = $this->mock(DeviceStateService::class);
+        $mock->shouldReceive('getNodeDevices')->with($node->id)->andReturn([
+            $probe->id => ['127.0.0.1'],
+            $real->id => ['203.0.113.5'],
+        ]);
+
+        app(NodeTrafficLedger::class)->applyBatch(
+            (string) Str::uuid(),
+            ['id' => $node->id, 'name' => $node->name, 'rate' => 1, 'onenew_identity' => $node->onenew_identity],
+            [$probe->id => [500, 500], $real->id => [2000, 3000]],
+            'vless',
+            $today->timestamp,
+            fn () => null
+        );
+
+        self::assertSame(1, \App\Onenew\ProbeAccount::countRealUsers([$probe->id => [500, 500], $real->id => [2000, 3000]]));
+
+        $this->getJson('/api/onenew/admin/traffic/node-users?server_id=' . $node->id, $this->headers($admin))
+            ->assertOk()
+            ->assertJsonPath('node.online', 1)
+            ->assertJsonPath('online_users.0.user_id', $real->id)
+            ->assertJsonPath('daily.summary.active_users', 1)
+            ->assertJsonPath('daily.data.0.user_id', $real->id);
+
+        Cache::forget(NodeTrafficLedger::ACTIVE_USERS_PREFIX . $node->id);
+    }
 }
