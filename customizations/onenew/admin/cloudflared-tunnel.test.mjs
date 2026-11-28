@@ -15,15 +15,16 @@ test('extractTunnelToken accepts raw token or cloudflared install command and re
 });
 
 test('CloudflaredTunnel modal loads state and submits validated install payload',async()=>{
-  const values=[],effects=[],deps=[],cleanups=[],posts=[];
-  let c=0,ec=0;
+  const values=[],refs=[],effects=[],deps=[],cleanups=[],posts=[];
+  let c=0,rc=0,ec=0;
   const R={Fragment:'fragment',createElement:(type,props,...children)=>({type,props:props||{},children:children.flat(Infinity)}),
     useState:init=>{const s=c++;if(!(s in values))values[s]=init;return [values[s],next=>{values[s]=typeof next==='function'?next(values[s]):next}]},
+    useRef:init=>refs[rc++]??(refs[rc-1]={current:init}),
     useEffect:(fn,d)=>{const s=ec++;if(JSON.stringify(deps[s])!==JSON.stringify(d)){deps[s]=d;effects.push(fn)}}};
   const props={react:R,machineId:4,machineName:'raksmart-cn2',
     get:async()=>({data:{machine_id:4,name:'raksmart-cn2',is_active:true,capable:true,online:true,installed:false,running:false,version:null,arch:'amd64',job:null}}),
     post:async(...args)=>posts.push(args)};
-  const render=()=>{c=0;ec=0;return CloudflaredTunnel(props)};
+  const render=()=>{c=0;rc=0;ec=0;return CloudflaredTunnel(props)};
   const visit=n=>!n||typeof n!=='object'?[]:[n,...(n.children||[]).flatMap(visit)];
   const btn=(tree,label)=>visit(tree).find(n=>n.type==='button'&&n.children.includes(label));
 

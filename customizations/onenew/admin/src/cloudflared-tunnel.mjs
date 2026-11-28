@@ -28,12 +28,19 @@ export function CloudflaredTunnel({react:R,get,post,machineId,machineName}){
   const [busy,setBusy]=R.useState(false);
   const [error,setError]=R.useState('');
   const [notice,setNotice]=R.useState('');
+  const dialog=R.useRef(null);
 
   const load=async(isCurrent=()=>true)=>{
     const res=await get(`${root}/${Number(machineId)}`,{baseURL:'/'});
     if(!isCurrent())return;
     setData(res?.data??res);
   };
+
+  R.useEffect(()=>{
+    if(!open)return;
+    dialog.current?.showModal?.();
+    return()=>{dialog.current?.close?.()};
+  },[open]);
 
   R.useEffect(()=>{
     if(!open)return;
@@ -68,8 +75,8 @@ export function CloudflaredTunnel({react:R,get,post,machineId,machineName}){
     finally{setBusy(false)}
   };
 
+  const stop=e=>{e?.stopPropagation?.()};
   const trigger=h('button',{type:'button',className:'onenew-resource-button',onClick:e=>{e?.stopPropagation?.();setOpen(true);setError('');setNotice('')}},'隧道');
-  if(!open)return trigger;
 
   const job=data?.job||null;
   const activeJob=!!(job&&live.has(job.state));
@@ -78,36 +85,35 @@ export function CloudflaredTunnel({react:R,get,post,machineId,machineName}){
   const statusTone=!data?'muted':!data.capable?'warn':data.running?'ok':data.installed?'err':'muted';
 
   return h(R.Fragment,null,trigger,
-    h('div',{className:'onenew-up-overlay',onClick:e=>{if(e.target===e.currentTarget&&!busy)setOpen(false)}},
-      h('section',{className:'onenew-up-modal onenew-up-modal-sm','aria-label':`服务器 #${machineId} Argo 隧道`},
-        h('header',{className:'onenew-up-header'},
-          h('div',{className:'onenew-up-title-group'},
-            h('strong',{className:'onenew-up-title'},`Argo 隧道 · ${title}`),
-            data&&h('span',{className:`onenew-up-pill onenew-up-pill-${statusTone}`},statusText)),
-          h('button',{type:'button',className:'onenew-up-btn onenew-up-btn-ghost',disabled:busy,onClick:()=>setOpen(false)},'关闭')),
-        h('div',{className:'onenew-up-body'},
-          h('p',{className:'onenew-up-tip'},'通过服务器上的升级助手安全下发 cloudflared 连接器（仅校验并传递 Tunnel Token，不执行任意 Shell 命令）。支持无公网 SSH 端口的服务器。'),
-          error&&h('p',{role:'alert',className:'onenew-up-alert'},error),
-          notice&&h('p',{role:'status',className:'onenew-up-tip'},notice),
-          !data?h('p',{className:'onenew-up-loading'},'正在读取隧道状态…'):h(R.Fragment,null,
-            !data.capable&&h('p',{className:'onenew-up-alert'},'该服务器尚未上报隧道助手状态。请先在服务器执行最新升级助手刷新命令（--refresh-assistant）后即可远程下发。'),
-            h('div',{className:'onenew-tunnel-cards'},
-              h('div',{className:'onenew-tunnel-card'},
-                h('span',{className:'onenew-tunnel-card-label'},'连接器状态'),
-                h('span',{className:'onenew-tunnel-card-val'},statusText)),
-              h('div',{className:'onenew-tunnel-card'},
-                h('span',{className:'onenew-tunnel-card-label'},'版本 / 架构'),
-                h('span',{className:'onenew-tunnel-card-val'},data.version?`${data.version} · ${data.arch||''}`:(data.arch||'—'))),
-              h('div',{className:'onenew-tunnel-card'},
-                h('span',{className:'onenew-tunnel-card-label'},'最近任务'),
-                h('span',{className:'onenew-tunnel-card-val'},job?`${actionLabels[job.action]||job.action} · ${stateLabels[job.state]||job.state}`:'无'))),
-            job?.error_code&&h('p',{role:'alert',className:'onenew-up-alert'},`最近错误：${errorLabels[job.error_code]||job.error_code}`),
-            h('label',{className:'onenew-field'},
-              h('span',null,'Cloudflare Tunnel Token（支持直接粘贴 cloudflared service install 命令）'),
-              h('input',{type:'password',autoComplete:'off',spellCheck:false,'aria-label':'Cloudflare Tunnel Token',placeholder:'eyJhIjoi...',value:token,disabled:busy||!data.capable||activeJob,onChange:e=>setToken(e.target.value)})),
-            h('div',{className:'onenew-tunnel-actions'},
-              h('button',{type:'button',className:'onenew-up-btn onenew-up-btn-primary',disabled:busy||!data.capable||activeJob||!token.trim(),onClick:()=>submit('install')},busy?'正在下发…':'安装 / 更新 Token'),
-              h('button',{type:'button',className:'onenew-up-btn',disabled:busy||!data.capable||activeJob||!data.installed,onClick:()=>submit('restart')},'重启服务'),
-              h('button',{type:'button',className:'onenew-up-btn onenew-up-btn-danger',disabled:busy||!data.capable||activeJob||!data.installed,onClick:()=>submit('uninstall')},'卸载清理'),
-              job?.state==='pending'&&h('button',{type:'button',className:'onenew-up-btn onenew-up-btn-ghost',disabled:busy,onClick:()=>cancel(job.id)},'取消等待')))))));
+    open&&h('dialog',{ref:dialog,className:'onenew-tunnel-dialog',onCancel:e=>{if(busy){e?.preventDefault?.();return}setOpen(false)},onClose:()=>setOpen(false),onClick:stop,onMouseDown:stop,onPointerDown:stop,'aria-label':`服务器 #${machineId} Argo 隧道`},
+      h('header',{className:'onenew-up-header'},
+        h('div',{className:'onenew-up-title-group'},
+          h('strong',{className:'onenew-up-title'},`Argo 隧道 · ${title}`),
+          data&&h('span',{className:`onenew-up-pill onenew-up-pill-${statusTone}`},statusText)),
+        h('button',{type:'button',className:'onenew-up-btn onenew-up-btn-ghost',disabled:busy,onClick:()=>setOpen(false)},'关闭')),
+      h('div',{className:'onenew-up-body'},
+        h('p',{className:'onenew-up-tip'},'通过服务器上的升级助手安全下发 cloudflared 连接器（仅校验并传递 Tunnel Token，不执行任意 Shell 命令）。支持无公网 SSH 端口的服务器。'),
+        error&&h('p',{role:'alert',className:'onenew-up-alert'},error),
+        notice&&h('p',{role:'status',className:'onenew-up-tip'},notice),
+        !data?h('p',{className:'onenew-up-loading'},'正在读取隧道状态…'):h(R.Fragment,null,
+          !data.capable&&h('p',{className:'onenew-up-alert'},'该服务器尚未上报隧道助手状态。请先在服务器执行最新升级助手刷新命令（--refresh-assistant）后即可远程下发。'),
+          h('div',{className:'onenew-tunnel-cards'},
+            h('div',{className:'onenew-tunnel-card'},
+              h('span',{className:'onenew-tunnel-card-label'},'连接器状态'),
+              h('span',{className:'onenew-tunnel-card-val'},statusText)),
+            h('div',{className:'onenew-tunnel-card'},
+              h('span',{className:'onenew-tunnel-card-label'},'版本 / 架构'),
+              h('span',{className:'onenew-tunnel-card-val'},data.version?`${data.version} · ${data.arch||''}`:(data.arch||'—'))),
+            h('div',{className:'onenew-tunnel-card'},
+              h('span',{className:'onenew-tunnel-card-label'},'最近任务'),
+              h('span',{className:'onenew-tunnel-card-val'},job?`${actionLabels[job.action]||job.action} · ${stateLabels[job.state]||job.state}`:'无'))),
+          job?.error_code&&h('p',{role:'alert',className:'onenew-up-alert'},`最近错误：${errorLabels[job.error_code]||job.error_code}`),
+          h('label',{className:'onenew-field'},
+            h('span',null,'Cloudflare Tunnel Token（支持直接粘贴 cloudflared service install 命令）'),
+            h('input',{type:'password',autoComplete:'off',spellCheck:false,'aria-label':'Cloudflare Tunnel Token',placeholder:'eyJhIjoi...',value:token,disabled:busy||!data.capable||activeJob,onChange:e=>setToken(e.target.value)})),
+          h('div',{className:'onenew-tunnel-actions'},
+            h('button',{type:'button',className:'onenew-up-btn onenew-up-btn-primary',disabled:busy||!data.capable||activeJob||!token.trim(),onClick:()=>submit('install')},busy?'正在下发…':'安装 / 更新 Token'),
+            h('button',{type:'button',className:'onenew-up-btn',disabled:busy||!data.capable||activeJob||!data.installed,onClick:()=>submit('restart')},'重启服务'),
+            h('button',{type:'button',className:'onenew-up-btn onenew-up-btn-danger',disabled:busy||!data.capable||activeJob||!data.installed,onClick:()=>submit('uninstall')},'卸载清理'),
+            job?.state==='pending'&&h('button',{type:'button',className:'onenew-up-btn onenew-up-btn-ghost',disabled:busy,onClick:()=>cancel(job.id)},'取消等待'))))));
 }
