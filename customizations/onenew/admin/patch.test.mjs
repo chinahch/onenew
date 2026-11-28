@@ -74,5 +74,6 @@ test('uTLS fingerprint selector includes chrome140 (support x25519mlkem768)',()=
   value:'chrome140',
   label:'chrome140 (support x25519mlkem768)',
  });
+ assert.ok(patched.includes('OnenewAdmin.CloudflaredTunnel,{react:H,get:IL,post:RL,machineId:e.original.id,machineName:e.original.name}'));
 });
 

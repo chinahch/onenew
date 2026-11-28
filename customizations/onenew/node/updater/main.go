@@ -66,6 +66,15 @@ func main() {
 					u.recoveryReason = "journal_failed"
 				}
 			}
+			if e == nil {
+				operation = "tunnel_poll"
+				var tj *TunnelJob
+				tj, e = u.pollTunnel()
+				if e == nil && tj != nil {
+					operation = "tunnel_execute"
+					e = u.executeTunnel(*tj)
+				}
+			}
 		}
 		if errors.Is(e, ErrUnauthorized) {
 			fmt.Fprintln(os.Stderr, "Updater disabled: machine authorization rejected")

@@ -38,6 +38,7 @@ class OnenewServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom($root . '/traffic/database/migrations');
         $this->loadMigrationsFrom($root . '/runtime/database/migrations');
         $this->loadMigrationsFrom($root . '/remote-upgrade/database/migrations');
+        $this->loadMigrationsFrom($root . '/cloudflared/database/migrations');
         $this->loadMigrationsFrom($root . '/ai-operations/database/migrations');
         $this->loadMigrationsFrom($root . '/runtime-logs/database/migrations');
         $this->loadMigrationsFrom($root . '/external/database/migrations');
@@ -51,6 +52,7 @@ class OnenewServiceProvider extends ServiceProvider
         require $root . '/traffic/routes.php';
         require $root . '/exit-probe/routes.php';
         require $root . '/remote-upgrade/routes.php';
+        require $root . '/cloudflared/routes.php';
         require $root . '/ai-operations/routes.php';
         require $root . '/runtime-logs/routes.php';
         require $root . '/landing-library/routes.php';
