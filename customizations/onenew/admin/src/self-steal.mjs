@@ -38,21 +38,34 @@ function renderJobProgress(h,job,nowSec){
     job.error_code&&h('p',{role:'alert',className:'onenew-job-err-msg'},errorLabels[job.error_code]||job.error_code));
 }
 
+let activeSiteMachineId=null;
+const siteDrafts=new Map();
+
 export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive=false}){
   const h=R.createElement;
-  const [open,setOpen]=R.useState(false);
+  const mid=Number(machineId);
+  const savedDraft=siteDrafts.get(mid);
+  const [open,setOpen]=R.useState(activeSiteMachineId===mid);
   const [data,setData]=R.useState(null);
-  const [domain,setDomain]=R.useState('');
-  const [port,setPort]=R.useState('8443');
-  const [touched,setTouched]=R.useState(false);
+  const [domain,setDomain]=R.useState(savedDraft?.domain??'');
+  const [port,setPort]=R.useState(savedDraft?.port??'8443');
+  const [touched,setTouched]=R.useState(!!savedDraft?.touched);
   const [busy,setBusy]=R.useState(false);
   const [error,setError]=R.useState('');
   const [notice,setNotice]=R.useState('');
-  const [nowSec,setNowSec]=R.useState(()=>Math.floor(Date.now()/1000));
+  const [nowSec,setNowSec]=R.useState(Math.floor(Date.now()/1000));
   const dialog=R.useRef(null);
+  const unmounting=R.useRef(false);
+
+  const openModal=()=>{activeSiteMachineId=mid;setOpen(true);setError('');setNotice('')};
+  const closeModal=()=>{if(activeSiteMachineId===mid)activeSiteMachineId=null;siteDrafts.delete(mid);setTouched(false);setOpen(false)};
+
+  const updateDraft=(nextDomain,nextPort,nextTouched)=>{
+    siteDrafts.set(mid,{domain:nextDomain,port:nextPort,touched:nextTouched});
+  };
 
   const load=async(isCurrent=()=>true)=>{
-    const res=await get(`${root}/${Number(machineId)}`,{baseURL:'/'});
+    const res=await get(`${root}/${mid}`,{baseURL:'/'});
     if(!isCurrent())return null;
     const payload=res?.data??res;
     setData(payload);
@@ -66,8 +79,9 @@ export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive
 
   R.useEffect(()=>{
     if(!open)return;
-    dialog.current?.showModal?.();
-    return()=>{dialog.current?.close?.()};
+    unmounting.current=false;
+    if(dialog.current&&!dialog.current.open)dialog.current.showModal?.();
+    return()=>{unmounting.current=true;dialog.current?.close?.()};
   },[open]);
 
   R.useEffect(()=>{
@@ -118,7 +132,7 @@ export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive
 
   const stop=e=>{e?.stopPropagation?.()};
   const hasSite=data?!!(data.installed||data.running):!!siteActive;
-  const trigger=h('button',{type:'button',className:hasSite?'onenew-resource-button onenew-tunnel-active':'onenew-resource-button',onClick:e=>{e?.stopPropagation?.();setOpen(true);setTouched(false);setError('');setNotice('')}},'伪装站');
+  const trigger=h('button',{type:'button',className:hasSite?'onenew-resource-button onenew-tunnel-active':'onenew-resource-button',onClick:e=>{e?.stopPropagation?.();openModal()}},'伪装站');
 
   const title=machineName?`${machineName} (SID:${machineId})`:`服务器 #${machineId}`;
   const isExisting=data?.version==='existing-h2-tls13';
@@ -126,12 +140,12 @@ export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive
   const statusTone=!data?'muted':!data.capable?'warn':data.running?'ok':data.installed?'err':'muted';
 
   return h(R.Fragment,null,trigger,
-    open&&h('dialog',{ref:dialog,className:'onenew-tunnel-dialog',onCancel:e=>{if(busy){e?.preventDefault?.();return}setOpen(false)},onClose:()=>setOpen(false),onClick:stop,onMouseDown:stop,onPointerDown:stop,'aria-label':`服务器 #${machineId} 偷自己伪装站`},
+    open&&h('dialog',{ref:dialog,className:'onenew-tunnel-dialog',onCancel:e=>{if(busy){e?.preventDefault?.();return}closeModal()},onClose:()=>{if(!unmounting.current)closeModal()},onClick:stop,onMouseDown:stop,onPointerDown:stop,'aria-label':`服务器 #${machineId} 偷自己伪装站`},
       h('header',{className:'onenew-up-header'},
         h('div',{className:'onenew-up-title-group'},
           h('strong',{className:'onenew-up-title'},`偷自己伪装站 · ${title}`),
           data&&h('span',{className:`onenew-up-pill onenew-up-pill-${statusTone}`},statusText)),
-        h('button',{type:'button',className:'onenew-up-btn onenew-up-btn-ghost',disabled:busy,onClick:()=>setOpen(false)},'关闭')),
+        h('button',{type:'button',className:'onenew-up-btn onenew-up-btn-ghost',disabled:busy,onClick:closeModal},'关闭')),
       h('div',{className:'onenew-up-body'},
         h('p',{className:'onenew-up-tip'},'通过升级助手自动在目标机部署独立的 Caddy 伪装站（onenew-disguise），自动签发并续期 TLS 1.3 + HTTP/2 证书。默认回落端口 8443 仅监听 127.0.0.1（不暴露公网端口），80 端口用于自动签证书。'),
         error&&h('p',{role:'alert',className:'onenew-up-alert'},error),
@@ -152,10 +166,10 @@ export function SelfStealSite({react:R,get,post,machineId,machineName,siteActive
           h('div',{className:'onenew-row'},
             h('label',{className:'onenew-field'},
               h('span',null,'伪装域名（需已解析到此服务器 IP，关闭小黄云）'),
-              h('input',{type:'text',autoComplete:'off',spellCheck:false,placeholder:'blog.example.com',value:domain,disabled:busy||!data.capable||activeJob,onChange:e=>{setTouched(true);setDomain(e.target.value)}})),
+              h('input',{type:'text',autoComplete:'off',spellCheck:false,placeholder:'blog.example.com',value:domain,disabled:busy||!data.capable||activeJob,onChange:e=>{setTouched(true);setDomain(e.target.value);updateDraft(e.target.value,port,true)}})),
             h('label',{className:'onenew-field'},
               h('span',null,'本地回落端口（默认 8443）'),
-              h('input',{type:'number',min:1,max:65535,value:port,disabled:busy||!data.capable||activeJob,onChange:e=>{setTouched(true);setPort(e.target.value)}}))),
+              h('input',{type:'number',min:1,max:65535,value:port,disabled:busy||!data.capable||activeJob,onChange:e=>{setTouched(true);setPort(e.target.value);updateDraft(domain,e.target.value,true)}}))),
           h('div',{className:'onenew-tunnel-actions'},
             h('button',{type:'button',className:'onenew-up-btn onenew-up-btn-primary',disabled:busy||!data.capable||activeJob||!domain.trim(),onClick:()=>submit('install')},busy?'正在下发…':'部署 / 更新伪装站'),
             h('button',{type:'button',className:'onenew-up-btn',disabled:busy||!data.capable||activeJob||!data.installed,onClick:()=>submit('restart')},'重启'),
