@@ -8,6 +8,13 @@ final class MigrationService
 {
     public const TTL=3600;
     public const LOCK='onenew:migration:export';
+    public const EPHEMERAL_TABLES=[
+        'v2_onenew_traffic_receipts',
+        'v2_onenew_domain_events',
+        'v2_onenew_domain_batches',
+        'onenew_runtime_log_entries',
+        'onenew_runtime_log_batches',
+    ];
     public function source(): string { return app()->environment('testing')?config('onenew.migration_source',base_path()):base_path(); }
     public function root(): string { return $this->source().'/.docker/.data/onenew-migrations'; }
     public function revision(): string
@@ -71,7 +78,16 @@ final class MigrationService
         $this->phase($id,'database');
         $pdo=new \PDO('sqlite:'.$database);$pdo->setAttribute(\PDO::ATTR_ERRMODE,\PDO::ERRMODE_EXCEPTION);
         $pdo->exec('PRAGMA busy_timeout=30000');$pdo->exec('VACUUM INTO '.$pdo->quote($snapshot));chmod($snapshot,0600);
-        $pdo=null;$this->phase($id,'files');$bytes=filesize($snapshot);$count=2;
+        $pdo=null;
+        $snap=new \PDO('sqlite:'.$snapshot);$snap->setAttribute(\PDO::ATTR_ERRMODE,\PDO::ERRMODE_EXCEPTION);
+        $existing=$snap->query("SELECT name FROM sqlite_master WHERE type='table'")->fetchAll(\PDO::FETCH_COLUMN);
+        $stripped=false;
+        foreach(self::EPHEMERAL_TABLES as $tbl){
+            if(in_array($tbl,$existing,true)){$snap->exec('DELETE FROM "'.$tbl.'"');$stripped=true;}
+        }
+        if($stripped)$snap->exec('VACUUM');
+        $snap=null;
+        $this->phase($id,'files');$bytes=filesize($snapshot);$count=2;
         foreach(['plugins','storage/theme'] as $relativeDir){
             $source=$this->source().'/'.$relativeDir;
             if(is_link($source))throw new \RuntimeException('Linked resources cannot be migrated');
