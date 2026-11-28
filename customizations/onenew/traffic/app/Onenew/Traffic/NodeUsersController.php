@@ -5,6 +5,7 @@ namespace App\Onenew\Traffic;
 use App\Http\Controllers\Controller;
 use App\Models\Server;
 use App\Models\User;
+use App\Onenew\ProbeAccount;
 use App\Services\DeviceStateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -139,6 +140,10 @@ final class NodeUsersController extends Controller
         $query = DB::table('v2_onenew_user_node_traffic')
             ->where('server_id', $node->id)
             ->where('record_at', $recordAt);
+        $probeIds = ProbeAccount::ids();
+        if (!empty($probeIds)) {
+            $query->whereNotIn('user_id', $probeIds);
+        }
         $identity = (string) ($node->onenew_identity ?? '');
         if ($identity !== '') {
             $query->where('node_identity', $identity);
@@ -181,6 +186,10 @@ final class NodeUsersController extends Controller
                 }
             }
         } catch (\Throwable) {
+        }
+
+        foreach (ProbeAccount::ids() as $probeId) {
+            unset($map[$probeId]);
         }
 
         return $map;

@@ -232,6 +232,8 @@ class ProbeService
         // Reuse the native entitlement hook, then reload the selected account. No
         // synthetic UUID and no stale subscription snapshot can pass this boundary.
         $eligible = ServerService::getAvailableUsers($node);
+        $preferred = $id === null ? array_flip(ProbeAccount::ids()) : [];
+        $fallback = null;
         foreach ($eligible as $candidate) {
             $candidateId = (int) data_get($candidate, 'id');
             if ($id !== null && $candidateId !== $id) {
@@ -242,10 +244,18 @@ class ProbeService
                 (int) $user->u + (int) $user->d < (int) $user->transfer_enable &&
                 ($user->expired_at === null || (int) $user->expired_at >= now()->timestamp) &&
                 in_array((string) $user->group_id, array_map('strval', $node->group_ids ?? []), true)) {
-                return $user;
+                if ($id !== null || isset($preferred[$candidateId])) {
+                    return $user;
+                }
+                if ($fallback === null) {
+                    $fallback = $user;
+                    if (empty($preferred)) {
+                        return $fallback;
+                    }
+                }
             }
         }
-        return null;
+        return $fallback;
     }
 
     private function nodeAvailable(Server $node): bool
