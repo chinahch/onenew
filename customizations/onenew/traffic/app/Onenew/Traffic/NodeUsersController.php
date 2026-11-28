@@ -152,46 +152,36 @@ final class NodeUsersController extends Controller
     }
 
     /**
-     * Merge per-node live device IPs (DeviceStateService) with recently active traffic-push users.
+     * Return active users on this node within the unified 3-minute real-traffic window,
+     * enriched with live device IPs from DeviceStateService when available.
      *
      * @return array<int, list<string>>
      */
     private function onlineUsersForNode(int $nodeId): array
     {
-        $map = [];
+        $activeUids = ProbeAccount::activeUserIds($nodeId);
+        if (empty($activeUids)) {
+            return [];
+        }
+
+        $deviceMap = [];
         try {
             $devices = app(DeviceStateService::class)->getNodeDevices($nodeId);
             if (is_array($devices)) {
                 foreach ($devices as $uid => $ips) {
                     $uid = (int) $uid;
                     if ($uid > 0 && is_array($ips) && !empty($ips)) {
-                        $map[$uid] = array_values(array_unique(array_map('strval', $ips)));
-                    }
-                }
-            }
-        } catch (\Throwable) {
-            // Fall back to traffic-push active user cache when Redis device state is unavailable.
-        }
-
-        try {
-            $now = time();
-            $window = max(300, (int) admin_setting('server_push_interval', 60) * 3);
-            $active = Cache::get(NodeTrafficLedger::ACTIVE_USERS_PREFIX . $nodeId);
-            if (is_array($active)) {
-                foreach ($active as $uid => $ts) {
-                    $uid = (int) $uid;
-                    if ($uid > 0 && is_int($ts) && ($now - $ts) <= $window && !array_key_exists($uid, $map)) {
-                        $map[$uid] = [];
+                        $deviceMap[$uid] = array_values(array_unique(array_map('strval', $ips)));
                     }
                 }
             }
         } catch (\Throwable) {
         }
 
-        foreach (ProbeAccount::ids() as $probeId) {
-            unset($map[$probeId]);
+        $map = [];
+        foreach ($activeUids as $uid) {
+            $map[$uid] = $deviceMap[$uid] ?? [];
         }
-
         return $map;
     }
 }

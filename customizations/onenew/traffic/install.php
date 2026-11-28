@@ -8,7 +8,10 @@ function applyOnenewTrafficPatch(string $root): void
         "\$router->get('/getTrafficRank', [\\App\\Onenew\\Traffic\\RankingController::class, 'getTrafficRank']);");
     replaceOnce($root.'/app/Services/ServerService.php',
         'Cache::put(CacheKey::get("SERVER_{$nodeType}_ONLINE_USER", $nodeId), count($data), 3600);',
-        'Cache::put(CacheKey::get("SERVER_{$nodeType}_ONLINE_USER", $nodeId), \\App\\Onenew\\ProbeAccount::countRealUsers($data), 3600);');
+        'Cache::put(CacheKey::get("SERVER_{$nodeType}_ONLINE_USER", $nodeId), \\App\\Onenew\\ProbeAccount::recordTrafficPush($nodeId, $data), 3600);');
+    replaceOnce($root.'/app/Models/Server.php',
+        'return Cache::get(CacheKey::get("SERVER_{$type}_ONLINE_USER", $serverId)) ?? 0;',
+        'return \\App\\Onenew\\ProbeAccount::onlineCount((int) $serverId);');
     $path = $root . '/app/Services/UserService.php';
     $source = str_replace("\r\n", "\n", file_get_contents($path));
     $old = 'use App\\Jobs\\StatUserJob;';
