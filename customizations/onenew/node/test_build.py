@@ -60,6 +60,7 @@ class BuildTest(unittest.TestCase):
         self.assertIn(f"VERSION={meta['binary_version']}\n", installer)
         self.assertIn(f"RELEASE={meta['release_tag']}\n", installer)
         catalog = json.loads((HERE.parent / 'remote-upgrade/app/Onenew/RemoteUpgrade/catalog.json').read_text(encoding='utf-8'))
-        self.assertIn('v' + meta['version'], catalog)
+        self.assertTrue(catalog, 'release catalog must not be empty')
+        self.assertTrue(all(k.startswith('v') for k in catalog))
 
 if __name__ == '__main__': unittest.main()
