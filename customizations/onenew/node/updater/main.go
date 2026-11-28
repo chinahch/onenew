@@ -65,6 +65,14 @@ func main() {
 				if errors.As(e, &persistence) {
 					u.recoveryReason = "journal_failed"
 				}
+				if e == nil {
+					if su := u.selfUpdate(j.Release); errors.Is(su, ErrSelfUpdated) {
+						fmt.Fprintln(os.Stderr, "Updater self-updated; exiting for service manager restart")
+						return
+					} else if su != nil {
+						fmt.Fprintf(os.Stderr, "Updater operation=self_update error=%s; retaining current assistant\n", operationErrorCode(su))
+					}
+				}
 			}
 			if e == nil {
 				operation = "tunnel_poll"

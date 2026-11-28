@@ -172,6 +172,6 @@ jobs:
             gh release download "$RELEASE_TAG" --dir verify-source --pattern onenew-node-source.tar.gz --pattern SHA256SUMS-source
             (cd verify-source && sha256sum -c SHA256SUMS-source)
           else
-            gh release create "$RELEASE_TAG" dist/*.tar.gz dist/caddy-updater-linux-* dist/SHA256SUMS-* dist/build-info-*.json --target main --title "Onenew native node v${NODE_VER}" --prerelease --notes 'Add remote Cloudflare Tunnel (cloudflared) install, restart, and uninstall support in caddy-updater (whitelisted actions with token validation, no arbitrary shell execution). Native binary packages and corresponding source include SHA256 checksums. Service and process name remain caddy.'
+            gh release create "$RELEASE_TAG" dist/*.tar.gz dist/caddy-updater-linux-* dist/SHA256SUMS-* dist/build-info-*.json --target main --title "Onenew native node v${NODE_VER}" --prerelease --notes 'Add checksum-verified self-update to caddy-updater so future panel node upgrades automatically update the assistant as well, plus remote Cloudflare Tunnel (cloudflared) support. Native binary packages and corresponding source include SHA256 checksums. Service and process name remain caddy.'
           fi
           python3 onenew/customizations/onenew/node/publish_distribution.py --root onenew
