@@ -77,11 +77,11 @@ final class NodeUsersTest extends TestCase
             $alice->id => ['183.14.22.91', '112.96.48.10'],
         ]);
 
-        // Record a traffic batch for bob (so bob is active via traffic push even without device_limit IPs)
+        // Record a traffic batch for bob (>= 64 KiB so bob is active via traffic push even without device_limit IPs)
         app(NodeTrafficLedger::class)->applyBatch(
             (string) Str::uuid(),
             ['id' => $node->id, 'name' => $node->name, 'rate' => 1, 'onenew_identity' => $node->onenew_identity],
-            [$bob->id => [1000, 4000]],
+            [$bob->id => [20000, 50000]],
             'vless',
             $today->timestamp,
             fn () => null
@@ -128,25 +128,25 @@ final class NodeUsersTest extends TestCase
             ->assertJsonPath('node.id', $node->id)
             ->assertJsonPath('node.online', 2)
             ->assertJsonPath('daily.summary.active_users', 3)
-            ->assertJsonPath('daily.summary.total', 35000);
+            ->assertJsonPath('daily.summary.total', 100000);
 
         $online = $res->json('online_users');
         self::assertCount(2, $online);
-        self::assertSame($alice->id, $online[0]['user_id']);
-        self::assertSame(['183.14.22.91', '112.96.48.10'], $online[0]['ips']);
-        self::assertSame(2, $online[0]['device_count']);
-        self::assertSame(21000, $online[0]['today_total']);
+        self::assertSame($bob->id, $online[0]['user_id']);
+        self::assertSame([], $online[0]['ips']);
+        self::assertSame(70000, $online[0]['today_total']);
 
-        self::assertSame($bob->id, $online[1]['user_id']);
-        self::assertSame([], $online[1]['ips']);
-        self::assertSame(5000, $online[1]['today_total']);
+        self::assertSame($alice->id, $online[1]['user_id']);
+        self::assertSame(['183.14.22.91', '112.96.48.10'], $online[1]['ips']);
+        self::assertSame(2, $online[1]['device_count']);
+        self::assertSame(21000, $online[1]['today_total']);
 
         $daily = $res->json('daily.data');
         self::assertCount(3, $daily);
-        self::assertSame([$alice->id, $charlie->id, $bob->id], array_column($daily, 'user_id'));
+        self::assertSame([$bob->id, $alice->id, $charlie->id], array_column($daily, 'user_id'));
         self::assertTrue($daily[0]['is_online']);
-        self::assertFalse($daily[1]['is_online']);
-        self::assertTrue($daily[2]['is_online']);
+        self::assertTrue($daily[1]['is_online']);
+        self::assertFalse($daily[2]['is_online']);
 
         // Query yesterday
         $this->getJson('/api/onenew/admin/traffic/node-users?server_id=' . $node->id . '&date=' . $yesterday->format('Y-m-d'), $this->headers($admin))
@@ -162,6 +162,7 @@ final class NodeUsersTest extends TestCase
     {
         $admin = $this->user(true, 'admin2@example.test');
         $probe = $this->user(false, '节点探针@qq.com');
+        $pinger = $this->user(false, 'pinger@example.test');
         $real = $this->user(false, 'real@example.test');
         $node = $this->node('SG-AI');
         $today = Carbon::now(config('app.timezone', 'UTC'))->startOfDay();
@@ -175,20 +176,28 @@ final class NodeUsersTest extends TestCase
         app(NodeTrafficLedger::class)->applyBatch(
             (string) Str::uuid(),
             ['id' => $node->id, 'name' => $node->name, 'rate' => 1, 'onenew_identity' => $node->onenew_identity],
-            [$probe->id => [500, 500], $real->id => [2000, 3000]],
+            [$probe->id => [100000, 100000], $pinger->id => [1000, 2000], $real->id => [30000, 50000]],
             'vless',
             $today->timestamp,
             fn () => null
         );
 
-        self::assertSame(1, \App\Onenew\ProbeAccount::countRealUsers([$probe->id => [500, 500], $real->id => [2000, 3000]]));
+        // Probe account and <64 KiB ping traffic are excluded from online user count; only $real counts.
+        self::assertSame(1, \App\Onenew\ProbeAccount::countRealUsers([
+            $probe->id => [100000, 100000],
+            $pinger->id => [1000, 2000],
+            $real->id => [30000, 50000],
+        ]));
 
         $this->getJson('/api/onenew/admin/traffic/node-users?server_id=' . $node->id, $this->headers($admin))
             ->assertOk()
             ->assertJsonPath('node.online', 1)
             ->assertJsonPath('online_users.0.user_id', $real->id)
-            ->assertJsonPath('daily.summary.active_users', 1)
-            ->assertJsonPath('daily.data.0.user_id', $real->id);
+            // $pinger still has daily traffic recorded, just not marked online
+            ->assertJsonPath('daily.summary.active_users', 2)
+            ->assertJsonPath('daily.data.0.user_id', $real->id)
+            ->assertJsonPath('daily.data.1.user_id', $pinger->id)
+            ->assertJsonPath('daily.data.1.is_online', false);
 
         Cache::forget(NodeTrafficLedger::ACTIVE_USERS_PREFIX . $node->id);
     }
